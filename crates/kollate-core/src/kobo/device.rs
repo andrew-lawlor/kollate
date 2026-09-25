@@ -47,6 +47,43 @@ impl DeviceInfo {
     pub fn read(mount: &Path) -> Option<Self> {
         Self::parse(&std::fs::read_to_string(mount.join(".kobo/version")).ok()?)
     }
+
+    /// Identifies the device from `.kobo/version` when `path` is a mount
+    /// point or the database inside one. A loose database file (e.g. a
+    /// backup) is treated as its own device, keyed by its path.
+    pub fn identify(path: &Path) -> Result<Self> {
+        let mount = if path.is_dir() {
+            Some(path)
+        } else {
+            path.parent().and_then(Path::parent)
+        };
+        if let Some(info) = mount.and_then(Self::read) {
+            return Ok(info);
+        }
+        Ok(Self {
+            serial: format!("file:{}", std::fs::canonicalize(path)?.display()),
+            firmware: None,
+            model_id: None,
+        })
+    }
+}
+
+/// Mounted Kobos under the usual removable-media roots for this user.
+pub fn find_mounted_kobos() -> Vec<PathBuf> {
+    let user = std::env::var("USER").unwrap_or_default();
+    let roots = [
+        PathBuf::from("/media").join(&user),
+        PathBuf::from("/run/media").join(&user),
+    ];
+    let mut found: Vec<PathBuf> = roots
+        .iter()
+        .filter_map(|root| std::fs::read_dir(root).ok())
+        .flatten()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.join(DB_RELATIVE_PATH).is_file())
+        .collect();
+    found.sort();
+    found
 }
 
 #[cfg(test)]

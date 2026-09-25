@@ -151,4 +151,9 @@ pub const MIGRATIONS: &[&str] = &[
         stats_json  TEXT NOT NULL
     );
     "#,
+    // 2: sortable reading position (backfilled in Library::init)
+    r#"
+    ALTER TABLE annotation ADD COLUMN position_key TEXT;
+    CREATE INDEX annotation_reading_order ON annotation(book_id, spine_index, position_key);
+    "#,
 ];

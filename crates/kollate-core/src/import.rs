@@ -307,8 +307,8 @@ impl Importer<'_> {
         Ok(self.tx.query_row(
             "INSERT INTO annotation (book_id, fingerprint, kind, device_text, device_note, color, chapter_title,
                     content_id, spine_index, start_path, start_offset, end_path, end_offset, chapter_progress,
-                    created_at, device_modified_at, imported_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?17)
+                    created_at, device_modified_at, imported_at, updated_at, position_key)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?17, ?18)
              RETURNING id",
             params![
                 book_id,
@@ -327,7 +327,8 @@ impl Importer<'_> {
                 bm.chapter_progress,
                 bm.created,
                 bm.modified,
-                self.now
+                self.now,
+                bm.reading_order_key().1
             ],
             |r| r.get(0),
         )?)
@@ -393,7 +394,7 @@ impl Importer<'_> {
             "UPDATE annotation SET kind = ?2, device_text = ?3, device_note = ?4, color = ?5, chapter_title = ?6,
                     content_id = ?7, spine_index = ?8, start_path = ?9, start_offset = ?10, end_path = ?11,
                     end_offset = ?12, chapter_progress = ?13, device_modified_at = ?14,
-                    fingerprint = coalesce(?15, fingerprint), removed_on_device_at = NULL,
+                    fingerprint = coalesce(?15, fingerprint), removed_on_device_at = NULL, position_key = ?19,
                     device_changed_at = CASE WHEN ?16 THEN ?17 ELSE device_changed_at END,
                     updated_at = CASE WHEN ?18 THEN ?17 ELSE updated_at END
              WHERE id = ?1",
@@ -416,6 +417,7 @@ impl Importer<'_> {
                 conflict,
                 self.now,
                 old != new || removed.is_some(),
+                bm.reading_order_key().1,
             ],
         )?;
         Ok(())

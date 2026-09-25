@@ -50,26 +50,8 @@ fn main() -> Result<()> {
     }
 }
 
-/// Identifies the device from `.kobo/version` when `path` is a mount point or
-/// the database inside one; otherwise treats the file as its own "device".
-fn device_for(path: &Path) -> Result<DeviceInfo> {
-    let mount = if path.is_dir() {
-        Some(path)
-    } else {
-        path.parent().and_then(Path::parent)
-    };
-    if let Some(info) = mount.and_then(DeviceInfo::read) {
-        return Ok(info);
-    }
-    Ok(DeviceInfo {
-        serial: format!("file:{}", std::fs::canonicalize(path)?.display()),
-        firmware: None,
-        model_id: None,
-    })
-}
-
 fn import(path: &Path, library_path: &Path, dry_run: bool) -> Result<()> {
-    let device = device_for(path)?;
+    let device = DeviceInfo::identify(path)?;
     let snapshot = KoboDb::open_copy(&find_kobo_db(path)?)?.snapshot()?;
     let mut lib = Library::open(library_path)?;
     let s = lib.import(&snapshot, &device, dry_run)?;

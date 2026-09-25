@@ -93,14 +93,33 @@ pub struct KoboBookmark {
 
 impl KoboBookmark {
     /// Sort key that orders bookmarks in reading order within a book.
-    pub fn reading_order_key(&self) -> (i64, Vec<i64>, i64, u64) {
+    pub fn reading_order_key(&self) -> (i64, String) {
         (
             self.spine_index.unwrap_or(i64::MAX),
-            kobo_span_numbers(&self.start.container_path),
-            self.start.offset,
-            (self.chapter_progress * 1e9) as u64,
+            position_key(
+                &self.start.container_path,
+                self.start.offset,
+                self.chapter_progress,
+            ),
         )
     }
+}
+
+/// A string that sorts in reading order within one chapter file. Kobo
+/// positions are a paragraph path (`span#kobo\.153\.2`) plus a character
+/// offset inside that span, so both must be compared numerically. Falls back
+/// to chapter progress for positions without Kobo spans.
+pub fn position_key(start_path: &str, start_offset: i64, chapter_progress: f64) -> String {
+    let spans = kobo_span_numbers(start_path);
+    if spans.is_empty() {
+        return format!("p{:012}", (chapter_progress.clamp(0.0, 1.0) * 1e11) as u64);
+    }
+    let mut key = String::from("s");
+    for n in spans {
+        key.push_str(&format!("{n:08}."));
+    }
+    key.push_str(&format!("{:08}", start_offset.max(0)));
+    key
 }
 
 /// Parses `span#kobo\.10\.4` into `[10, 4]`.
@@ -144,5 +163,20 @@ mod tests {
         assert_eq!(kobo_span_numbers(r"span#kobo\.10\.4"), vec![10, 4]);
         assert_eq!(kobo_span_numbers("span#kobo.42.3"), vec![42, 3]);
         assert!(kobo_span_numbers("div#foo").is_empty());
+    }
+
+    #[test]
+    fn position_key_orders_spans_before_offsets() {
+        // Real positions from four highlights in one paragraph group.
+        let mut keys = [
+            ("green", position_key(r"span#kobo\.153\.3", 27, 0.1)),
+            ("blue", position_key(r"span#kobo\.153\.2", 30, 0.1)),
+            ("yellow", position_key(r"span#kobo\.153\.1", 309, 0.1)),
+            ("pink", position_key(r"span#kobo\.153\.1", 356, 0.1)),
+            ("later", position_key(r"span#kobo\.1000\.1", 0, 0.1)),
+        ];
+        keys.sort_by(|a, b| a.1.cmp(&b.1));
+        let order: Vec<_> = keys.iter().map(|k| k.0).collect();
+        assert_eq!(order, ["yellow", "pink", "blue", "green", "later"]);
     }
 }

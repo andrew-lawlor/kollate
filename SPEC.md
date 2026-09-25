@@ -74,7 +74,7 @@ The host has GTK 4.18 and libadwaita 1.7, so we can target `v4_18` / `v1_7` feat
 
 | Concern | Crate |
 |---|---|
-| UI | `gtk4`, `libadwaita`, plus `gio` / `glib` for the mount monitor and async main loop. UI is written with composite templates in GtkBuilder `.ui` XML, compiled into GResources. |
+| UI | `gtk4` 0.11 (`v4_18`), `libadwaita` 0.9 (`v1_7`), plus `gio` / `glib` for the mount monitor and async main loop. Widgets are built in Rust code (no `.ui` templates); styles live in `style.css`. |
 | SQLite (device + library) | `rusqlite` with the `bundled` feature (plus FTS5), so there's no system sqlite dependency. |
 | EPUB (context extraction) | `zip`, plus `quick-xml` to strip XHTML to text; sentence splitting with `unicode-segmentation`. |
 | Dictionaries (offline) | Bundled Open English WordNet (prebuilt SQLite), plus our own importers for StarDict and kaikki.org Wiktionary JSONL. |
@@ -100,7 +100,7 @@ kollate/                     (cargo workspace)
     import.rs           # diff + merge device data into the store
     export/             # markdown(+vault), anki, csv, json, readwise
   crates/kollate-cli/     # `kollate-cli import <mount|db> [--dry-run]`, `export …`
-  crates/kollate/         # GTK4/libadwaita app (src/ + data/ui/*.ui, resources)
+  crates/kollate/         # GTK4/libadwaita app: window.rs (sidebar, list, actions), card.rs, edit.rs, style.css
   tests/fixtures/KoboReader.sqlite
 ```
 
@@ -212,9 +212,9 @@ Content pane:
 - **Book detail:** a header with cover and metadata, then highlights grouped by chapter in reading order (`VolumeIndex`, `ChapterProgress`, `StartOffset`).
 - **Vocabulary:** a `GtkColumnView` table with columns for word, book(s), date, definition, context and status. Selecting a row opens a detail panel where you pick a context, edit the definition or change the status.
 - **Edit:** inline editing of the note and a "corrected text" field. The device original stays visible and can be restored.
-- **Merge highlights:** Kobo splits highlights that cross page or element boundaries, so you can select adjacent ones and merge them.
-- **Search:** global (Ctrl+F) over FTS, with filter chips for book, colour, type, tag, date range and status.
-- **Keyboard triage in Inbox:** `K` keep, `A` archive, `S` star, `T` tag, `J`/`↓` next.
+- **Merge highlights** (not built yet): Kobo splits highlights that cross page or element boundaries, so you'd select adjacent ones and merge them.
+- **Search:** Ctrl+F searches the current view (text, note, chapter, book, author, tags) with an escaped `LIKE`, which is plenty for a personal library. FTS5 and filter chips for colour and date come later if needed.
+- **Keyboard triage** on the selected card: `K` keep, `A` archive, `S` star, `E`/`Enter`/double-click edit, `I` back to Inbox, `Delete` trash, `↑`/`↓` move. Status changes show an Undo toast.
 
 **Preferences:** device-detection behaviour, definition sources, export targets, colour names (for example "blue = definitions").
 
@@ -240,7 +240,7 @@ Export dialog options: scope (selection, book, filter, everything), include arch
 
 1. ✅ **M0, core + CLI:** Kobo reader, normalization, chapter resolution and `kollate-cli inspect <mount|db>`. Tests run against the fixture DB here: 52 bookmarks, 12 words, 5 books.
 2. ✅ **M1, store + dedup:** the schema, importer and merge rules. Tests cover re-importing the same DB (0 changes), an edited note, a deleted row and a factory reset (new IDs, same text).
-3. **M2, UI browse & curate:** books, highlights, notes, search, star/tag/archive, edit.
+3. ✅ **M2, UI browse & curate:** books, highlights, notes, search, star/tag/archive, edit.
 4. **M3, device integration:** autodetect, auto-import, Inbox, toasts, eject, markup files, covers.
 5. **M4, vocab enrichment:** EPUB context extraction, WordNet bundle and dictionary import, lemma merge.
 6. **M5, export:** Obsidian vault sync and Anki, then JSON, CSV and Readwise.

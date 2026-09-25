@@ -1,7 +1,10 @@
 //! The local library: Kollate's own SQLite database and the source of truth.
 //! Nothing here ever touches the device.
 
+mod query;
 mod schema;
+
+pub use query::{AnnotationFilter, SidebarCounts, Tag, View, VocabStatus};
 
 use std::path::{Path, PathBuf};
 
@@ -45,7 +48,7 @@ impl Status {
         }
     }
 
-    fn parse(s: &str) -> Self {
+    pub(crate) fn parse(s: &str) -> Self {
         match s {
             "kept" => Self::Kept,
             "archived" => Self::Archived,
@@ -71,6 +74,9 @@ pub struct Annotation {
     pub status: Status,
     pub device_changed_at: Option<DateTime<Utc>>,
     pub removed_on_device_at: Option<DateTime<Utc>>,
+    pub book_title: String,
+    pub book_author: Option<String>,
+    pub tags: Vec<String>,
 }
 
 impl Annotation {
@@ -79,8 +85,12 @@ impl Annotation {
         self.user_text.as_deref().or(self.device_text.as_deref())
     }
 
+    /// The note to display. A user override of `""` hides the Kobo's note.
     pub fn note(&self) -> Option<&str> {
-        self.user_note.as_deref().or(self.device_note.as_deref())
+        self.user_note
+            .as_deref()
+            .or(self.device_note.as_deref())
+            .filter(|n| !n.is_empty())
     }
 }
 
@@ -99,6 +109,7 @@ pub struct Vocab {
     pub word: String,
     pub language: String,
     pub first_seen_at: Option<DateTime<Utc>>,
+    pub status: VocabStatus,
     /// Titles of the books the word was looked up in.
     pub books: Vec<String>,
 }
@@ -112,11 +123,15 @@ pub struct LibraryCounts {
     pub removed_on_device: i64,
 }
 
-const ANNOTATION_COLUMNS: &str =
-    "id, book_id, kind, device_text, device_note, user_text, user_note, color,
-     chapter_title, created_at, starred, status, device_changed_at, removed_on_device_at";
+pub(crate) const ANNOTATION_SELECT: &str = "SELECT a.id, a.book_id, a.kind, a.device_text, a.device_note,
+     a.user_text, a.user_note, a.color, a.chapter_title, a.created_at, a.starred, a.status,
+     a.device_changed_at, a.removed_on_device_at, coalesce(b.user_title, b.title),
+     coalesce(b.user_author, b.author),
+     (SELECT group_concat(name, char(31)) FROM (SELECT t.name FROM annotation_tag x JOIN tag t ON t.id = x.tag_id
+      WHERE x.annotation_id = a.id ORDER BY t.name COLLATE NOCASE))
+     FROM annotation a JOIN book b ON b.id = a.book_id";
 
-fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotation> {
+pub(crate) fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotation> {
     Ok(Annotation {
         id: r.get(0)?,
         book_id: r.get(1)?,
@@ -132,6 +147,12 @@ fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotation> {
         status: Status::parse(&r.get::<_, String>(11)?),
         device_changed_at: r.get(12)?,
         removed_on_device_at: r.get(13)?,
+        book_title: r.get(14)?,
+        book_author: r.get(15)?,
+        tags: r
+            .get::<_, Option<String>>(16)?
+            .map(|s| s.split('\u{1f}').map(str::to_owned).collect())
+            .unwrap_or_default(),
     })
 }
 
@@ -157,7 +178,32 @@ impl Library {
             tx.pragma_update(None, "user_version", i + 1)?;
             tx.commit()?;
         }
-        Ok(Self { conn })
+        let lib = Self { conn };
+        lib.backfill_position_keys()?;
+        Ok(lib)
+    }
+
+    fn backfill_position_keys(&self) -> Result<()> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, start_path, start_offset, chapter_progress FROM annotation WHERE position_key IS NULL",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        for (id, path, offset, progress) in rows {
+            self.conn.execute(
+                "UPDATE annotation SET position_key = ?2 WHERE id = ?1",
+                params![id, crate::kobo::position_key(&path, offset, progress)],
+            )?;
+        }
+        Ok(())
     }
 
     pub fn counts(&self) -> Result<LibraryCounts> {
@@ -201,7 +247,7 @@ impl Library {
         Ok(self
             .conn
             .query_row(
-                &format!("SELECT {ANNOTATION_COLUMNS} FROM annotation WHERE id = ?1"),
+                &format!("{ANNOTATION_SELECT} WHERE a.id = ?1"),
                 [id],
                 annotation_from_row,
             )
@@ -210,13 +256,10 @@ impl Library {
 
     /// Annotations of a book in reading order.
     pub fn annotations_for_book(&self, book_id: i64) -> Result<Vec<Annotation>> {
-        let mut stmt = self.conn.prepare(&format!(
-            "SELECT {ANNOTATION_COLUMNS} FROM annotation WHERE book_id = ?1
-             ORDER BY spine_index IS NULL, spine_index, chapter_progress, start_offset, id"
-        ))?;
-        Ok(stmt
-            .query_map([book_id], annotation_from_row)?
-            .collect::<rusqlite::Result<_>>()?)
+        self.query_annotations(&AnnotationFilter {
+            view: View::Book(book_id),
+            ..Default::default()
+        })
     }
 
     pub fn annotation_id_for_bookmark(&self, bookmark_id: &str) -> Result<Option<i64>> {
@@ -231,21 +274,35 @@ impl Library {
     }
 
     pub fn vocab(&self) -> Result<Vec<Vocab>> {
+        self.query_vocab(None, None)
+    }
+
+    /// Vocab words, newest first, optionally limited to one book and/or
+    /// matching a search string.
+    pub fn query_vocab(&self, book_id: Option<i64>, search: Option<&str>) -> Result<Vec<Vocab>> {
+        let pattern = search
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(query::like_pattern);
         let mut stmt = self.conn.prepare(
-            "SELECT v.id, v.word, v.language, v.first_seen_at,
-                    (SELECT group_concat(DISTINCT coalesce(b.user_title, b.title))
-                     FROM vocab_sighting s JOIN book b ON b.id = s.book_id WHERE s.vocab_id = v.id)
-             FROM vocab v ORDER BY v.first_seen_at, v.id",
+            "SELECT v.id, v.word, v.language, v.first_seen_at, v.status,
+                    (SELECT group_concat(title, char(31)) FROM (SELECT DISTINCT coalesce(b.user_title, b.title) AS title
+                     FROM vocab_sighting s JOIN book b ON b.id = s.book_id WHERE s.vocab_id = v.id))
+             FROM vocab v
+             WHERE (?1 IS NULL OR EXISTS (SELECT 1 FROM vocab_sighting s WHERE s.vocab_id = v.id AND s.book_id = ?1))
+               AND (?2 IS NULL OR v.word LIKE ?2 ESCAPE '\\' OR v.definition LIKE ?2 ESCAPE '\\')
+             ORDER BY v.first_seen_at DESC, v.id DESC",
         )?;
-        let vocab = stmt.query_map([], |r| {
+        let vocab = stmt.query_map(params![book_id, pattern], |r| {
             Ok(Vocab {
                 id: r.get(0)?,
                 word: r.get(1)?,
                 language: r.get(2)?,
                 first_seen_at: r.get(3)?,
+                status: VocabStatus::parse(&r.get::<_, String>(4)?),
                 books: r
-                    .get::<_, Option<String>>(4)?
-                    .map(|s| s.split(',').map(str::to_owned).collect())
+                    .get::<_, Option<String>>(5)?
+                    .map(|s| s.split('\u{1f}').map(str::to_owned).collect())
                     .unwrap_or_default(),
             })
         })?;

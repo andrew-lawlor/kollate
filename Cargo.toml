@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/kollate-core", "crates/kollate-cli"]
+members = ["crates/kollate-core", "crates/kollate-cli", "crates/kollate"]
 
 [workspace.package]
 version = "0.1.0"

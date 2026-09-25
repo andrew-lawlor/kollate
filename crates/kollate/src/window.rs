@@ -1,0 +1,1061 @@
+//! Main window: a sidebar of views, books and tags, and a list of cards.
+
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::rc::Rc;
+
+use adw::prelude::*;
+use gtk::{gdk, gio, glib};
+use kollate_core::kobo::{DeviceInfo, KoboDb, find_kobo_db, find_mounted_kobos};
+use kollate_core::store::{Annotation, AnnotationFilter, Status, View, Vocab, VocabStatus};
+use kollate_core::{ImportStats, Library};
+
+use crate::{card, edit};
+
+/// What the content pane shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Nav {
+    Annotations(View),
+    Vocab,
+}
+
+const TOP_LEVEL: [(Nav, &str, &str); 8] = [
+    (
+        Nav::Annotations(View::Inbox),
+        "mail-unread-symbolic",
+        "Inbox",
+    ),
+    (
+        Nav::Annotations(View::All),
+        "view-list-bullet-symbolic",
+        "All Highlights",
+    ),
+    (
+        Nav::Annotations(View::Notes),
+        "document-edit-symbolic",
+        "Notes",
+    ),
+    (
+        Nav::Annotations(View::Markups),
+        "input-tablet-symbolic",
+        "Markups",
+    ),
+    (
+        Nav::Annotations(View::Starred),
+        "starred-symbolic",
+        "Starred",
+    ),
+    (Nav::Vocab, "accessories-dictionary-symbolic", "Vocabulary"),
+    (
+        Nav::Annotations(View::Archive),
+        "folder-symbolic",
+        "Archive",
+    ),
+    (
+        Nav::Annotations(View::Trash),
+        "user-trash-symbolic",
+        "Trash",
+    ),
+];
+
+const VOCAB_STATUS_LABELS: [&str; 4] = ["New", "Learning", "Known", "Ignored"];
+
+pub struct Window {
+    win: adw::ApplicationWindow,
+    lib: RefCell<Library>,
+    split: adw::NavigationSplitView,
+    toasts: adw::ToastOverlay,
+    /// The most recent toast; replaced rather than queued behind.
+    last_toast: RefCell<Option<adw::Toast>>,
+
+    sidebar: gtk::ListBox,
+    /// Parallel to the sidebar's rows; `None` for section headers.
+    sidebar_navs: RefCell<Vec<Option<Nav>>>,
+    count_labels: RefCell<HashMap<Nav, gtk::Label>>,
+    books: RefCell<HashMap<i64, (String, Option<String>)>>,
+    tags: RefCell<HashMap<i64, String>>,
+    rebuilding_sidebar: Cell<bool>,
+
+    content_page: adw::NavigationPage,
+    title: adw::WindowTitle,
+    search_bar: gtk::SearchBar,
+    search: gtk::SearchEntry,
+    stack: gtk::Stack,
+    empty: adw::StatusPage,
+    list: gtk::ListBox,
+    /// Parallel to the list's rows: the group heading each row belongs to.
+    groups: Rc<RefCell<Vec<String>>>,
+    /// Number of (annotation, vocab) rows currently listed.
+    shown: Cell<(usize, usize)>,
+    current: Cell<Nav>,
+}
+
+fn plural(n: usize, one: &str, many: &str) -> String {
+    format!("{n} {}", if n == 1 { one } else { many })
+}
+
+impl Window {
+    pub fn new(app: &adw::Application, lib: Library) -> Rc<Self> {
+        let win = adw::ApplicationWindow::builder()
+            .application(app)
+            .title("Kollate")
+            .default_width(1100)
+            .default_height(760)
+            .width_request(360)
+            .height_request(400)
+            .build();
+
+        // Sidebar
+        let menu = gio::Menu::new();
+        let import = gio::Menu::new();
+        import.append(Some("_Import from Kobo"), Some("win.import"));
+        import.append(Some("Import from _Folder…"), Some("win.import-folder"));
+        menu.append_section(None, &import);
+        let help = gio::Menu::new();
+        help.append(Some("_Keyboard Shortcuts"), Some("win.shortcuts"));
+        help.append(Some("_About Kollate"), Some("win.about"));
+        menu.append_section(None, &help);
+        let menu_button = gtk::MenuButton::builder()
+            .icon_name("open-menu-symbolic")
+            .menu_model(&menu)
+            .primary(true)
+            .tooltip_text("Main Menu")
+            .build();
+        let import_button = gtk::Button::builder()
+            .icon_name("media-removable-symbolic")
+            .tooltip_text("Import from Kobo (Ctrl+I)")
+            .action_name("win.import")
+            .build();
+        import_button.update_property(&[gtk::accessible::Property::Label("Import from Kobo")]);
+        let sidebar_header = adw::HeaderBar::new();
+        sidebar_header.pack_start(&import_button);
+        sidebar_header.pack_end(&menu_button);
+        let sidebar = gtk::ListBox::builder()
+            .css_classes(["navigation-sidebar"])
+            .build();
+        let sidebar_toolbar = adw::ToolbarView::new();
+        sidebar_toolbar.add_top_bar(&sidebar_header);
+        sidebar_toolbar.set_content(Some(
+            &gtk::ScrolledWindow::builder()
+                .hscrollbar_policy(gtk::PolicyType::Never)
+                .child(&sidebar)
+                .build(),
+        ));
+        let sidebar_page = adw::NavigationPage::new(&sidebar_toolbar, "Kollate");
+
+        // Content
+        let title = adw::WindowTitle::new("", "");
+        let search_button = gtk::ToggleButton::builder()
+            .icon_name("system-search-symbolic")
+            .tooltip_text("Search (Ctrl+F)")
+            .build();
+        search_button.update_property(&[gtk::accessible::Property::Label("Search")]);
+        let header = adw::HeaderBar::builder().title_widget(&title).build();
+        header.pack_end(&search_button);
+        let search = gtk::SearchEntry::builder()
+            .placeholder_text("Search text, notes, books and tags")
+            .hexpand(true)
+            .build();
+        let search_bar = gtk::SearchBar::builder()
+            .child(
+                &adw::Clamp::builder()
+                    .maximum_size(600)
+                    .child(&search)
+                    .build(),
+            )
+            .build();
+        search_bar.connect_entry(&search);
+        search_button
+            .bind_property("active", &search_bar, "search-mode-enabled")
+            .bidirectional()
+            .sync_create()
+            .build();
+
+        let list = gtk::ListBox::builder()
+            .selection_mode(gtk::SelectionMode::Single)
+            .css_classes(["boxed-list-separate", "annotation-list"])
+            .valign(gtk::Align::Start)
+            .build();
+        let clamp = adw::Clamp::builder()
+            .maximum_size(820)
+            .tightening_threshold(600)
+            .child(&list)
+            .margin_top(12)
+            .margin_bottom(24)
+            .margin_start(12)
+            .margin_end(12)
+            .build();
+        let scrolled = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vexpand(true)
+            .child(&clamp)
+            .build();
+        let empty = adw::StatusPage::new();
+        let stack = gtk::Stack::new();
+        stack.add_named(&scrolled, Some("list"));
+        stack.add_named(&empty, Some("empty"));
+        let content_toolbar = adw::ToolbarView::new();
+        content_toolbar.add_top_bar(&header);
+        content_toolbar.add_top_bar(&search_bar);
+        content_toolbar.set_content(Some(&stack));
+        let content_page = adw::NavigationPage::new(&content_toolbar, "Inbox");
+
+        let split = adw::NavigationSplitView::builder()
+            .sidebar(&sidebar_page)
+            .content(&content_page)
+            .min_sidebar_width(220.0)
+            .max_sidebar_width(300.0)
+            .build();
+        let toasts = adw::ToastOverlay::new();
+        toasts.set_child(Some(&split));
+        win.set_content(Some(&toasts));
+
+        let breakpoint = adw::Breakpoint::new(
+            adw::BreakpointCondition::parse("max-width: 640sp").expect("valid"),
+        );
+        breakpoint.add_setter(&split, "collapsed", Some(&true.to_value()));
+        win.add_breakpoint(breakpoint);
+
+        let this = Rc::new(Self {
+            win,
+            lib: RefCell::new(lib),
+            split,
+            toasts,
+            last_toast: RefCell::default(),
+            sidebar,
+            sidebar_navs: RefCell::default(),
+            count_labels: RefCell::default(),
+            books: RefCell::default(),
+            tags: RefCell::default(),
+            rebuilding_sidebar: Cell::new(false),
+            content_page,
+            title,
+            search_bar,
+            search,
+            stack,
+            empty,
+            list,
+            groups: Rc::default(),
+            shown: Cell::new((0, 0)),
+            current: Cell::new(Nav::Annotations(View::Inbox)),
+        });
+        this.setup_list();
+        this.setup_signals();
+        this.setup_actions();
+        this.rebuild_sidebar();
+        this.reload();
+
+        // The window owns the controller for as long as it's open.
+        let keep_alive = this.clone();
+        this.win.connect_close_request(move |_| {
+            let _ = &keep_alive;
+            glib::Propagation::Proceed
+        });
+        this
+    }
+
+    pub fn present(&self) {
+        self.win.present();
+    }
+
+    fn toast(&self, title: &str) {
+        self.show_toast(adw::Toast::new(title));
+    }
+
+    fn show_toast(&self, toast: adw::Toast) {
+        if let Some(previous) = self.last_toast.replace(Some(toast.clone())) {
+            previous.dismiss();
+        }
+        self.toasts.add_toast(toast);
+    }
+
+    fn error(&self, heading: &str, err: impl std::fmt::Display) {
+        let dialog = adw::AlertDialog::new(Some(heading), Some(&err.to_string()));
+        dialog.add_response("close", "Close");
+        dialog.present(Some(&self.win));
+    }
+
+    // ---- Setup -------------------------------------------------------------
+
+    fn setup_list(self: &Rc<Self>) {
+        let groups = self.groups.clone();
+        self.list.set_header_func(move |row, before| {
+            let groups = groups.borrow();
+            let label = groups
+                .get(row.index() as usize)
+                .cloned()
+                .unwrap_or_default();
+            let previous = before.and_then(|b| groups.get(b.index() as usize));
+            if label.is_empty() || previous == Some(&label) {
+                row.set_header(None::<&gtk::Widget>);
+                return;
+            }
+            let header = gtk::Label::builder()
+                .label(&label)
+                .xalign(0.0)
+                .wrap(true)
+                .css_classes(["heading", "group-header"])
+                .build();
+            if before.is_none() {
+                header.add_css_class("first");
+            }
+            row.set_header(Some(&header));
+        });
+
+        // Single-key triage on the selected card.
+        let keys = gtk::EventControllerKey::new();
+        keys.connect_key_pressed(glib::clone!(
+            #[weak(rename_to = list)]
+            self.list,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, key, _, state| {
+                if state.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
+                    return glib::Propagation::Proceed;
+                }
+                let action = match key {
+                    gdk::Key::k => "keep",
+                    gdk::Key::a => "archive",
+                    gdk::Key::s => "star",
+                    gdk::Key::e => "edit",
+                    gdk::Key::i => "inbox",
+                    gdk::Key::Delete | gdk::Key::KP_Delete => "trash",
+                    _ => return glib::Propagation::Proceed,
+                };
+                match list.selected_row() {
+                    Some(row) if row.activate_action(&format!("card.{action}"), None).is_ok() => {
+                        glib::Propagation::Stop
+                    }
+                    _ => glib::Propagation::Proceed,
+                }
+            }
+        ));
+        self.list.add_controller(keys);
+
+        // Double-click or Enter on a card opens the editor.
+        self.list.set_activate_on_single_click(false);
+        self.list.connect_row_activated(|_, row| {
+            let _ = row.activate_action("card.edit", None);
+        });
+    }
+
+    fn setup_signals(self: &Rc<Self>) {
+        let weak = Rc::downgrade(self);
+        self.sidebar.connect_row_selected(move |_, row| {
+            let (Some(this), Some(row)) = (weak.upgrade(), row) else {
+                return;
+            };
+            if this.rebuilding_sidebar.get() {
+                return;
+            }
+            let nav = this
+                .sidebar_navs
+                .borrow()
+                .get(row.index() as usize)
+                .copied()
+                .flatten();
+            if let Some(nav) = nav {
+                this.current.set(nav);
+                if !this.search.text().is_empty() {
+                    this.search.set_text(""); // triggers a reload
+                } else {
+                    this.reload();
+                }
+                this.split.set_show_content(true);
+            }
+        });
+
+        let weak = Rc::downgrade(self);
+        self.search.connect_search_changed(move |_| {
+            if let Some(this) = weak.upgrade() {
+                this.reload();
+            }
+        });
+    }
+
+    fn add_win_action(self: &Rc<Self>, name: &str, f: impl Fn(&Rc<Self>) + 'static) {
+        let action = gio::SimpleAction::new(name, None);
+        let weak = Rc::downgrade(self);
+        action.connect_activate(move |_, _| {
+            if let Some(this) = weak.upgrade() {
+                f(&this);
+            }
+        });
+        self.win.add_action(&action);
+    }
+
+    fn setup_actions(self: &Rc<Self>) {
+        self.add_win_action("search", |this| {
+            let enabled = !this.search_bar.is_search_mode();
+            this.search_bar.set_search_mode(enabled);
+            if enabled {
+                this.search.grab_focus();
+            }
+        });
+        self.add_win_action("import", |this| {
+            match find_mounted_kobos().into_iter().next() {
+                Some(mount) => this.import_from(mount),
+                None => this.choose_import_folder(),
+            }
+        });
+        self.add_win_action("import-folder", |this| this.choose_import_folder());
+        self.add_win_action("about", |this| {
+            adw::AboutDialog::builder()
+                .application_name("Kollate")
+                .application_icon("accessories-dictionary")
+                .version(env!("CARGO_PKG_VERSION"))
+                .comments("Collect and curate highlights, notes and vocabulary from your Kobo.")
+                .license_type(gtk::License::Gpl30)
+                .build()
+                .present(Some(&this.win));
+        });
+        self.add_win_action("shortcuts", |this| {
+            let dialog = adw::AlertDialog::new(
+                Some("Keyboard Shortcuts"),
+                Some(
+                    "On a selected highlight:\n\
+                     K  Keep  ·  A  Archive  ·  S  Star\n\
+                     E or Enter  Edit  ·  I  Move to Inbox  ·  Delete  Trash\n\
+                     ↑ ↓  Previous / next\n\n\
+                     Ctrl+F  Search  ·  Ctrl+I  Import from Kobo\n\
+                     Ctrl+W  Close window  ·  Ctrl+Q  Quit",
+                ),
+            );
+            dialog.add_response("close", "Close");
+            dialog.present(Some(&this.win));
+        });
+    }
+
+    // ---- Sidebar -----------------------------------------------------------
+
+    fn sidebar_row(
+        icon: Option<&str>,
+        label: &str,
+        tooltip: Option<&str>,
+        count: &gtk::Label,
+    ) -> gtk::ListBoxRow {
+        let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        if let Some(icon) = icon {
+            hbox.append(&gtk::Image::from_icon_name(icon));
+        }
+        hbox.append(
+            &gtk::Label::builder()
+                .label(label)
+                .xalign(0.0)
+                .hexpand(true)
+                .ellipsize(gtk::pango::EllipsizeMode::End)
+                .build(),
+        );
+        count.add_css_class("dim-label");
+        count.add_css_class("numeric");
+        hbox.append(count);
+        let row = gtk::ListBoxRow::builder().child(&hbox).build();
+        row.set_tooltip_text(tooltip);
+        row
+    }
+
+    fn sidebar_heading(label: &str) -> gtk::ListBoxRow {
+        let label = gtk::Label::builder()
+            .label(label)
+            .xalign(0.0)
+            .margin_top(12)
+            .css_classes(["heading", "dim-label"])
+            .build();
+        gtk::ListBoxRow::builder()
+            .child(&label)
+            .selectable(false)
+            .activatable(false)
+            .build()
+    }
+
+    fn rebuild_sidebar(self: &Rc<Self>) {
+        self.rebuilding_sidebar.set(true);
+        self.sidebar.remove_all();
+        let mut navs = Vec::new();
+        let mut labels = HashMap::new();
+        let mut add = |row: gtk::ListBoxRow, nav: Option<Nav>, count: Option<gtk::Label>| {
+            self.sidebar.append(&row);
+            navs.push(nav);
+            if let (Some(nav), Some(count)) = (nav, count) {
+                labels.insert(nav, count);
+            }
+        };
+
+        for (nav, icon, label) in TOP_LEVEL {
+            let count = gtk::Label::new(None);
+            add(
+                Self::sidebar_row(Some(icon), label, None, &count),
+                Some(nav),
+                Some(count),
+            );
+        }
+
+        let lib = self.lib.borrow();
+        let books = lib.books().unwrap_or_default();
+        let mut book_map = HashMap::new();
+        if !books.is_empty() {
+            add(Self::sidebar_heading("Books"), None, None);
+        }
+        for b in books {
+            let count = gtk::Label::new(None);
+            let tooltip = match &b.author {
+                Some(author) => format!("{}\n{author}", b.title),
+                None => b.title.clone(),
+            };
+            let nav = Nav::Annotations(View::Book(b.id));
+            add(
+                Self::sidebar_row(None, &b.title, Some(&tooltip), &count),
+                Some(nav),
+                Some(count),
+            );
+            book_map.insert(b.id, (b.title, b.author));
+        }
+
+        let tags = lib.tags().unwrap_or_default();
+        let mut tag_map = HashMap::new();
+        if !tags.is_empty() {
+            add(Self::sidebar_heading("Tags"), None, None);
+        }
+        for t in tags {
+            let count = gtk::Label::new(None);
+            let nav = Nav::Annotations(View::Tag(t.id));
+            add(
+                Self::sidebar_row(Some("user-bookmarks-symbolic"), &t.name, None, &count),
+                Some(nav),
+                Some(count),
+            );
+            tag_map.insert(t.id, t.name);
+        }
+        drop(lib);
+
+        // The current book or tag may be gone (e.g. last tag removed).
+        if !navs.contains(&Some(self.current.get())) {
+            self.current.set(Nav::Annotations(View::Inbox));
+        }
+        let selected = navs.iter().position(|n| *n == Some(self.current.get()));
+        *self.sidebar_navs.borrow_mut() = navs;
+        *self.count_labels.borrow_mut() = labels;
+        *self.books.borrow_mut() = book_map;
+        *self.tags.borrow_mut() = tag_map;
+        if let Some(i) = selected {
+            self.sidebar
+                .select_row(self.sidebar.row_at_index(i as i32).as_ref());
+        }
+        self.rebuilding_sidebar.set(false);
+        self.update_counts();
+    }
+
+    fn update_counts(&self) {
+        let lib = self.lib.borrow();
+        let Ok(c) = lib.sidebar_counts() else { return };
+        let mut counts: HashMap<Nav, i64> = HashMap::from([
+            (Nav::Annotations(View::Inbox), c.inbox),
+            (Nav::Annotations(View::All), c.all),
+            (Nav::Annotations(View::Notes), c.notes),
+            (Nav::Annotations(View::Markups), c.markups),
+            (Nav::Annotations(View::Starred), c.starred),
+            (Nav::Annotations(View::Archive), c.archive),
+            (Nav::Annotations(View::Trash), c.trash),
+            (Nav::Vocab, c.vocab),
+        ]);
+        for b in lib.books().unwrap_or_default() {
+            counts.insert(Nav::Annotations(View::Book(b.id)), b.annotation_count);
+        }
+        for t in lib.tags().unwrap_or_default() {
+            counts.insert(Nav::Annotations(View::Tag(t.id)), t.count);
+        }
+        for (nav, label) in self.count_labels.borrow().iter() {
+            let n = counts.get(nav).copied().unwrap_or(0);
+            label.set_label(&if n > 0 { n.to_string() } else { String::new() });
+        }
+    }
+
+    fn select_nav(&self, nav: Nav) {
+        let index = self
+            .sidebar_navs
+            .borrow()
+            .iter()
+            .position(|n| *n == Some(nav));
+        if let Some(i) = index {
+            self.sidebar
+                .select_row(self.sidebar.row_at_index(i as i32).as_ref());
+        }
+    }
+
+    // ---- Content -----------------------------------------------------------
+
+    fn nav_title(&self, nav: Nav) -> (String, Option<String>) {
+        match nav {
+            Nav::Annotations(View::Book(id)) => {
+                self.books.borrow().get(&id).cloned().unwrap_or_default()
+            }
+            Nav::Annotations(View::Tag(id)) => (
+                self.tags.borrow().get(&id).cloned().unwrap_or_default(),
+                None,
+            ),
+            _ => {
+                let label = TOP_LEVEL
+                    .iter()
+                    .find(|(n, _, _)| *n == nav)
+                    .map_or("", |(_, _, l)| l);
+                (label.to_owned(), None)
+            }
+        }
+    }
+
+    fn update_title(&self) {
+        let nav = self.current.get();
+        let (title, author) = self.nav_title(nav);
+        let (annotations, words) = self.shown.get();
+        let mut parts: Vec<String> = author.into_iter().collect();
+        if annotations > 0 {
+            parts.push(plural(annotations, "highlight", "highlights"));
+        }
+        if words > 0 {
+            parts.push(plural(words, "word", "words"));
+        }
+        self.content_page.set_title(&title);
+        self.title.set_title(&title);
+        self.title.set_subtitle(&parts.join(" · "));
+    }
+
+    fn search_text(&self) -> Option<String> {
+        Some(self.search.text().to_string()).filter(|s| !s.trim().is_empty())
+    }
+
+    /// Reloads the content pane for the current view.
+    fn reload(self: &Rc<Self>) {
+        self.list.remove_all();
+        self.groups.borrow_mut().clear();
+        self.shown.set((0, 0));
+        let nav = self.current.get();
+        let separate = !matches!(nav, Nav::Vocab);
+        self.list.set_css_classes(if separate {
+            &["boxed-list-separate", "annotation-list"]
+        } else {
+            &["boxed-list", "annotation-list"]
+        });
+
+        let result = match nav {
+            Nav::Annotations(view) => self.fill_annotations(view),
+            Nav::Vocab => self.fill_vocab(None, "").map(|_| ()),
+        };
+        if let Err(err) = result {
+            self.error("Couldn’t Load Library", err);
+        }
+        self.update_title();
+        self.update_empty_state();
+        if let Some(first) = self.list.row_at_index(0) {
+            self.list.select_row(Some(&first));
+        }
+    }
+
+    fn fill_annotations(self: &Rc<Self>, view: View) -> kollate_core::Result<()> {
+        let filter = AnnotationFilter {
+            view,
+            search: self.search_text(),
+            id: None,
+        };
+        let items = self.lib.borrow().query_annotations(&filter)?;
+        let in_book_view = matches!(view, View::Book(_));
+        for a in &items {
+            let group = if !in_book_view {
+                match &a.book_author {
+                    Some(author) => format!("{} — {author}", a.book_title),
+                    None => a.book_title.clone(),
+                }
+            } else {
+                a.chapter_title.clone().unwrap_or_default()
+            };
+            self.groups.borrow_mut().push(group);
+            self.list.append(&self.annotation_row(a, in_book_view));
+        }
+        self.shown.set((items.len(), 0));
+        if let View::Book(id) = view {
+            self.fill_vocab(Some(id), "Vocabulary")?;
+        }
+        Ok(())
+    }
+
+    fn fill_vocab(self: &Rc<Self>, book: Option<i64>, group: &str) -> kollate_core::Result<usize> {
+        let words = self
+            .lib
+            .borrow()
+            .query_vocab(book, self.search_text().as_deref())?;
+        for v in &words {
+            self.groups.borrow_mut().push(group.to_owned());
+            self.list.append(&self.vocab_row(v, book.is_none()));
+        }
+        let (annotations, _) = self.shown.get();
+        self.shown.set((annotations, words.len()));
+        Ok(words.len())
+    }
+
+    fn update_empty_state(&self) {
+        let empty = self.groups.borrow().is_empty();
+        self.stack
+            .set_visible_child_name(if empty { "empty" } else { "list" });
+        if !empty {
+            return;
+        }
+        let lib_empty = self
+            .lib
+            .borrow()
+            .books()
+            .map(|b| b.is_empty())
+            .unwrap_or(false);
+        let (icon, title, description) = if self.search_text().is_some() {
+            (
+                "system-search-symbolic",
+                "No Results",
+                "Try a different search.",
+            )
+        } else if lib_empty {
+            (
+                "media-removable-symbolic",
+                "Welcome to Kollate",
+                "Connect your Kobo with a USB cable, then choose Import (Ctrl+I). Nothing on the Kobo is ever changed.",
+            )
+        } else {
+            match self.current.get() {
+                Nav::Annotations(View::Inbox) => (
+                    "mail-unread-symbolic",
+                    "Inbox Zero",
+                    "New highlights from your Kobo will appear here.",
+                ),
+                Nav::Annotations(View::Starred) => (
+                    "starred-symbolic",
+                    "No Starred Highlights",
+                    "Press S on a highlight to star it.",
+                ),
+                Nav::Annotations(View::Trash) => ("user-trash-symbolic", "Trash Is Empty", ""),
+                Nav::Vocab => (
+                    "accessories-dictionary-symbolic",
+                    "No Words Yet",
+                    "Words you look up on your Kobo appear here.",
+                ),
+                _ => ("view-list-bullet-symbolic", "Nothing Here", ""),
+            }
+        };
+        self.empty.set_icon_name(Some(icon));
+        self.empty.set_title(title);
+        self.empty
+            .set_description(Some(description).filter(|d| !d.is_empty()));
+    }
+
+    fn vocab_row(self: &Rc<Self>, v: &Vocab, show_books: bool) -> gtk::ListBoxRow {
+        let mut subtitle = Vec::new();
+        if show_books && !v.books.is_empty() {
+            subtitle.push(v.books.join(", "));
+        }
+        if let Some(date) = v.first_seen_at {
+            subtitle.push(card::format_date(date));
+        }
+        let row = adw::ActionRow::builder()
+            .title(glib::markup_escape_text(&v.word))
+            .subtitle(glib::markup_escape_text(&subtitle.join(" · ")))
+            .subtitle_lines(2)
+            .build();
+        let status = gtk::DropDown::from_strings(&VOCAB_STATUS_LABELS);
+        status.set_valign(gtk::Align::Center);
+        status.add_css_class("flat");
+        status.set_tooltip_text(Some("Learning status"));
+        let index = VocabStatus::ALL
+            .iter()
+            .position(|s| *s == v.status)
+            .unwrap_or(0);
+        status.set_selected(index as u32);
+        let weak = Rc::downgrade(self);
+        let id = v.id;
+        status.connect_selected_notify(move |dd| {
+            let Some(this) = weak.upgrade() else { return };
+            let status = VocabStatus::ALL[(dd.selected() as usize).min(3)];
+            if let Err(err) = this.lib.borrow().set_vocab_status(id, status) {
+                this.error("Couldn’t Update Word", err);
+            }
+        });
+        row.add_suffix(&status);
+        row.upcast()
+    }
+
+    // ---- Annotation rows and actions ----------------------------------------
+
+    fn annotation_row(self: &Rc<Self>, a: &Annotation, in_book_view: bool) -> gtk::ListBoxRow {
+        let row = gtk::ListBoxRow::builder()
+            .child(&card::build(a, in_book_view))
+            .build();
+        let group = gio::SimpleActionGroup::new();
+        let id = a.id;
+        let add = |name: &str, f: fn(&Rc<Self>, &gtk::ListBoxRow, i64)| {
+            let action = gio::SimpleAction::new(name, None);
+            let weak = Rc::downgrade(self);
+            let row = row.downgrade();
+            action.connect_activate(move |_, _| {
+                if let (Some(this), Some(row)) = (weak.upgrade(), row.upgrade()) {
+                    f(&this, &row, id);
+                }
+            });
+            group.add_action(&action);
+        };
+        add("star", |this, row, id| {
+            let lib = this.lib.borrow();
+            let starred = lib.annotation(id).ok().flatten().is_some_and(|a| a.starred);
+            let result = lib.set_starred(id, !starred);
+            drop(lib);
+            this.after_change(row, id, result);
+        });
+        add("keep", |this, row, id| {
+            this.change_status(row, id, Status::Kept)
+        });
+        add("inbox", |this, row, id| {
+            this.change_status(row, id, Status::Inbox)
+        });
+        add("archive", |this, row, id| {
+            this.change_status(row, id, Status::Archived)
+        });
+        add("trash", |this, row, id| {
+            this.change_status(row, id, Status::Trashed)
+        });
+        add("accept-device", |this, row, id| {
+            let result = this.lib.borrow().accept_device_version(id);
+            this.after_change(row, id, result);
+        });
+        add("copy", |this, _, id| {
+            if let Some(text) = this
+                .lib
+                .borrow()
+                .annotation(id)
+                .ok()
+                .flatten()
+                .and_then(|a| a.text().map(str::to_owned))
+            {
+                this.win.clipboard().set_text(&text);
+                this.toast("Copied");
+            }
+        });
+        add("copy-markdown", |this, _, id| {
+            if let Some(a) = this.lib.borrow().annotation(id).ok().flatten() {
+                this.win.clipboard().set_text(&card::to_markdown(&a));
+                this.toast("Copied as Markdown");
+            }
+        });
+        add("edit", |this, row, id| this.edit(row, id));
+        row.insert_action_group("card", Some(&group));
+        row
+    }
+
+    fn change_status(self: &Rc<Self>, row: &gtk::ListBoxRow, id: i64, status: Status) {
+        let previous = self
+            .lib
+            .borrow()
+            .annotation(id)
+            .ok()
+            .flatten()
+            .map(|a| a.status);
+        if previous == Some(status) {
+            return;
+        }
+        let result = self.lib.borrow().set_status(id, status);
+        let ok = result.is_ok();
+        self.after_change(row, id, result);
+        let (Some(previous), true) = (previous, ok) else {
+            return;
+        };
+        let message = match status {
+            Status::Kept if previous == Status::Inbox => "Kept",
+            Status::Kept => "Restored",
+            Status::Inbox => "Moved to Inbox",
+            Status::Archived => "Archived",
+            Status::Trashed => "Moved to Trash",
+        };
+        let toast = adw::Toast::builder()
+            .title(message)
+            .button_label("Undo")
+            .timeout(4)
+            .build();
+        let weak = Rc::downgrade(self);
+        toast.connect_button_clicked(move |_| {
+            if let Some(this) = weak.upgrade() {
+                let _ = this.lib.borrow().set_status(id, previous);
+                this.reload();
+                this.update_counts();
+            }
+        });
+        self.show_toast(toast);
+    }
+
+    fn edit(self: &Rc<Self>, row: &gtk::ListBoxRow, id: i64) {
+        let Some(a) = self.lib.borrow().annotation(id).ok().flatten() else {
+            return;
+        };
+        let weak = Rc::downgrade(self);
+        let row = row.downgrade();
+        let (user_text, user_note, tags) =
+            (a.user_text.clone(), a.user_note.clone(), a.tags.clone());
+        edit::present(&self.win, &a, move |edited| {
+            let (Some(this), Some(row)) = (weak.upgrade(), row.upgrade()) else {
+                return;
+            };
+            let tags_changed = edited.tags != tags;
+            let result = (|| {
+                let mut lib = this.lib.borrow_mut();
+                if edited.text != user_text {
+                    lib.set_user_text(id, edited.text.as_deref())?;
+                }
+                if edited.note != user_note {
+                    lib.set_user_note(id, edited.note.as_deref())?;
+                }
+                if tags_changed {
+                    let tags: Vec<&str> = edited.tags.iter().map(String::as_str).collect();
+                    lib.set_annotation_tags(id, &tags)?;
+                }
+                Ok(())
+            })();
+            this.after_change(&row, id, result);
+            if tags_changed {
+                this.rebuild_sidebar();
+            }
+        });
+    }
+
+    /// Refreshes one card after a change, or removes it if it no longer
+    /// belongs in the current view, then moves the selection along.
+    fn after_change(
+        self: &Rc<Self>,
+        row: &gtk::ListBoxRow,
+        id: i64,
+        result: kollate_core::Result<()>,
+    ) {
+        if let Err(err) = result {
+            self.error("Couldn’t Save Change", err);
+            return;
+        }
+        let Nav::Annotations(view) = self.current.get() else {
+            return;
+        };
+        let filter = AnnotationFilter {
+            view,
+            search: self.search_text(),
+            id: Some(id),
+        };
+        let still_here = self
+            .lib
+            .borrow()
+            .query_annotations(&filter)
+            .ok()
+            .and_then(|v| v.into_iter().next());
+        match still_here {
+            Some(a) => {
+                row.set_child(Some(&card::build(&a, matches!(view, View::Book(_)))));
+                row.grab_focus();
+            }
+            None => {
+                let index = row.index();
+                self.list.remove(row);
+                if index >= 0 {
+                    self.groups.borrow_mut().remove(index as usize);
+                }
+                let (annotations, words) = self.shown.get();
+                self.shown.set((annotations.saturating_sub(1), words));
+                self.list.invalidate_headers();
+                let next = self
+                    .list
+                    .row_at_index(index)
+                    .or_else(|| self.list.row_at_index(index - 1));
+                if let Some(next) = next {
+                    self.list.select_row(Some(&next));
+                    next.grab_focus();
+                }
+                self.update_title();
+                self.update_empty_state();
+            }
+        }
+        self.update_counts();
+    }
+
+    // ---- Import ------------------------------------------------------------
+
+    fn choose_import_folder(self: &Rc<Self>) {
+        let dialog = gtk::FileDialog::builder()
+            .title("Choose Your Kobo")
+            .modal(true)
+            .build();
+        let media = PathBuf::from("/media").join(std::env::var("USER").unwrap_or_default());
+        if media.is_dir() {
+            dialog.set_initial_folder(Some(&gio::File::for_path(media)));
+        }
+        let this = self.clone();
+        glib::spawn_future_local(async move {
+            if let Ok(folder) = dialog.select_folder_future(Some(&this.win)).await
+                && let Some(path) = folder.path()
+            {
+                this.import_from(path);
+            }
+        });
+    }
+
+    fn import_from(self: &Rc<Self>, path: PathBuf) {
+        let this = self.clone();
+        glib::spawn_future_local(async move {
+            let progress = adw::Toast::builder()
+                .title("Importing from Kobo…")
+                .timeout(0)
+                .build();
+            this.show_toast(progress.clone());
+            let read = gio::spawn_blocking(move || -> kollate_core::Result<_> {
+                let device = DeviceInfo::identify(&path)?;
+                let snapshot = KoboDb::open_copy(&find_kobo_db(&path)?)?.snapshot()?;
+                Ok((device, snapshot))
+            })
+            .await;
+            progress.dismiss();
+            let outcome = match read {
+                Ok(Ok((device, snapshot))) => this
+                    .lib
+                    .borrow_mut()
+                    .import(&snapshot, &device, false)
+                    .map_err(|e| e.to_string()),
+                Ok(Err(err)) => Err(err.to_string()),
+                Err(_) => Err("The import stopped unexpectedly.".to_owned()),
+            };
+            match outcome {
+                Ok(stats) => {
+                    this.rebuild_sidebar();
+                    this.reload();
+                    this.import_toast(&stats);
+                }
+                Err(err) => this.error("Import Failed", err),
+            }
+        });
+    }
+
+    fn import_toast(self: &Rc<Self>, s: &ImportStats) {
+        let mut parts = Vec::new();
+        if s.annotations_new > 0 {
+            parts.push(plural(s.annotations_new, "new highlight", "new highlights"));
+        }
+        if s.words_new > 0 {
+            parts.push(plural(s.words_new, "new word", "new words"));
+        }
+        if s.annotations_updated > 0 {
+            parts.push(format!("{} updated", s.annotations_updated));
+        }
+        let title = if parts.is_empty() {
+            "Nothing new on your Kobo".to_owned()
+        } else {
+            parts.join(" · ")
+        };
+        let toast = adw::Toast::builder().title(title).timeout(6).build();
+        if s.annotations_new > 0 {
+            toast.set_button_label(Some("Review"));
+            let weak = Rc::downgrade(self);
+            toast.connect_button_clicked(move |_| {
+                if let Some(this) = weak.upgrade() {
+                    this.select_nav(Nav::Annotations(View::Inbox));
+                }
+            });
+        }
+        self.show_toast(toast);
+    }
+}
