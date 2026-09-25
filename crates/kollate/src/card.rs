@@ -274,6 +274,114 @@ pub fn book_header(book: &Book) -> gtk::ListBoxRow {
         .build()
 }
 
+/// A cover tile on the Books page: a flow box child (named with the book
+/// ID) holding a flat button.
+pub fn book_tile(book: &Book) -> gtk::FlowBoxChild {
+    const W: i32 = 132;
+    let tile = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(4)
+        .width_request(W)
+        .halign(gtk::Align::Center)
+        .build();
+    match book.cover.as_ref().filter(|p| p.is_file()) {
+        Some(path) => {
+            let cover = gtk::Picture::builder()
+                .content_fit(gtk::ContentFit::Cover)
+                .can_shrink(true)
+                .height_request(W * 3 / 2)
+                .css_classes(["book-cover"])
+                .build();
+            cover.set_filename(Some(path));
+            // A picture asks for its image's full size; clamp it to the tile.
+            tile.append(
+                &adw::Clamp::builder()
+                    .maximum_size(W)
+                    .tightening_threshold(W)
+                    .child(&cover)
+                    .build(),
+            );
+        }
+        None => {
+            let placeholder = gtk::Box::builder()
+                .width_request(W)
+                .height_request(W * 3 / 2)
+                .css_classes(["book-cover", "no-cover"])
+                .build();
+            let icon = gtk::Image::builder()
+                .icon_name("x-office-document-symbolic")
+                .pixel_size(40)
+                .hexpand(true)
+                .vexpand(true)
+                .css_classes(["dim-label"])
+                .build();
+            placeholder.append(&icon);
+            tile.append(&placeholder);
+        }
+    }
+    let label = |text: &str, css: &[&str], lines: i32| {
+        gtk::Label::builder()
+            .label(text)
+            .xalign(0.0)
+            .wrap(true)
+            .lines(lines)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .max_width_chars(1)
+            .css_classes(css.iter().map(|c| c.to_string()).collect::<Vec<_>>())
+            .build()
+    };
+    let title = label(&book.title, &["heading"], 2);
+    title.set_margin_top(6);
+    tile.append(&title);
+    if let Some(author) = &book.author {
+        tile.append(&label(author, &["caption", "dim-label"], 1));
+    }
+    let mut counts = Vec::new();
+    if book.annotation_count > 0 {
+        counts.push(format!(
+            "{} {}",
+            book.annotation_count,
+            if book.annotation_count == 1 {
+                "highlight"
+            } else {
+                "highlights"
+            }
+        ));
+    }
+    if book.vocab_count > 0 {
+        counts.push(format!(
+            "{} {}",
+            book.vocab_count,
+            if book.vocab_count == 1 {
+                "word"
+            } else {
+                "words"
+            }
+        ));
+    }
+    if !counts.is_empty() {
+        tile.append(&label(&counts.join(" · "), &["caption", "dim-label"], 1));
+    }
+
+    // A flat button, so the tile is clickable and accessible like any button.
+    let button = gtk::Button::builder()
+        .child(&tile)
+        .css_classes(["flat", "book-tile"])
+        .build();
+    let name = match &book.author {
+        Some(author) => format!("{} — {author}", book.title),
+        None => book.title.clone(),
+    };
+    button.set_tooltip_text(Some(&name));
+    button.update_property(&[gtk::accessible::Property::Label(&name)]);
+    let child = gtk::FlowBoxChild::builder()
+        .child(&button)
+        .focusable(false)
+        .build();
+    child.set_widget_name(&book.id.to_string());
+    child
+}
+
 /// Markdown blockquote with the note and source, for "Copy as Markdown".
 pub fn to_markdown(a: &Annotation) -> String {
     let mut out = String::new();

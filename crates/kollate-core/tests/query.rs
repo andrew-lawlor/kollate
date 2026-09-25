@@ -137,3 +137,109 @@ fn book_view_is_in_true_reading_order() {
     // kobo.3.1 < kobo.10.2 < kobo.10.4 (numeric, not text, comparison).
     assert_eq!(texts[..3], ["encircling o", "laughing aga", "they wave to"]);
 }
+
+#[test]
+fn shelf_hides_books_with_nothing_active() {
+    use kollate_core::store::BookSort;
+    let lib = library();
+    assert_eq!(lib.shelf(BookSort::Recent, None).unwrap().len(), 5);
+
+    // Trash every highlight of one book, archive every highlight of another.
+    let books = lib.books().unwrap();
+    let ash = books
+        .iter()
+        .find(|b| b.title.starts_with("Children of Ash"))
+        .unwrap()
+        .id;
+    let sagas = books
+        .iter()
+        .find(|b| b.title.starts_with("The Sagas"))
+        .unwrap()
+        .id;
+    for a in view(&lib, View::Book(ash)) {
+        lib.set_status(a.id, Status::Trashed).unwrap();
+    }
+    for a in view(&lib, View::Book(sagas)) {
+        lib.set_status(a.id, Status::Archived).unwrap();
+    }
+    let shelf: Vec<i64> = lib
+        .shelf(BookSort::Title, None)
+        .unwrap()
+        .iter()
+        .map(|b| b.id)
+        .collect();
+    assert_eq!(shelf.len(), 3);
+    assert!(!shelf.contains(&ash) && !shelf.contains(&sagas));
+    assert_eq!(
+        lib.books().unwrap().len(),
+        5,
+        "books() still lists everything"
+    );
+
+    // A book kept alive only by its words disappears when they're all ignored.
+    let kane = books
+        .iter()
+        .find(|b| b.title.contains("Solomon Kane"))
+        .unwrap()
+        .id;
+    for a in view(&lib, View::Book(kane)) {
+        lib.set_status(a.id, Status::Archived).unwrap();
+    }
+    assert!(
+        lib.shelf(BookSort::Title, None)
+            .unwrap()
+            .iter()
+            .any(|b| b.id == kane),
+        "has 2 words"
+    );
+    for w in lib.query_vocab(Some(kane), None).unwrap() {
+        lib.set_vocab_status(w.id, VocabStatus::Ignored).unwrap();
+    }
+    assert!(
+        !lib.shelf(BookSort::Title, None)
+            .unwrap()
+            .iter()
+            .any(|b| b.id == kane)
+    );
+}
+
+#[test]
+fn shelf_sorts_and_searches() {
+    use kollate_core::store::BookSort;
+    let lib = library();
+    let titles = |sort| {
+        lib.shelf(sort, None)
+            .unwrap()
+            .into_iter()
+            .map(|b| b.title)
+            .collect::<Vec<_>>()
+    };
+
+    // Most recent activity: Solomon Kane (Sep 25 lookups), then the Bible/Tantra (late Aug)…
+    let recent = titles(BookSort::Recent);
+    assert!(recent[0].contains("Solomon Kane"), "{recent:?}");
+    assert!(
+        recent.last().unwrap().starts_with("Children of Ash"),
+        "{recent:?}"
+    );
+    assert!(
+        lib.shelf(BookSort::Recent, None)
+            .unwrap()
+            .iter()
+            .all(|b| b.last_activity.is_some())
+    );
+
+    assert!(titles(BookSort::Title)[0].starts_with("Children of Ash"));
+    let by_author: Vec<_> = lib
+        .shelf(BookSort::Author, None)
+        .unwrap()
+        .into_iter()
+        .map(|b| b.author)
+        .collect();
+    assert_eq!(by_author[0].as_deref(), Some("Jane Smilely"));
+
+    let found = lib.shelf(BookSort::Title, Some("price")).unwrap();
+    assert_eq!(found.len(), 1, "matches author Neil Price");
+    assert_eq!(BookSort::parse(Some("author")), BookSort::Author);
+    assert_eq!(BookSort::parse(None), BookSort::Recent);
+}

@@ -13,7 +13,8 @@ use kollate_core::kobo::assets::{CopiedAssets, copy_assets};
 use kollate_core::kobo::epub::find_word_contexts;
 use kollate_core::kobo::{DeviceInfo, KoboDb, find_kobo_db, find_mounted_kobos, is_kobo_mount};
 use kollate_core::store::{
-    Annotation, AnnotationFilter, DeviceDeletePolicy, Status, View, Vocab, VocabStatus,
+    Annotation, AnnotationFilter, Book, BookSort, DeviceDeletePolicy, Status, View, Vocab,
+    VocabStatus,
 };
 use kollate_core::{ImportStats, Library};
 
@@ -24,9 +25,11 @@ use crate::{card, edit, word};
 pub enum Nav {
     Annotations(View),
     Vocab,
+    /// The Books page (cover grid).
+    Books,
 }
 
-const TOP_LEVEL: [(Nav, &str, &str); 9] = [
+const TOP_LEVEL: [(Nav, &str, &str); 10] = [
     (
         Nav::Annotations(View::Inbox),
         "mail-unread-symbolic",
@@ -52,6 +55,7 @@ const TOP_LEVEL: [(Nav, &str, &str); 9] = [
         "starred-symbolic",
         "Starred",
     ),
+    (Nav::Books, "folder-documents-symbolic", "Books"),
     (Nav::Vocab, "accessories-dictionary-symbolic", "Vocabulary"),
     (
         Nav::Annotations(View::Archive),
@@ -112,6 +116,9 @@ enum BannerAction {
     Eject,
 }
 
+/// How many books the sidebar lists under Recent.
+const RECENT_BOOKS: usize = 5;
+
 const VOCAB_STATUS_LABELS: [&str; 4] = ["New", "Learning", "Known", "Ignored"];
 
 pub struct Window {
@@ -146,6 +153,15 @@ pub struct Window {
     groups: Rc<RefCell<Vec<String>>>,
     /// Number of (annotation, vocab) rows currently listed.
     shown: Cell<(usize, usize)>,
+    /// Books page.
+    books_grid: gtk::FlowBox,
+    books_shown: Cell<usize>,
+    book_sort: gtk::DropDown,
+    back: gtk::Button,
+    /// The current book was opened from the Books page (Back returns there).
+    from_books: Cell<bool>,
+    /// Book IDs listed under Recent in the sidebar.
+    recent_ids: RefCell<Vec<i64>>,
     current: Cell<Nav>,
     dictionaries: RefCell<Vec<Dictionary>>,
 }
@@ -223,6 +239,19 @@ impl Window {
         search_button.update_property(&[gtk::accessible::Property::Label("Search")]);
         let header = adw::HeaderBar::builder().title_widget(&title).build();
         header.pack_end(&search_button);
+        let back = gtk::Button::builder()
+            .icon_name("go-previous-symbolic")
+            .tooltip_text("Back to Books (Alt+←)")
+            .action_name("win.back")
+            .visible(false)
+            .build();
+        back.update_property(&[gtk::accessible::Property::Label("Back to Books")]);
+        header.pack_start(&back);
+        let book_sort = gtk::DropDown::from_strings(&["Recent", "Title", "Author"]);
+        book_sort.set_tooltip_text(Some("Sort books"));
+        book_sort.update_property(&[gtk::accessible::Property::Label("Sort books")]);
+        book_sort.set_visible(false);
+        header.pack_end(&book_sort);
         let search = gtk::SearchEntry::builder()
             .placeholder_text("Search text, notes, books and tags")
             .hexpand(true)
@@ -262,8 +291,33 @@ impl Window {
             .child(&clamp)
             .build();
         let empty = adw::StatusPage::new();
+        let books_grid = gtk::FlowBox::builder()
+            .homogeneous(true)
+            .selection_mode(gtk::SelectionMode::None)
+            .activate_on_single_click(true)
+            .min_children_per_line(2)
+            .max_children_per_line(10)
+            .column_spacing(12)
+            .row_spacing(12)
+            .valign(gtk::Align::Start)
+            .margin_top(12)
+            .margin_bottom(24)
+            .margin_start(12)
+            .margin_end(12)
+            .build();
+        let books_scrolled = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vexpand(true)
+            .child(
+                &adw::Clamp::builder()
+                    .maximum_size(1100)
+                    .child(&books_grid)
+                    .build(),
+            )
+            .build();
         let stack = gtk::Stack::new();
         stack.add_named(&scrolled, Some("list"));
+        stack.add_named(&books_scrolled, Some("books"));
         stack.add_named(&empty, Some("empty"));
         let banner = adw::Banner::new("");
         let content_toolbar = adw::ToolbarView::new();
@@ -315,6 +369,12 @@ impl Window {
             list,
             groups: Rc::default(),
             shown: Cell::new((0, 0)),
+            books_grid,
+            books_shown: Cell::new(0),
+            book_sort,
+            back,
+            from_books: Cell::new(false),
+            recent_ids: RefCell::default(),
             current: Cell::new(Nav::Annotations(View::Inbox)),
             dictionaries: RefCell::default(),
         });
@@ -437,14 +497,45 @@ impl Window {
                 .copied()
                 .flatten();
             if let Some(nav) = nav {
-                this.current.set(nav);
-                if !this.search.text().is_empty() {
-                    this.search.set_text(""); // triggers a reload
-                } else {
-                    this.reload();
-                }
-                this.split.set_show_content(true);
-                this.update_counts();
+                this.navigate(nav, false);
+            }
+        });
+
+        // Clicking the (already selected) Books row while a book from the
+        // Books page is open goes back to the grid.
+        let weak = Rc::downgrade(self);
+        self.sidebar.connect_row_activated(move |_, row| {
+            let Some(this) = weak.upgrade() else { return };
+            let nav = this
+                .sidebar_navs
+                .borrow()
+                .get(row.index() as usize)
+                .copied()
+                .flatten();
+            if nav == Some(Nav::Books) && this.current.get() != Nav::Books {
+                this.navigate(Nav::Books, false);
+            }
+        });
+
+        let saved = BookSort::parse(
+            self.lib
+                .borrow()
+                .setting("books_sort")
+                .ok()
+                .flatten()
+                .as_deref(),
+        );
+        self.book_sort
+            .set_selected(BookSort::ALL.iter().position(|s| *s == saved).unwrap_or(0) as u32);
+        let weak = Rc::downgrade(self);
+        self.book_sort.connect_selected_notify(move |dd| {
+            let Some(this) = weak.upgrade() else { return };
+            let sort = BookSort::ALL[(dd.selected() as usize).min(BookSort::ALL.len() - 1)];
+            if let Err(err) = this.lib.borrow().set_setting("books_sort", sort.as_str()) {
+                this.error("Couldn’t Save Setting", err);
+            }
+            if this.current.get() == Nav::Books {
+                this.reload();
             }
         });
 
@@ -454,6 +545,20 @@ impl Window {
                 this.reload();
             }
         });
+    }
+
+    /// Shows `nav`. `from_books` records that a book was opened from the
+    /// Books page, so Back can return there.
+    fn navigate(self: &Rc<Self>, nav: Nav, from_books: bool) {
+        self.current.set(nav);
+        self.from_books.set(from_books);
+        if !self.search.text().is_empty() {
+            self.search.set_text(""); // triggers a reload
+        } else {
+            self.reload();
+        }
+        self.split.set_show_content(true);
+        self.update_counts();
     }
 
     fn add_win_action(self: &Rc<Self>, name: &str, f: impl Fn(&Rc<Self>) + 'static) {
@@ -484,6 +589,11 @@ impl Window {
         });
         self.add_win_action("preferences", |this| this.show_preferences());
         self.add_win_action("export", |this| this.show_export());
+        self.add_win_action("back", |this| {
+            if this.from_books.get() {
+                this.navigate(Nav::Books, false);
+            }
+        });
         self.add_win_action("import-folder", |this| this.choose_import_folder());
         self.add_win_action("about", |this| {
             let about = adw::AboutDialog::builder()
@@ -585,12 +695,24 @@ impl Window {
         }
 
         let lib = self.lib.borrow();
-        let books = lib.books().unwrap_or_default();
-        let mut book_map = HashMap::new();
-        if !books.is_empty() {
-            add(Self::sidebar_heading("Books"), None, None);
+        // Titles of every book (for page titles); only recent ones get a row.
+        let book_map: HashMap<i64, (String, Option<String>)> = lib
+            .books()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|b| (b.id, (b.title, b.author)))
+            .collect();
+        let recent: Vec<Book> = lib
+            .shelf(BookSort::Recent, None)
+            .unwrap_or_default()
+            .into_iter()
+            .take(RECENT_BOOKS)
+            .collect();
+        if !recent.is_empty() {
+            add(Self::sidebar_heading("Recent"), None, None);
         }
-        for b in books {
+        let mut recent_ids = Vec::new();
+        for b in recent {
             let count = gtk::Label::new(None);
             let tooltip = match &b.author {
                 Some(author) => format!("{}\n{author}", b.title),
@@ -602,7 +724,7 @@ impl Window {
                 Some(nav),
                 Some(count),
             );
-            book_map.insert(b.id, (b.title, b.author));
+            recent_ids.push(b.id);
         }
 
         let tags = lib.tags().unwrap_or_default();
@@ -622,11 +744,19 @@ impl Window {
         }
         drop(lib);
 
-        // The current book or tag may be gone (e.g. last tag removed).
-        if !navs.contains(&Some(self.current.get())) {
-            self.current.set(Nav::Annotations(View::Inbox));
-        }
-        let selected = navs.iter().position(|n| *n == Some(self.current.get()));
+        // A book opened from the Books page has no row of its own: keep it
+        // and select Books. A removed tag falls back to the Inbox.
+        let current = self.current.get();
+        let highlight = match current {
+            _ if navs.contains(&Some(current)) => Some(current),
+            Nav::Annotations(View::Book(id)) if book_map.contains_key(&id) => Some(Nav::Books),
+            _ => {
+                self.current.set(Nav::Annotations(View::Inbox));
+                Some(Nav::Annotations(View::Inbox))
+            }
+        };
+        let selected = navs.iter().position(|n| *n == highlight);
+        *self.recent_ids.borrow_mut() = recent_ids;
         *self.sidebar_navs.borrow_mut() = navs;
         *self.count_labels.borrow_mut() = labels;
         *self.books.borrow_mut() = book_map;
@@ -639,9 +769,17 @@ impl Window {
         self.update_counts();
     }
 
-    fn update_counts(&self) {
+    fn update_counts(self: &Rc<Self>) {
         let lib = self.lib.borrow();
         let Ok(c) = lib.sidebar_counts() else { return };
+        let shelf = lib.shelf(BookSort::Recent, None).unwrap_or_default();
+        let recent: Vec<i64> = shelf.iter().take(RECENT_BOOKS).map(|b| b.id).collect();
+        if recent != *self.recent_ids.borrow() {
+            // A book gained or lost its place under Recent.
+            drop(lib);
+            self.rebuild_sidebar();
+            return;
+        }
         let mut counts: HashMap<Nav, i64> = HashMap::from([
             (Nav::Annotations(View::Inbox), c.inbox),
             (Nav::Annotations(View::All), c.all),
@@ -652,6 +790,7 @@ impl Window {
             (Nav::Annotations(View::Trash), c.trash),
             (Nav::Annotations(View::RemovedOnDevice), c.removed_on_device),
             (Nav::Vocab, c.vocab),
+            (Nav::Books, shelf.len() as i64),
         ]);
         for b in lib.books().unwrap_or_default() {
             counts.insert(Nav::Annotations(View::Book(b.id)), b.annotation_count);
@@ -710,6 +849,9 @@ impl Window {
         let (title, author) = self.nav_title(nav);
         let (annotations, words) = self.shown.get();
         let mut parts: Vec<String> = author.into_iter().collect();
+        if nav == Nav::Books && self.books_shown.get() > 0 {
+            parts.push(plural(self.books_shown.get(), "book", "books"));
+        }
         if annotations > 0 {
             parts.push(plural(annotations, "highlight", "highlights"));
         }
@@ -738,9 +880,13 @@ impl Window {
             &["boxed-list", "annotation-list"]
         });
 
+        self.back
+            .set_visible(self.from_books.get() && matches!(nav, Nav::Annotations(View::Book(_))));
+        self.book_sort.set_visible(nav == Nav::Books);
         let result = match nav {
             Nav::Annotations(view) => self.fill_annotations(view),
             Nav::Vocab => self.fill_vocab(None, "").map(|_| ()),
+            Nav::Books => self.fill_books(),
         };
         if let Err(err) = result {
             self.error("Couldn’t Load Library", err);
@@ -801,10 +947,45 @@ impl Window {
         Ok(words.len())
     }
 
+    fn fill_books(self: &Rc<Self>) -> kollate_core::Result<()> {
+        while let Some(child) = self.books_grid.first_child() {
+            self.books_grid.remove(&child);
+        }
+        let sort = BookSort::ALL[(self.book_sort.selected() as usize).min(BookSort::ALL.len() - 1)];
+        let books = self
+            .lib
+            .borrow()
+            .shelf(sort, self.search_text().as_deref())?;
+        for b in &books {
+            let tile = card::book_tile(b);
+            if let Some(button) = tile.child().and_downcast::<gtk::Button>() {
+                let weak = Rc::downgrade(self);
+                let id = b.id;
+                button.connect_clicked(move |_| {
+                    if let Some(this) = weak.upgrade() {
+                        this.navigate(Nav::Annotations(View::Book(id)), true);
+                    }
+                });
+            }
+            self.books_grid.append(&tile);
+        }
+        self.books_shown.set(books.len());
+        Ok(())
+    }
+
     fn update_empty_state(&self) {
-        let empty = self.shown.get() == (0, 0);
-        self.stack
-            .set_visible_child_name(if empty { "empty" } else { "list" });
+        let on_books = self.current.get() == Nav::Books;
+        let empty = if on_books {
+            self.books_shown.get() == 0
+        } else {
+            self.shown.get() == (0, 0)
+        };
+        let page = match (empty, on_books) {
+            (true, _) => "empty",
+            (false, true) => "books",
+            (false, false) => "list",
+        };
+        self.stack.set_visible_child_name(page);
         if !empty {
             return;
         }
@@ -839,6 +1020,11 @@ impl Window {
                     "Press S on a highlight to star it.",
                 ),
                 Nav::Annotations(View::Trash) => ("user-trash-symbolic", "Trash Is Empty", ""),
+                Nav::Books => (
+                    "folder-documents-symbolic",
+                    "No Books",
+                    "Books with highlights or looked-up words appear here. Books whose highlights are all archived or trashed are hidden.",
+                ),
                 Nav::Annotations(View::RemovedOnDevice) => (
                     "edit-delete-symbolic",
                     "Nothing Deleted on Your Kobo",

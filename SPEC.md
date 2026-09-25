@@ -209,7 +209,8 @@ Schema versioning via `PRAGMA user_version` with forward-only migrations.
 
 Sidebar:
 - 📥 **Inbox** (new since last review, with a count badge)
-- 📚 **Books**, a list with cover, title, author and highlight/word counts
+- 📚 **Books**: one entry that opens a page of covers with title, author and highlight/word counts, sorted by most recent activity (or title or author; saved in `setting.books_sort`), with search. Only books with an Inbox or kept highlight, or a word that isn't Ignored, are listed (`Library::shelf`). A Back button (Alt+←) returns from a book to the grid.
+- 🕘 **Recent**: the 5 most recently annotated books, as sidebar rows
 - ✏️ **All Highlights** · 🗒 **Notes only** · ✍️ **Markups**
 - 🔤 **Vocabulary**
 - ⭐ **Starred** · 🏷 **Tags** (user tags) · 🗄 **Archive** · 🗑 **Trash**

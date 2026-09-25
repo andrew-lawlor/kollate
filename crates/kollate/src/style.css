@@ -58,3 +58,9 @@
   background: none;
   box-shadow: none;
 }
+
+.book-tile {
+  padding: 8px;
+  border-radius: 12px;
+  font-weight: normal;
+}

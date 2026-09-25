@@ -114,6 +114,37 @@ pub struct Book {
     pub publisher: Option<String>,
     pub series: Option<String>,
     pub series_number: Option<String>,
+    /// Newest highlight (Inbox or kept) or word lookup in this book.
+    pub last_activity: Option<DateTime<Utc>>,
+}
+
+/// Order of the Books page.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub enum BookSort {
+    /// Most recently annotated first.
+    #[default]
+    Recent,
+    Title,
+    Author,
+}
+
+impl BookSort {
+    pub const ALL: [Self; 3] = [Self::Recent, Self::Title, Self::Author];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Recent => "recent",
+            Self::Title => "title",
+            Self::Author => "author",
+        }
+    }
+
+    pub fn parse(s: Option<&str>) -> Self {
+        Self::ALL
+            .into_iter()
+            .find(|v| Some(v.as_str()) == s)
+            .unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -236,23 +267,68 @@ impl Library {
         )?)
     }
 
+    /// Every book in the library, by title.
     pub fn books(&self) -> Result<Vec<Book>> {
-        self.query_books(None)
+        self.query_books(None, false, None, BookSort::Title)
     }
 
     pub fn book(&self, id: i64) -> Result<Option<Book>> {
-        Ok(self.query_books(Some(id))?.into_iter().next())
+        Ok(self
+            .query_books(Some(id), false, None, BookSort::Title)?
+            .into_iter()
+            .next())
     }
 
-    fn query_books(&self, id: Option<i64>) -> Result<Vec<Book>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT b.id, coalesce(b.user_title, b.title), coalesce(b.user_author, b.author),
-                    (SELECT count(*) FROM annotation a WHERE a.book_id = b.id AND a.status IN ('inbox', 'kept')),
-                    (SELECT count(DISTINCT s.vocab_id) FROM vocab_sighting s WHERE s.book_id = b.id),
-                    b.cover_path, b.percent_read, b.last_read_at, b.isbn, b.publisher, b.series, b.series_number
-             FROM book b WHERE NOT b.hidden AND (?1 IS NULL OR b.id = ?1) ORDER BY 2 COLLATE NOCASE",
-        )?;
-        let books = stmt.query_map([id], |r| {
+    /// Books worth showing: those with a highlight in the Inbox or kept, or
+    /// a word that isn't Ignored. Books whose highlights are all archived or
+    /// trashed are left out. `search` matches title or author.
+    pub fn shelf(&self, sort: BookSort, search: Option<&str>) -> Result<Vec<Book>> {
+        self.query_books(None, true, search, sort)
+    }
+
+    fn query_books(
+        &self,
+        id: Option<i64>,
+        active_only: bool,
+        search: Option<&str>,
+        sort: BookSort,
+    ) -> Result<Vec<Book>> {
+        let pattern = search
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(query::like_pattern);
+        let order = match sort {
+            BookSort::Recent => "last_activity IS NULL, last_activity DESC, title COLLATE NOCASE",
+            BookSort::Title => "title COLLATE NOCASE",
+            BookSort::Author => "author IS NULL, author COLLATE NOCASE, title COLLATE NOCASE",
+        };
+        let mut stmt = self.conn.prepare(&format!(
+            "WITH stats AS (
+                SELECT b.id,
+                    (SELECT count(*) FROM annotation a WHERE a.book_id = b.id AND a.status IN ('inbox', 'kept'))
+                        AS annotations,
+                    (SELECT count(DISTINCT s.vocab_id) FROM vocab_sighting s JOIN vocab v ON v.id = s.vocab_id
+                     WHERE s.book_id = b.id AND v.status != 'ignored') AS words,
+                    nullif(max(
+                        coalesce((SELECT max(a.created_at) FROM annotation a
+                                  WHERE a.book_id = b.id AND a.status IN ('inbox', 'kept')), ''),
+                        coalesce((SELECT max(s.looked_up_at) FROM vocab_sighting s JOIN vocab v ON v.id = s.vocab_id
+                                  WHERE s.book_id = b.id AND v.status != 'ignored'), '')
+                    ), '') AS last_activity
+                FROM book b
+            )
+            SELECT b.id, coalesce(b.user_title, b.title) AS title, coalesce(b.user_author, b.author) AS author,
+                   st.annotations, st.words, b.cover_path, b.percent_read, b.last_read_at, b.isbn, b.publisher,
+                   b.series, b.series_number, st.last_activity
+            FROM book b JOIN stats st ON st.id = b.id
+            WHERE NOT b.hidden
+              AND (?1 IS NULL OR b.id = ?1)
+              AND (NOT ?2 OR st.annotations > 0 OR st.words > 0)
+              AND (?3 IS NULL OR coalesce(b.user_title, b.title) LIKE ?3 ESCAPE '\\'
+                   OR coalesce(b.user_author, b.author, '') LIKE ?3 ESCAPE '\\')
+            ORDER BY {order}"
+        ))?;
+        let books = stmt.query_map(params![id, active_only, pattern], |r| {
             Ok(Book {
                 id: r.get(0)?,
                 title: r.get(1)?,
@@ -266,6 +342,7 @@ impl Library {
                 publisher: r.get(9)?,
                 series: r.get(10)?,
                 series_number: r.get(11)?,
+                last_activity: r.get(12)?,
             })
         })?;
         Ok(books.collect::<rusqlite::Result<_>>()?)

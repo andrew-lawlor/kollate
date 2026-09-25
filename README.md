@@ -24,6 +24,7 @@ Plug in your Kobo and Kollate imports everything you've marked while reading:
 Then you curate:
 
 - An **Inbox** of new highlights you can triage from the keyboard: `K` keep, `A` archive, `S` star, `E` edit, `Delete` trash.
+- A **Books** page of covers, sorted by most recently read (or title, or author), with your five latest books always one click away in the sidebar.
 - **Star, tag, archive** and **search** everything.
 - **Fix typos or rewrite notes.** Kollate keeps the Kobo's original and can restore it.
 - **Pick the right context sentence** and edit definitions for each word, and track words as *New*, *Learning*, *Known* or *Ignored*.
@@ -38,14 +39,12 @@ And export:
 
 | | |
 |---|---|
-| ![A book page with its cover, reading progress and highlights by chapter](docs/screenshots/book.png) | ![Vocabulary words with definitions and the sentence each was found in](docs/screenshots/vocabulary.png) |
-| **Books:** cover, progress, highlights by chapter | **Vocabulary:** definition and the sentence from your book |
-| ![Word dialog for choosing the context sentence and editing the definition](docs/screenshots/word.png) | ![Dark mode, with a starred and tagged note](docs/screenshots/dark.png) |
-| **Words:** pick the context, edit the definition | **Dark mode**, tags and stars |
-
-<p align="center">
-  <img src="docs/screenshots/export.png" width="70%" alt="Export dialog with Obsidian, Anki and file options">
-</p>
+| ![The Books page: a grid of covers with highlight and word counts](docs/screenshots/books.png) | ![A book page with its cover, reading progress and highlights by chapter](docs/screenshots/book.png) |
+| **Books:** your library by cover, most recent first | **A book:** cover, progress, highlights by chapter |
+| ![Vocabulary words with definitions and the sentence each was found in](docs/screenshots/vocabulary.png) | ![Word dialog for choosing the context sentence and editing the definition](docs/screenshots/word.png) |
+| **Vocabulary:** definition and the sentence from your book | **Words:** pick the context, edit the definition |
+| ![Dark mode, with a starred and tagged note](docs/screenshots/dark.png) | ![Export dialog with Obsidian, Anki and file options](docs/screenshots/export.png) |
+| **Dark mode**, tags and stars | **Export** to Obsidian, Anki and files |
 
 ## Your Kobo stays untouched, and nothing goes online
 
