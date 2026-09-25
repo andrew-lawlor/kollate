@@ -2,6 +2,7 @@
 
 mod card;
 mod edit;
+mod shortcuts;
 mod window;
 mod word;
 
@@ -20,6 +21,7 @@ fn main() -> glib::ExitCode {
     app.set_accels_for_action("win.preferences", &["<Control>comma"]);
     app.set_accels_for_action("win.export", &["<Control>e"]);
     app.set_accels_for_action("win.back", &["<Alt>Left"]);
+    app.set_accels_for_action("win.shortcuts", &["<Control>question", "<Control>slash"]);
     app.set_accels_for_action("window.close", &["<Control>w"]);
     app.set_accels_for_action("app.quit", &["<Control>q"]);
     app.run()

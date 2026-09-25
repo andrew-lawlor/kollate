@@ -18,7 +18,7 @@ use kollate_core::store::{
 };
 use kollate_core::{ImportStats, Library};
 
-use crate::{card, edit, word};
+use crate::{card, edit, shortcuts, word};
 
 /// What the content pane shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -140,6 +140,7 @@ pub struct Window {
     content_page: adw::NavigationPage,
     title: adw::WindowTitle,
     banner: adw::Banner,
+    tip: adw::Banner,
     banner_action: Cell<BannerAction>,
     monitor: gio::VolumeMonitor,
     kobo: RefCell<Option<Connected>>,
@@ -360,9 +361,15 @@ impl Window {
         stack.add_named(&books_scrolled, Some("books"));
         stack.add_named(&empty, Some("empty"));
         let banner = adw::Banner::new("");
+        // One-time hint about keyboard triage, shown in the Inbox.
+        let tip = adw::Banner::builder()
+            .title("Tip: K keeps, A archives, S stars, and Delete trashes the selected highlight. Press Ctrl+? for all shortcuts.")
+            .button_label("Got It")
+            .build();
         let content_toolbar = adw::ToolbarView::new();
         content_toolbar.add_top_bar(&header);
         content_toolbar.add_top_bar(&banner);
+        content_toolbar.add_top_bar(&tip);
         content_toolbar.add_top_bar(&search_bar);
         content_toolbar.add_bottom_bar(&selection_bar);
         content_toolbar.set_content(Some(&stack));
@@ -399,6 +406,7 @@ impl Window {
             content_page,
             title,
             banner,
+            tip,
             banner_action: Cell::new(BannerAction::Import),
             monitor: gio::VolumeMonitor::get(),
             kobo: RefCell::default(),
@@ -606,6 +614,16 @@ impl Window {
         });
 
         let weak = Rc::downgrade(self);
+        self.tip.connect_button_clicked(move |tip| {
+            tip.set_revealed(false);
+            if let Some(this) = weak.upgrade()
+                && let Err(err) = this.lib.borrow().set_setting("tip_triage_dismissed", "1")
+            {
+                this.error("Couldn’t Save Setting", err);
+            }
+        });
+
+        let weak = Rc::downgrade(self);
         self.keep_all.connect_clicked(move |_| {
             if let Some(this) = weak.upgrade() {
                 let ids = this.listed_annotation_ids();
@@ -700,21 +718,7 @@ impl Window {
             );
             about.present(Some(&this.win));
         });
-        self.add_win_action("shortcuts", |this| {
-            let dialog = adw::AlertDialog::new(
-                Some("Keyboard Shortcuts"),
-                Some(
-                    "On a selected highlight:\n\
-                     K  Keep  ·  A  Archive  ·  S  Star\n\
-                     E or Enter  Edit  ·  I  Move to Inbox  ·  Delete  Trash\n\
-                     ↑ ↓  Previous / next\n\n\
-                     Ctrl+F  Search  ·  Ctrl+I  Import from Kobo  ·  Ctrl+E  Export\n\
-                     Ctrl+,  Preferences  ·  Ctrl+W  Close window  ·  Ctrl+Q  Quit",
-                ),
-            );
-            dialog.add_response("close", "Close");
-            dialog.present(Some(&this.win));
-        });
+        self.add_win_action("shortcuts", |this| shortcuts::present(&this.win));
     }
 
     // ---- Sidebar -----------------------------------------------------------
@@ -985,8 +989,16 @@ impl Window {
         }
         self.update_title();
         self.update_empty_state();
-        self.keep_all
-            .set_visible(nav == Nav::Annotations(View::Inbox) && self.shown.get().0 > 0);
+        let inbox_has_items = nav == Nav::Annotations(View::Inbox) && self.shown.get().0 > 0;
+        self.keep_all.set_visible(inbox_has_items);
+        let tip_dismissed = self
+            .lib
+            .borrow()
+            .setting("tip_triage_dismissed")
+            .ok()
+            .flatten()
+            .is_some();
+        self.tip.set_revealed(inbox_has_items && !tip_dismissed);
         self.selection_bar.set_revealed(false);
         let first = (0..)
             .map_while(|i| self.list.row_at_index(i))
