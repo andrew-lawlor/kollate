@@ -44,8 +44,8 @@ And export:
 | **Books:** your library by cover, most recent first | **A book:** cover, progress, highlights by chapter |
 | ![Vocabulary words with definitions and the sentence each was found in](docs/screenshots/vocabulary.png) | ![Word dialog for choosing the context sentence and editing the definition](docs/screenshots/word.png) |
 | **Vocabulary:** definition and the sentence from your book | **Words:** pick the context, edit the definition |
-| ![Dark mode, with a starred and tagged note](docs/screenshots/dark.png) | ![Export dialog with Obsidian, Anki and file options](docs/screenshots/export.png) |
-| **Dark mode**, tags and stars | **Export** to Obsidian, Anki and files |
+| ![Dark mode: starred highlights from several books, with a note](docs/screenshots/dark.png) | ![Export dialog with Obsidian, Anki and file options](docs/screenshots/export.png) |
+| **Dark mode:** your starred highlights across books | **Export** to Obsidian, Anki and files |
 
 ## Your Kobo stays untouched, and nothing goes online
 
