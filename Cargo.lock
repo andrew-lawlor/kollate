@@ -742,7 +742,7 @@ dependencies = [
 
 [[package]]
 name = "kollate"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "gtk4",
@@ -752,7 +752,7 @@ dependencies = [
 
 [[package]]
 name = "kollate-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -762,7 +762,7 @@ dependencies = [
 
 [[package]]
 name = "kollate-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "blake3",
  "chrono",
