@@ -222,7 +222,9 @@ Content pane:
 - **Edit:** inline editing of the note and a "corrected text" field. The device original stays visible and can be restored.
 - **Merge highlights** (not built yet): Kobo splits highlights that cross page or element boundaries, so you'd select adjacent ones and merge them.
 - **Search:** Ctrl+F searches the current view (text, note, chapter, book, author, tags) with an escaped `LIKE`, which is plenty for a personal library. FTS5 and filter chips for colour and date come later if needed.
-- **Keyboard triage** on the selected card: `K` keep, `A` archive, `S` star, `E`/`Enter`/double-click edit, `I` back to Inbox, `Delete` trash, `↑`/`↓` move. Status changes show an Undo toast.
+- **Keyboard triage** on the selected card: `K` keep, `A` archive, `S` star, `E`/`Enter`/double-click edit, `I` back to Inbox, `Delete` trash, `↑`/`↓` move. Status changes show an Undo toast. **Starring an Inbox item also keeps it** (one Undo reverts both).
+- **Multi-select:** the list allows multiple selection (Ctrl/Shift-click, Shift+arrows, Ctrl+A; Escape goes back to one). With several highlights selected, the triage keys act on all of them, and a bottom action bar shows "N selected" with Keep, Archive, Star and Trash. **Keep All** in the Inbox header keeps everything listed, respecting the search. Bulk actions reload the list and offer one Undo for everything.
+- **Search** is a permanent field at the top of every page (Ctrl+F focuses it, Escape clears it). Its placeholder says what it searches: highlights, books (title/author) or words (word, definition, context).
 
 **Preferences:** device-detection behaviour, definition sources, export targets, colour names (for example "blue = definitions").
 

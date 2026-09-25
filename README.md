@@ -23,9 +23,10 @@ Plug in your Kobo and Kollate imports everything you've marked while reading:
 
 Then you curate:
 
-- An **Inbox** of new highlights you can triage from the keyboard: `K` keep, `A` archive, `S` star, `E` edit, `Delete` trash.
+- An **Inbox** of new highlights you can triage from the keyboard: `K` keep, `A` archive, `S` star (starring also keeps), `E` edit, `Delete` trash.
+- **Bulk actions:** select several highlights (Ctrl- or Shift-click, Shift+↑/↓, Ctrl+A) and keep, archive, star or trash them together, or **Keep All** in the Inbox. Every action can be undone.
 - A **Books** page of covers, sorted by most recently read (or title, or author), with your five latest books always one click away in the sidebar.
-- **Star, tag, archive** and **search** everything.
+- **Star, tag, archive** and **search** everything: the search field at the top of every page filters highlights, books or words.
 - **Fix typos or rewrite notes.** Kollate keeps the Kobo's original and can restore it.
 - **Pick the right context sentence** and edit definitions for each word, and track words as *New*, *Learning*, *Known* or *Ignored*.
 

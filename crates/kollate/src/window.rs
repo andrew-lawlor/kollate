@@ -144,7 +144,10 @@ pub struct Window {
     monitor: gio::VolumeMonitor,
     kobo: RefCell<Option<Connected>>,
     importing: Cell<bool>,
-    search_bar: gtk::SearchBar,
+    selection_bar: gtk::ActionBar,
+    selection_label: gtk::Label,
+    selection_done: gtk::Button,
+    keep_all: gtk::Button,
     search: gtk::SearchEntry,
     stack: gtk::Stack,
     empty: adw::StatusPage,
@@ -232,13 +235,13 @@ impl Window {
 
         // Content
         let title = adw::WindowTitle::new("", "");
-        let search_button = gtk::ToggleButton::builder()
-            .icon_name("system-search-symbolic")
-            .tooltip_text("Search (Ctrl+F)")
-            .build();
-        search_button.update_property(&[gtk::accessible::Property::Label("Search")]);
         let header = adw::HeaderBar::builder().title_widget(&title).build();
-        header.pack_end(&search_button);
+        let keep_all = gtk::Button::builder()
+            .label("Keep All")
+            .tooltip_text("Keep every highlight listed in the Inbox")
+            .visible(false)
+            .build();
+        header.pack_end(&keep_all);
         let back = gtk::Button::builder()
             .icon_name("go-previous-symbolic")
             .tooltip_text("Back to Books (Alt+←)")
@@ -256,23 +259,60 @@ impl Window {
             .placeholder_text("Search text, notes, books and tags")
             .hexpand(true)
             .build();
-        let search_bar = gtk::SearchBar::builder()
-            .child(
-                &adw::Clamp::builder()
-                    .maximum_size(600)
-                    .child(&search)
-                    .build(),
-            )
+        search.set_tooltip_text(Some("Search (Ctrl+F)"));
+        // Always visible, so it's easy to find; Escape clears it.
+        let search_bar = adw::Clamp::builder()
+            .maximum_size(600)
+            .child(&search)
+            .margin_top(6)
+            .margin_bottom(6)
+            .margin_start(12)
+            .margin_end(12)
             .build();
-        search_bar.connect_entry(&search);
-        search_button
-            .bind_property("active", &search_bar, "search-mode-enabled")
-            .bidirectional()
-            .sync_create()
+        search.connect_stop_search(|entry| entry.set_text(""));
+
+        // Shown while several highlights are selected.
+        let selection_label = gtk::Label::new(None);
+        let selection_bar = gtk::ActionBar::builder().revealed(false).build();
+        selection_bar.set_center_widget(Some(&selection_label));
+        for (label, tooltip, action) in [
+            ("Keep", "Keep (K)", "keep"),
+            ("Archive", "Archive (A)", "archive"),
+            ("Star", "Star or unstar (S)", "star"),
+        ] {
+            let b = gtk::Button::builder()
+                .label(label)
+                .tooltip_text(tooltip)
+                .action_name("win.bulk")
+                .action_target(&action.to_variant())
+                .build();
+            // A text button is named by its label; replace that with a fuller name.
+            b.reset_relation(gtk::AccessibleRelation::LabelledBy);
+            b.update_property(&[gtk::accessible::Property::Label(&format!(
+                "{label} selected highlights"
+            ))]);
+            selection_bar.pack_start(&b);
+        }
+        let bulk_trash = gtk::Button::builder()
+            .label("Trash")
+            .tooltip_text("Move to Trash (Delete)")
+            .action_name("win.bulk")
+            .action_target(&"trash".to_variant())
+            .css_classes(["destructive-action"])
             .build();
+        bulk_trash.reset_relation(gtk::AccessibleRelation::LabelledBy);
+        bulk_trash.update_property(&[gtk::accessible::Property::Label(
+            "Trash selected highlights",
+        )]);
+        selection_bar.pack_start(&bulk_trash);
+        let clear_selection = gtk::Button::builder()
+            .label("Done")
+            .tooltip_text("Clear the selection (Escape)")
+            .build();
+        selection_bar.pack_end(&clear_selection);
 
         let list = gtk::ListBox::builder()
-            .selection_mode(gtk::SelectionMode::Single)
+            .selection_mode(gtk::SelectionMode::Multiple)
             .css_classes(["boxed-list-separate", "annotation-list"])
             .valign(gtk::Align::Start)
             .build();
@@ -324,6 +364,7 @@ impl Window {
         content_toolbar.add_top_bar(&header);
         content_toolbar.add_top_bar(&banner);
         content_toolbar.add_top_bar(&search_bar);
+        content_toolbar.add_bottom_bar(&selection_bar);
         content_toolbar.set_content(Some(&stack));
         let content_page = adw::NavigationPage::new(&content_toolbar, "Inbox");
 
@@ -362,7 +403,10 @@ impl Window {
             monitor: gio::VolumeMonitor::get(),
             kobo: RefCell::default(),
             importing: Cell::new(false),
-            search_bar,
+            selection_bar,
+            selection_label,
+            selection_done: clear_selection,
+            keep_all,
             search,
             stack,
             empty,
@@ -444,35 +488,57 @@ impl Window {
             row.set_header(Some(&header));
         });
 
-        // Single-key triage on the selected card.
+        // Single-key triage on the selected card(s). With several selected,
+        // K/A/S/I/Delete apply to all of them.
         let keys = gtk::EventControllerKey::new();
-        keys.connect_key_pressed(glib::clone!(
-            #[weak(rename_to = list)]
-            self.list,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |_, key, _, state| {
-                if state.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
-                    return glib::Propagation::Proceed;
-                }
-                let action = match key {
-                    gdk::Key::k => "keep",
-                    gdk::Key::a => "archive",
-                    gdk::Key::s => "star",
-                    gdk::Key::e => "edit",
-                    gdk::Key::i => "inbox",
-                    gdk::Key::Delete | gdk::Key::KP_Delete => "trash",
-                    _ => return glib::Propagation::Proceed,
-                };
-                match list.selected_row() {
-                    Some(row) if row.activate_action(&format!("card.{action}"), None).is_ok() => {
-                        glib::Propagation::Stop
-                    }
-                    _ => glib::Propagation::Proceed,
-                }
+        let weak = Rc::downgrade(self);
+        keys.connect_key_pressed(move |_, key, _, state| {
+            let Some(this) = weak.upgrade() else {
+                return glib::Propagation::Proceed;
+            };
+            if state.contains(gdk::ModifierType::CONTROL_MASK)
+                && matches!(key, gdk::Key::a | gdk::Key::A)
+            {
+                this.list.select_all();
+                return glib::Propagation::Stop;
             }
-        ));
+            if state.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
+                return glib::Propagation::Proceed;
+            }
+            let action = match key {
+                gdk::Key::k => "keep",
+                gdk::Key::a => "archive",
+                gdk::Key::s => "star",
+                gdk::Key::e => "edit",
+                gdk::Key::i => "inbox",
+                gdk::Key::Delete | gdk::Key::KP_Delete => "trash",
+                gdk::Key::Escape if this.list.selected_rows().len() > 1 => {
+                    this.collapse_selection();
+                    return glib::Propagation::Stop;
+                }
+                _ => return glib::Propagation::Proceed,
+            };
+            let ids = this.selected_annotation_ids();
+            if ids.len() > 1 && action != "edit" {
+                this.bulk(action, &ids);
+                return glib::Propagation::Stop;
+            }
+            let row = this.list.selected_rows().into_iter().next();
+            match row {
+                Some(row) if row.activate_action(&format!("card.{action}"), None).is_ok() => {
+                    glib::Propagation::Stop
+                }
+                _ => glib::Propagation::Proceed,
+            }
+        });
         self.list.add_controller(keys);
+
+        let weak = Rc::downgrade(self);
+        self.list.connect_selected_rows_changed(move |_| {
+            if let Some(this) = weak.upgrade() {
+                this.update_selection_bar();
+            }
+        });
 
         // Double-click or Enter on a card opens the editor.
         self.list.set_activate_on_single_click(false);
@@ -540,6 +606,20 @@ impl Window {
         });
 
         let weak = Rc::downgrade(self);
+        self.keep_all.connect_clicked(move |_| {
+            if let Some(this) = weak.upgrade() {
+                let ids = this.listed_annotation_ids();
+                this.bulk("keep", &ids);
+            }
+        });
+        let weak = Rc::downgrade(self);
+        self.selection_done.connect_clicked(move |_| {
+            if let Some(this) = weak.upgrade() {
+                this.collapse_selection();
+            }
+        });
+
+        let weak = Rc::downgrade(self);
         self.search.connect_search_changed(move |_| {
             if let Some(this) = weak.upgrade() {
                 this.reload();
@@ -574,12 +654,19 @@ impl Window {
 
     fn setup_actions(self: &Rc<Self>) {
         self.add_win_action("search", |this| {
-            let enabled = !this.search_bar.is_search_mode();
-            this.search_bar.set_search_mode(enabled);
-            if enabled {
-                this.search.grab_focus();
+            this.search.grab_focus();
+            this.search.select_region(0, -1);
+        });
+
+        let bulk = gio::SimpleAction::new("bulk", Some(glib::VariantTy::STRING));
+        let weak = Rc::downgrade(self);
+        bulk.connect_activate(move |_, arg| {
+            if let (Some(this), Some(action)) = (weak.upgrade(), arg.and_then(|a| a.str())) {
+                let ids = this.selected_annotation_ids();
+                this.bulk(action, &ids);
             }
         });
+        self.win.add_action(&bulk);
         self.add_win_action("import", |this| {
             let connected = this.kobo.borrow().as_ref().map(|k| k.root.clone());
             match connected.or_else(|| find_mounted_kobos().into_iter().next()) {
@@ -883,6 +970,11 @@ impl Window {
         self.back
             .set_visible(self.from_books.get() && matches!(nav, Nav::Annotations(View::Book(_))));
         self.book_sort.set_visible(nav == Nav::Books);
+        self.search.set_placeholder_text(Some(match nav {
+            Nav::Books => "Search books by title or author",
+            Nav::Vocab => "Search words, definitions and sentences",
+            _ => "Search highlights, notes, chapters, books and tags",
+        }));
         let result = match nav {
             Nav::Annotations(view) => self.fill_annotations(view),
             Nav::Vocab => self.fill_vocab(None, "").map(|_| ()),
@@ -893,6 +985,9 @@ impl Window {
         }
         self.update_title();
         self.update_empty_state();
+        self.keep_all
+            .set_visible(nav == Nav::Annotations(View::Inbox) && self.shown.get().0 > 0);
+        self.selection_bar.set_revealed(false);
         let first = (0..)
             .map_while(|i| self.list.row_at_index(i))
             .find(|r| r.is_selectable());
@@ -1218,6 +1313,7 @@ impl Window {
     fn annotation_row(self: &Rc<Self>, a: &Annotation, in_book_view: bool) -> gtk::ListBoxRow {
         let row = gtk::ListBoxRow::builder()
             .child(&card::build(a, in_book_view))
+            .name(format!("a{}", a.id))
             .build();
         let group = gio::SimpleActionGroup::new();
         let id = a.id;
@@ -1233,11 +1329,26 @@ impl Window {
             group.add_action(&action);
         };
         add("star", |this, row, id| {
-            let lib = this.lib.borrow();
-            let starred = lib.annotation(id).ok().flatten().is_some_and(|a| a.starred);
-            let result = lib.set_starred(id, !starred);
-            drop(lib);
+            let before = this.lib.borrow().annotation(id).ok().flatten();
+            let Some(before) = before else { return };
+            // Starring something in the Inbox means you want it: keep it too.
+            let keep = !before.starred && before.status == Status::Inbox;
+            let result = (|| {
+                let lib = this.lib.borrow();
+                lib.set_starred(id, !before.starred)?;
+                if keep {
+                    lib.set_status(id, Status::Kept)?;
+                }
+                kollate_core::Result::Ok(())
+            })();
+            let ok = result.is_ok();
             this.after_change(row, id, result);
+            if ok && keep {
+                this.undo_toast(
+                    "Starred and kept".to_owned(),
+                    vec![(id, before.status, before.starred)],
+                );
+            }
         });
         add("keep", |this, row, id| {
             this.change_status(row, id, Status::Kept)
@@ -1291,6 +1402,135 @@ impl Window {
         });
         row.insert_action_group("card", Some(&group));
         row
+    }
+
+    /// IDs of the selected highlight rows, in list order.
+    fn selected_annotation_ids(&self) -> Vec<i64> {
+        let mut rows = self.list.selected_rows();
+        rows.sort_by_key(|r| r.index());
+        rows.iter()
+            .filter_map(|r| r.widget_name().strip_prefix('a')?.parse().ok())
+            .collect()
+    }
+
+    /// IDs of every highlight row currently listed.
+    fn listed_annotation_ids(&self) -> Vec<i64> {
+        (0..)
+            .map_while(|i| self.list.row_at_index(i))
+            .filter_map(|r| r.widget_name().strip_prefix('a')?.parse().ok())
+            .collect()
+    }
+
+    /// Keeps only the first selected row selected.
+    fn collapse_selection(&self) {
+        let mut rows = self.list.selected_rows();
+        rows.sort_by_key(|r| r.index());
+        if let Some(first) = rows.first() {
+            self.list.unselect_all();
+            self.list.select_row(Some(first));
+            first.grab_focus();
+        }
+    }
+
+    fn update_selection_bar(&self) {
+        let n = self.selected_annotation_ids().len();
+        let show = n > 1 && matches!(self.current.get(), Nav::Annotations(_));
+        self.selection_bar.set_revealed(show);
+        if show {
+            self.selection_label.set_label(&format!("{n} selected"));
+        }
+    }
+
+    /// Applies `action` (keep, archive, trash, inbox or star) to several
+    /// highlights at once, with one Undo for all of them.
+    fn bulk(self: &Rc<Self>, action: &str, ids: &[i64]) {
+        if ids.is_empty() {
+            return;
+        }
+        let before: Vec<(i64, Status, bool)> = {
+            let lib = self.lib.borrow();
+            ids.iter()
+                .filter_map(|id| lib.annotation(*id).ok().flatten())
+                .map(|a| (a.id, a.status, a.starred))
+                .collect()
+        };
+        // Star all, unless they're all starred already (then unstar all).
+        let star = !before.iter().all(|(_, _, starred)| *starred);
+        let result = (|| {
+            let lib = self.lib.borrow();
+            for (id, status, _) in &before {
+                match action {
+                    "keep" => lib.set_status(*id, Status::Kept)?,
+                    "archive" => lib.set_status(*id, Status::Archived)?,
+                    "trash" => lib.set_status(*id, Status::Trashed)?,
+                    "inbox" => lib.set_status(*id, Status::Inbox)?,
+                    "star" => {
+                        lib.set_starred(*id, star)?;
+                        if star && *status == Status::Inbox {
+                            lib.set_status(*id, Status::Kept)?;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            kollate_core::Result::Ok(())
+        })();
+        if let Err(err) = result {
+            self.error("Couldn’t Update Highlights", err);
+        }
+        let n = before.len();
+        let what = plural(n, "highlight", "highlights");
+        let message = match action {
+            "keep" => format!("Kept {what}"),
+            "archive" => format!("Archived {what}"),
+            "trash" => format!("Moved {what} to Trash"),
+            "inbox" => format!("Moved {what} to the Inbox"),
+            "star" if star => format!("Starred {what}"),
+            _ => format!("Unstarred {what}"),
+        };
+        // Reload, keeping the position of the first affected row.
+        let first_index = ids.first().and_then(|id| {
+            (0..)
+                .map_while(|i| self.list.row_at_index(i))
+                .position(|r| r.widget_name() == format!("a{id}"))
+        });
+        self.reload();
+        if let Some(i) = first_index {
+            let row = self.list.row_at_index(i as i32).or_else(|| {
+                let last = (0..).map_while(|i| self.list.row_at_index(i)).count() as i32 - 1;
+                self.list.row_at_index(last)
+            });
+            if let Some(row) = row.filter(|r| r.is_selectable()) {
+                self.list.unselect_all();
+                self.list.select_row(Some(&row));
+                row.grab_focus();
+            }
+        }
+        self.update_counts();
+        self.undo_toast(message, before);
+    }
+
+    /// A toast whose Undo puts each highlight's status and star back.
+    fn undo_toast(self: &Rc<Self>, message: String, before: Vec<(i64, Status, bool)>) {
+        let toast = adw::Toast::builder()
+            .title(message)
+            .button_label("Undo")
+            .timeout(5)
+            .build();
+        let weak = Rc::downgrade(self);
+        toast.connect_button_clicked(move |_| {
+            let Some(this) = weak.upgrade() else { return };
+            {
+                let lib = this.lib.borrow();
+                for (id, status, starred) in &before {
+                    let _ = lib.set_status(*id, *status);
+                    let _ = lib.set_starred(*id, *starred);
+                }
+            }
+            this.reload();
+            this.update_counts();
+        });
+        self.show_toast(toast);
     }
 
     fn change_status(self: &Rc<Self>, row: &gtk::ListBoxRow, id: i64, status: Status) {
@@ -1412,6 +1652,7 @@ impl Window {
                     .row_at_index(index)
                     .or_else(|| self.list.row_at_index(index - 1));
                 if let Some(next) = next {
+                    self.list.unselect_all();
                     self.list.select_row(Some(&next));
                     next.grab_focus();
                 }
