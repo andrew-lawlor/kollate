@@ -22,7 +22,7 @@ pub fn find_kobo_db(path: &Path) -> Result<PathBuf> {
 }
 
 /// Contents of `.kobo/version`: `serial,?,firmware,?,?,model-id`.
-/// Field layout to be verified against a real device.
+/// Verified on a Libra Colour (model ID suffix `0390`), firmware 4.45.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceInfo {
     pub serial: String,
@@ -66,5 +66,7 @@ mod tests {
             Some("00000000-0000-0000-0000-000000000393")
         );
         assert!(DeviceInfo::parse("").is_none());
+        let real = DeviceInfo::parse("N000000000000,4.9.77,4.45.23697,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390").unwrap();
+        assert_eq!(real.firmware.as_deref(), Some("4.45.23697"));
     }
 }

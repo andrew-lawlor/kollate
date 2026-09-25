@@ -77,7 +77,7 @@ The host has GTK 4.18 and libadwaita 1.7, so we can target `v4_18` / `v1_7` feat
 | UI | `gtk4`, `libadwaita`, plus `gio` / `glib` for the mount monitor and async main loop. UI is written with composite templates in GtkBuilder `.ui` XML, compiled into GResources. |
 | SQLite (device + library) | `rusqlite` with the `bundled` feature (plus FTS5), so there's no system sqlite dependency. |
 | EPUB (context extraction) | `zip`, plus `quick-xml` to strip XHTML to text; sentence splitting with `unicode-segmentation`. |
-| Dictionaries (offline) | Our own reader for Kobo `dicthtml` zips, plus `flate2`. The optional StarDict reader is ours too, since the format is simple. |
+| Dictionaries (offline) | Bundled Open English WordNet (prebuilt SQLite), plus our own importers for StarDict and kaikki.org Wiktionary JSONL. |
 | Export | `minijinja` (Markdown templates), `csv`, `serde_json`, and a hand-rolled `.apkg` writer (an SQLite file plus a media JSON, zipped). |
 | Misc | `serde`, `chrono`, `blake3` (fingerprints), `unicode-normalization`, `thiserror` / `anyhow`, `tracing`. |
 
@@ -94,9 +94,9 @@ kollate/                     (cargo workspace)
     kobo/qvariant.rs    # minimal QDataStream QVariantMap decoder (markups)
     kobo/device.rs      # identify a mounted Kobo (.kobo/version)
     kobo/epub.rs        # read book files on the device for vocab context
-    kobo/dict.rs        # Kobo dicthtml reader (offline definitions)
     normalize.rs        # text cleanup, date parsing, fingerprints
     store/              # local library DB (schema, migrations, repositories)
+    dict/               # WordNet + imported dictionaries (offline definitions)
     import.rs           # diff + merge device data into the store
     export/             # markdown(+vault), anki, csv, json, readwise
   crates/kollate-cli/     # `kollate-cli import <mount|db> [--dry-run]`, `export …`
@@ -119,7 +119,7 @@ kollate/                     (cargo workspace)
   1. Copy the DB, then diff and merge highlights, notes and vocab (§6).
   2. Copy markup `.svg`/`.jpg` files for new markups.
   3. **Vocab context pass (§8):** for every word without a context sentence, open the book's EPUB on the device and extract candidate sentences. This runs in the background, with progress shown in the header bar.
-  4. Look up definitions offline for new words, using the on-device Kobo dictionary (§8).
+  4. Look up definitions offline for new words (§8).
   5. Cache covers from `.kobo-images/` for new books.
 - Steps 2–5 are best-effort. If the reader is unplugged mid-way, the unfinished work is queued and resumes on the next connect.
 - After an import, a toast reads "Kobo Libra Colour: 7 new highlights, 2 new words · Review". Clicking it opens the **Inbox**.
@@ -185,12 +185,13 @@ Schema versioning via `PRAGMA user_version` with forward-only migrations.
 - Store books (encrypted) get no automatic context, and the user can paste one in.
 - The book text is **not** cached; only the chosen and candidate sentences are stored.
 
-**Definitions** (offline, no network permission):
-1. **The Kobo's own dictionary** at `.kobo/dict/dicthtml-<lang>.zip`, matched on `WordList.DictSuffix`, which gives the same definition the user saw on the device. The format is a zip of gzip-compressed HTML shards plus a `words` index; still to be verified against the real file when the reader is plugged in. Definitions are fetched during import and cached in the library DB.
-2. **Fallback:** a local StarDict dictionary the user points to in Preferences.
+**Definitions** (offline, no network permission). Kobo's own dictionaries are encrypted (§13), so we don't use them. Instead:
+1. **Bundled: Open English WordNet** (CC BY 4.0), shipped as a compact SQLite file of about 15–25 MB. It covers most literary vocabulary, and it's the default for English.
+2. **User-imported:** StarDict dictionaries or a kaikki.org Wiktionary JSONL extract that the user downloads themselves and imports via a file picker (converted once into SQLite). This gives richer definitions and other languages, and the app still never touches the network.
 3. **Manual:** the user can edit any definition.
+Definitions are looked up at import and cached in the library DB.
 
-**Lemma merge:** a rule-based English lemmatizer (`theophanies` → `theophany`, `daimons` → `daimon`), which also tries the Kobo dictionary's headword for the lemma. Users can split or merge words.
+**Lemma merge:** a rule-based English lemmatizer (`theophanies` → `theophany`, `daimons` → `daimon`), which also checks the dictionary's headwords for the lemma. Users can split or merge words.
 
 ---
 
@@ -240,7 +241,7 @@ Export dialog options: scope (selection, book, filter, everything), include arch
 2. **M1, store + dedup:** the schema, importer and merge rules. Tests cover re-importing the same DB (0 changes), an edited note, a deleted row and a factory reset (new IDs, same text).
 3. **M2, UI browse & curate:** books, highlights, notes, search, star/tag/archive, edit.
 4. **M3, device integration:** autodetect, auto-import, Inbox, toasts, eject, markup files, covers.
-5. **M4, vocab enrichment:** EPUB context extraction, the Kobo dictionary reader, lemma merge.
+5. **M4, vocab enrichment:** EPUB context extraction, WordNet bundle and dictionary import, lemma merge.
 6. **M5, export:** Obsidian vault sync and Anki, then JSON, CSV and Readwise.
 7. **M6, polish & ship:** markup SVG rendering, Flatpak (no network), app icon, `.desktop` file.
 
@@ -254,8 +255,10 @@ Export dialog options: scope (selection, book, filter, everything), include arch
 - Offline only; the app requests no network permission.
 - Device: Kobo Libra Colour (colour highlights, stylus markups).
 
-## 13. To verify when the reader is plugged in
-- The `.kobo/markups/<BookmarkID>.svg` / `.jpg` layout.
-- The `.kobo/dict/dicthtml-en.zip` format.
-- The `.kobo/version` format and model ID.
-- Kobo's colour index → colour name mapping (0 yellow, 1 pink, 2 blue, 3 green?).
+## 13. Verified on the device (2026-09-25, Libra Colour, firmware 4.45.23697)
+- `.kobo/version` = `N000000000000,4.9.77,4.45.23697,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390`, i.e. serial, ?, firmware, ?, ?, model ID (`…0390` = Libra Colour). The parser matches.
+- Markups: `.kobo/markups/<BookmarkID>.svg` holds **only the ink strokes** (Qt SVG, page-sized viewBox 1264×1680). `.jpg` is the rendered page with the ink on it. Import both; the UI shows the JPG.
+- Dictionaries: `.kobo/dict/dicthtml.zip` (English, **no `-en` suffix**) plus `dicthtml-en-zh-CN.zip` / `-zh-TW`. Inside: `words` / `prefix_exceptions` are marisa tries, and the `*.html` shards are **encrypted** (not gzip). **Decision: we don't use Kobo's dictionaries** (see §8).
+- `Exported Annotations/` and `Exported Notebooks/` exist (Kobo's own export feature) and are empty. Ignore them.
+- `driveinfo.calibre` is present, so the user manages books with calibre. Calibre may rename or re-send books, which the book fingerprint (§6) handles.
+- Still open: Kobo's colour index → colour name mapping. Check by making one highlight in each colour.
