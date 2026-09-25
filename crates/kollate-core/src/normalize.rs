@@ -94,6 +94,25 @@ pub fn annotation_fingerprint(
     ])
 }
 
+/// Identifies a stylus markup, which has no text: its anchor range and
+/// creation time within the book.
+pub fn markup_fingerprint(
+    book_fp: &str,
+    start: (&str, i64),
+    end: (&str, i64),
+    created: Option<&str>,
+) -> String {
+    fingerprint(&[
+        book_fp,
+        "markup",
+        start.0,
+        &start.1.to_string(),
+        end.0,
+        &end.1.to_string(),
+        created.unwrap_or(""),
+    ])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

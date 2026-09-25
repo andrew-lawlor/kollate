@@ -12,6 +12,5 @@ tempfile.workspace = true
 thiserror.workspace = true
 unicode-normalization.workspace = true
 blake3.workspace = true
-
-[dev-dependencies]
 serde_json.workspace = true
+

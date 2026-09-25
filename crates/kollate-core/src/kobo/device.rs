@@ -66,7 +66,10 @@ mod tests {
             Some("00000000-0000-0000-0000-000000000393")
         );
         assert!(DeviceInfo::parse("").is_none());
-        let real = DeviceInfo::parse("N000000000000,4.9.77,4.45.23697,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390").unwrap();
+        let real = DeviceInfo::parse(
+            "N000000000000,4.9.77,4.45.23697,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390",
+        )
+        .unwrap();
         assert_eq!(real.firmware.as_deref(), Some("4.45.23697"));
     }
 }

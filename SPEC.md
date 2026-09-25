@@ -133,8 +133,8 @@ kollate/                     (cargo workspace)
 ### 6.1 Identity keys
 | Entity | Primary key | Fallback fingerprint (catches factory reset, re-sideloaded books, a second device) |
 |---|---|---|
-| Book | `(device_id, VolumeID)` mapped to a `book_id` | `sha1(normalize(title) + normalize(author))`, plus ISBN if present |
-| Annotation | `BookmarkID` (a globally unique UUID) | `sha1(book_fingerprint + normalize(text) + start_path + start_offset)`. For markups: `BookmarkID` only. |
+| Book | `(device_id, VolumeID)` mapped to a `book_id` | `blake3(normalize(title) + normalize(author))`, plus ISBN if present |
+| Annotation | `BookmarkID` (a globally unique UUID) | `blake3(book_fingerprint + normalize(text) + start_path + start_offset)`. For markups: `blake3(book_fingerprint + start/end anchors + created_at)`. |
 | Vocab word | `(normalize(word), language)` | n/a. Each device/book occurrence becomes a `vocab_sighting` row. |
 
 `normalize(text)` applies NFC, collapses whitespace, trims, and unifies curly/straight quotes. Book paths change when files are renamed, which is why the fingerprint exists.
@@ -153,25 +153,26 @@ To support this, every annotation keeps the `device_*` fields (original) separat
 ## 7. Local data model (`~/.local/share/kollate/library.db`)
 
 ```
-device(id, serial, model, name, last_seen_at)
-book(id, fingerprint UNIQUE, title, author, isbn, publisher, language, series, series_no,
-     cover_path, percent_read, last_read_at, user_title, user_author, hidden)
-book_source(book_id, device_id, volume_id, UNIQUE(device_id, volume_id))
-annotation(id, bookmark_id UNIQUE, fingerprint, book_id, kind{highlight,note,markup},
-     device_text, device_note, color, chapter_title, chapter_file, start_path, start_offset,
-     chapter_progress, created_at, device_modified_at,
+device(id, serial UNIQUE, model_id, firmware, first_seen_at, last_seen_at)
+book(id, fingerprint UNIQUE, title, author, publisher, isbn, language, series, series_number,
+     percent_read, last_read_at, user_title, user_author, cover_path, hidden, created_at, updated_at)
+book_source(device_id, volume_id, book_id, image_id, PK(device_id, volume_id))
+annotation(id, book_id, fingerprint, kind{highlight,note,markup},
+     device_text, device_note, color, chapter_title, content_id, spine_index,
+     start_path, start_offset, end_path, end_offset, chapter_progress, created_at, device_modified_at,
      user_text, user_note, starred, status{inbox,kept,archived,trashed},
-     removed_on_device_at, markup_svg_path, markup_jpg_path, imported_at, updated_at)
+     device_changed_at, removed_on_device_at, markup_svg_path, markup_jpg_path, imported_at, updated_at)
+annotation_source(bookmark_id PK, device_id, annotation_id, first_seen_at, last_seen_at)
+     -- several Kobo IDs → one annotation (factory reset, second device); drives "removed on device"
 annotation_revision(id, annotation_id, field, old_value, new_value, source{device,user}, at)
-vocab(id, word, lemma, language, definition, definition_source, status{new,learning,known,ignored},
-     starred, user_note, first_seen_at, UNIQUE(lemma, language))
+vocab(id, word, key (NFC lowercase), language, lemma, definition, definition_source,
+     status{new,learning,known,ignored}, starred, user_note, first_seen_at, imported_at, updated_at,
+     UNIQUE(key, language))
 vocab_sighting(id, vocab_id, book_id, device_id, surface_form, looked_up_at, context_sentence,
-     UNIQUE(vocab_id, book_id, surface_form))
-tag(id, name UNIQUE, color)   annotation_tag(...)   vocab_tag(...)
-import_run(id, device_id, started_at, finished_at, stats_json, db_version)
-export_target(id, name, format, path, options_json, last_exported_at)
-export_item(export_target_id, item_type, item_id, content_hash, exported_at)  -- incremental exports
-fts: annotation_fts(text, note, book title, author), vocab_fts(word, definition, context)
+     UNIQUE(vocab_id, IFNULL(book_id,0), surface_form))
+tag(id, name UNIQUE NOCASE, color)   annotation_tag(...)   vocab_tag(...)
+import_run(id, device_id, started_at, finished_at, db_version, stats_json)
+-- later migrations: export_target, export_item (M5), FTS5 tables (M2)
 ```
 Schema versioning via `PRAGMA user_version` with forward-only migrations.
 
@@ -238,7 +239,7 @@ Export dialog options: scope (selection, book, filter, everything), include arch
 ## 11. Milestones
 
 1. ✅ **M0, core + CLI:** Kobo reader, normalization, chapter resolution and `kollate-cli inspect <mount|db>`. Tests run against the fixture DB here: 52 bookmarks, 12 words, 5 books.
-2. **M1, store + dedup:** the schema, importer and merge rules. Tests cover re-importing the same DB (0 changes), an edited note, a deleted row and a factory reset (new IDs, same text).
+2. ✅ **M1, store + dedup:** the schema, importer and merge rules. Tests cover re-importing the same DB (0 changes), an edited note, a deleted row and a factory reset (new IDs, same text).
 3. **M2, UI browse & curate:** books, highlights, notes, search, star/tag/archive, edit.
 4. **M3, device integration:** autodetect, auto-import, Inbox, toasts, eject, markup files, covers.
 5. **M4, vocab enrichment:** EPUB context extraction, WordNet bundle and dictionary import, lemma merge.
