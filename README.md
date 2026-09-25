@@ -49,23 +49,40 @@ And export:
 
 ## Your Kobo stays untouched, and nothing goes online
 
-- Kollate **never writes to your Kobo.** It copies the Kobo's database to a temporary folder and reads the copy, so you can eject at any time.
+- Kollate **never writes to your Kobo.** It copies the Kobo's database to a temporary folder and reads the copy, so you can eject at any time. The Flatpak enforces this: its sandbox can only read the Kobo.
 - **No duplicates, ever.** Highlights are matched by the Kobo's own IDs, and by content if the IDs change (a factory reset, a second device, or calibre re-sending a book). Re-importing the same Kobo changes nothing.
 - **Your library is the source of truth.** Highlights you delete on the Kobo stay in Kollate, flagged "deleted on Kobo". If you've edited something in Kollate and it later changes on the Kobo, your version wins and the Kobo's is kept alongside it.
 - **Fully offline.** Definitions come from the bundled [Open English WordNet](https://en-word.net). You can add StarDict dictionaries or [kaikki.org](https://kaikki.org) Wiktionary extracts in Preferences.
 
 ## Install
 
-### Debian / Ubuntu (.deb)
+Download from the [latest release](https://github.com/andrew-lawlor/kollate/releases/latest).
 
-Build the package (see below) and install it:
+### Flatpak (any distribution)
 
 ```sh
-./scripts/build-deb.sh
-sudo apt install ./target/debian/kollate_0.1.0-1_amd64.deb
+flatpak install --user kollate.flatpak
+flatpak run io.github.andrew_lawlor.Kollate
+```
+
+The bundle uses the GNOME 51 runtime from Flathub, and Flatpak installs it automatically. The sandbox only gets **read-only** access to `/media` and `/run/media`, where the Kobo is mounted, plus access to gvfs so it can notice the Kobo and eject it. It gets no network access. The Flatpak keeps its library in `~/.var/app/io.github.andrew_lawlor.Kollate/data/kollate/`.
+
+### Debian / Ubuntu (.deb)
+
+```sh
+sudo apt install ./kollate_0.1.0-1_amd64.deb
 ```
 
 The package includes the app, the `kollate-cli` tool and the WordNet dictionary. It needs GTK ≥ 4.12 and libadwaita ≥ 1.5, which Debian 13 and Ubuntu 24.04 or newer provide.
+
+### Building the packages
+
+```sh
+./scripts/build-deb.sh       # target/debian/kollate_<version>_amd64.deb
+./scripts/build-flatpak.sh   # installs for your user; bundle in target/flatpak/kollate.flatpak
+```
+
+`build-flatpak.sh` needs `org.gnome.Sdk//51`, `org.freedesktop.Sdk.Extension.rust-stable//26.08` and `org.flatpak.Builder` from Flathub. After changing `Cargo.lock`, regenerate `flatpak/cargo-sources.json` with [flatpak-cargo-generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo).
 
 ### From source
 
@@ -85,7 +102,7 @@ cargo run --release -p kollate
 4. Open **Export** (`Ctrl+E`), pick a folder in your Obsidian vault and/or export an Anki deck.
 5. Press **Eject** in the banner when you're done.
 
-Your library lives in `~/.local/share/kollate/`.
+Your library lives in `~/.local/share/kollate/` (`~/.var/app/io.github.andrew_lawlor.Kollate/data/kollate/` for the Flatpak).
 
 ### Command line
 

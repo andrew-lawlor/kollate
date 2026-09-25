@@ -2,3 +2,6 @@ target/
 *.sqlite-shm
 *.sqlite-wal
 /data/
+/.flatpak-builder/
+/flatpak/build-dir/
+/flatpak/repo/

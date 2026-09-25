@@ -254,7 +254,9 @@ Later: user-editable Markdown templates (minijinja), and a "since last export" o
 6. ✅ **M5, export:** Obsidian vault sync and Anki, then JSON, CSV and Readwise.
 7. **M6, polish & ship:**
    - ✅ `.deb` via cargo-deb (`scripts/build-deb.sh` → `target/debian/kollate_<ver>_amd64.deb`). It contains `kollate`, `kollate-cli`, the desktop entry, AppStream metainfo, a scalable icon, the WordNet dictionary under `/usr/share/kollate/dictionaries/`, the GPL-3 copyright file and a WordNet notice. Dependencies come from shlibdeps. App ID: `io.github.andrew_lawlor.Kollate`.
-   - Still to do: Flatpak (no network), README, and markup SVG rendering.
+   - ✅ Flatpak: `flatpak/io.github.andrew_lawlor.Kollate.yml` on GNOME 51 with rust-stable//26.08. The build is offline, using pinned sources in `flatpak/cargo-sources.json`, and WordNet is downloaded by sha256 and converted at build time. Permissions: wayland, fallback-x11, dri, ipc, `/media:ro`, `/run/media:ro`, `org.gtk.vfs.*`. **No network.** `scripts/build-flatpak.sh` installs the app for the user and writes `target/flatpak/kollate.flatpak`. Verified with the Kobo connected: it autodetected the device through gvfs, imported 56 highlights, found 12 contexts, defined 10 of 11 words, and copied 6 covers and 1 markup image.
+   - ✅ README with screenshots. Public repo at https://github.com/andrew-lawlor/kollate.
+   - Still to do: markup SVG rendering, testing Eject from inside the sandbox, and a Flathub submission (which needs a git source in place of `type: dir`).
 
 ---
 

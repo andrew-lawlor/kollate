@@ -1,0 +1,51 @@
+id: io.github.andrew_lawlor.Kollate
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: kollate
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # Kobo e-readers mount here. Read-only: Kollate never writes to the device.
+  - --filesystem=/media:ro
+  - --filesystem=/run/media:ro
+  # Notice when the Kobo is plugged in, and eject it (gvfs / UDisks2).
+  - --talk-name=org.gtk.vfs.*
+  - --filesystem=xdg-run/gvfsd
+  # No network access. Obsidian vaults and export files go through the file chooser portal.
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+modules:
+  - name: kollate
+    buildsystem: simple
+    build-options:
+      env:
+        CARGO_HOME: /run/build/kollate/cargo
+        CARGO_NET_OFFLINE: 'true'
+    build-commands:
+      - cargo --offline build --release --workspace
+      - install -Dm755 target/release/kollate -t /app/bin/
+      - install -Dm755 target/release/kollate-cli -t /app/bin/
+      - install -Dm644 crates/kollate/data/io.github.andrew_lawlor.Kollate.desktop -t /app/share/applications/
+      - install -Dm644 crates/kollate/data/io.github.andrew_lawlor.Kollate.metainfo.xml -t /app/share/metainfo/
+      - install -Dm644 crates/kollate/data/io.github.andrew_lawlor.Kollate.svg -t /app/share/icons/hicolor/scalable/apps/
+      - install -Dm644 crates/kollate/data/THIRD-PARTY.md LICENSE -t /app/share/doc/kollate/
+      - mkdir -p /app/share/kollate/dictionaries
+      - target/release/kollate-cli dict build-wordnet english-wordnet-2025.xml.gz /app/share/kollate/dictionaries/oewn-2025.db
+    sources:
+      - type: dir
+        path: ..
+        skip:
+          - target
+          - data
+          - .flatpak-builder
+          - flatpak/build-dir
+          - flatpak/repo
+      - cargo-sources.json
+      - type: file
+        url: https://github.com/globalwordnet/english-wordnet/releases/download/2025-edition/english-wordnet-2025.xml.gz
+        sha256: 9ca6d1dcb75f822fdd66617f7d9da48142ace38dd544d6ad5e2feca1674ad3fe
