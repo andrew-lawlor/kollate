@@ -3,9 +3,34 @@ name = "kollate"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Collect and curate highlights, notes and vocabulary from a Kobo e-reader"
+homepage = "https://github.com/andrew-lawlor/kollate"
 
 [dependencies]
 kollate-core = { path = "../kollate-core" }
 chrono.workspace = true
 gtk = { version = "0.11.5", package = "gtk4", features = ["v4_18"] }
 adw = { version = "0.9.2", package = "libadwaita", features = ["v1_7"] }
+[package.metadata.deb]
+name = "kollate"
+maintainer = "Andrew Lawlor <andrew@lawlor.io>"
+copyright = "2026, Andrew Lawlor <andrew@lawlor.io>"
+license-file = ["../../LICENSE", "0"]
+section = "text"
+priority = "optional"
+depends = "$auto"
+extended-description = """\
+Kollate imports highlights, notes, handwritten markups and Vocabulary Builder \
+words from a Kobo e-reader connected over USB, without writing to the device \
+and without duplicates. Curate them in a GTK/libadwaita app, see each word's \
+context sentence and an offline WordNet definition, and export to Obsidian, \
+Anki, JSON, CSV or Readwise."""
+assets = [
+    ["target/release/kollate", "usr/bin/", "755"],
+    ["target/release/kollate-cli", "usr/bin/", "755"],
+    ["data/io.github.andrew_lawlor.Kollate.desktop", "usr/share/applications/", "644"],
+    ["data/io.github.andrew_lawlor.Kollate.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["data/io.github.andrew_lawlor.Kollate.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["../../data/dictionaries/oewn-2025.db", "usr/share/kollate/dictionaries/", "644"],
+    ["data/THIRD-PARTY.md", "usr/share/doc/kollate/", "644"],
+]

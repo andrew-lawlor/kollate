@@ -252,7 +252,9 @@ Later: user-editable Markdown templates (minijinja), and a "since last export" o
 4. ✅ **M3, device integration:** autodetect, auto-import, Inbox, toasts, eject, markup files, covers.
 5. ✅ **M4, vocab enrichment:** EPUB context extraction, WordNet bundle and dictionary import, lemma merge.
 6. ✅ **M5, export:** Obsidian vault sync and Anki, then JSON, CSV and Readwise.
-7. **M6, polish & ship:** markup SVG rendering, Flatpak (no network), app icon, `.desktop` file.
+7. **M6, polish & ship:**
+   - ✅ `.deb` via cargo-deb (`scripts/build-deb.sh` → `target/debian/kollate_<ver>_amd64.deb`). It contains `kollate`, `kollate-cli`, the desktop entry, AppStream metainfo, a scalable icon, the WordNet dictionary under `/usr/share/kollate/dictionaries/`, the GPL-3 copyright file and a WordNet notice. Dependencies come from shlibdeps. App ID: `io.github.andrew_lawlor.Kollate`.
+   - Still to do: Flatpak (no network), README, and markup SVG rendering.
 
 ---
 
@@ -263,6 +265,8 @@ Later: user-editable Markdown templates (minijinja), and a "since last export" o
 - Autodetect the reader, and pull vocab context while it's plugged in.
 - Offline only; the app requests no network permission.
 - Device: Kobo Libra Colour (colour highlights, stylus markups).
+- App ID `io.github.andrew_lawlor.Kollate`. License GPL-3.0-or-later. Maintainer Andrew Lawlor <andrew@lawlor.io>.
+- The .deb is packaged before the Flatpak.
 
 ## 13. Verified on the device (2026-09-25, Libra Colour, firmware 4.45.23697)
 - `.kobo/version` = `N000000000000,4.9.77,4.45.23697,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390`, i.e. serial, ?, firmware, ?, ?, model ID (`…0390` = Libra Colour). The parser matches.

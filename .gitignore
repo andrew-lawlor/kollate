@@ -1,4 +1,4 @@
 target/
 *.sqlite-shm
 *.sqlite-wal
-data/
+/data/

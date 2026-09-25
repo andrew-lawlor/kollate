@@ -480,7 +480,9 @@ impl Window {
         self.add_win_action("about", |this| {
             let about = adw::AboutDialog::builder()
                 .application_name("Kollate")
-                .application_icon("accessories-dictionary")
+                .application_icon(crate::APP_ID)
+                .developer_name("Andrew Lawlor")
+                .website("https://github.com/andrew-lawlor/kollate")
                 .version(env!("CARGO_PKG_VERSION"))
                 .comments("Collect and curate highlights, notes and vocabulary from your Kobo.")
                 .license_type(gtk::License::Gpl30)

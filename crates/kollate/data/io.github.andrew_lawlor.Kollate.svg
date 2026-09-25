@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5e5c64"/>
+      <stop offset="1" stop-color="#3d3846"/>
+    </linearGradient>
+  </defs>
+  <!-- device -->
+  <rect x="22" y="12" width="84" height="108" rx="10" fill="#241f31"/>
+  <rect x="22" y="8" width="84" height="108" rx="10" fill="url(#bezel)"/>
+  <!-- page -->
+  <rect x="30" y="16" width="68" height="84" rx="3" fill="#f6f5f4"/>
+  <!-- highlights (Kobo colours) -->
+  <rect x="35" y="33" width="46" height="9" rx="2" fill="#f6d32d"/>
+  <rect x="35" y="47" width="58" height="9" rx="2" fill="#f36fb1" opacity="0.85"/>
+  <rect x="35" y="61" width="34" height="9" rx="2" fill="#62a0ea" opacity="0.9"/>
+  <rect x="35" y="75" width="50" height="9" rx="2" fill="#57e389"/>
+  <!-- text lines -->
+  <g fill="#77767b">
+    <rect x="37" y="23" width="54" height="3" rx="1.5"/>
+    <rect x="37" y="36" width="42" height="3" rx="1.5"/>
+    <rect x="37" y="50" width="54" height="3" rx="1.5"/>
+    <rect x="37" y="64" width="30" height="3" rx="1.5"/>
+    <rect x="37" y="78" width="46" height="3" rx="1.5"/>
+    <rect x="37" y="91" width="38" height="3" rx="1.5"/>
+  </g>
+  <!-- home button -->
+  <rect x="56" y="105" width="16" height="3" rx="1.5" fill="#9a9996"/>
+</svg>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.andrew_lawlor.Kollate</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Kollate</name>
+  <summary>Collect and curate highlights and vocabulary from your Kobo</summary>
+  <developer id="io.github.andrew_lawlor">
+    <name>Andrew Lawlor</name>
+  </developer>
+  <description>
+    <p>
+      Plug in your Kobo e-reader and Kollate brings in your highlights, notes,
+      handwritten markups and Vocabulary Builder words, without ever changing
+      anything on the device and without duplicates.
+    </p>
+    <ul>
+      <li>Triage new highlights in an inbox, star, tag, edit and archive them</li>
+      <li>See the sentence each vocabulary word appeared in, with an offline definition</li>
+      <li>Sync notes to an Obsidian vault and export Anki decks, JSON, CSV or Readwise CSV</li>
+    </ul>
+    <p>Kollate works entirely offline.</p>
+  </description>
+  <launchable type="desktop-id">io.github.andrew_lawlor.Kollate.desktop</launchable>
+  <url type="homepage">https://github.com/andrew-lawlor/kollate</url>
+  <content_rating type="oars-1.1"/>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <releases>
+    <release version="0.1.0" date="2026-09-25">
+      <description>
+        <p>First release: import, curation, vocabulary enrichment and export.</p>
+      </description>
+    </release>
+  </releases>
+</component>

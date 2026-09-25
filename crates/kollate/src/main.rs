@@ -9,7 +9,7 @@ use adw::prelude::*;
 use gtk::{gdk, gio, glib};
 use kollate_core::{Library, default_library_path};
 
-pub const APP_ID: &str = "io.github.kollate.Kollate";
+pub const APP_ID: &str = "io.github.andrew_lawlor.Kollate";
 
 fn main() -> glib::ExitCode {
     let app = adw::Application::builder().application_id(APP_ID).build();
@@ -32,6 +32,7 @@ fn library_path() -> std::path::PathBuf {
 }
 
 fn load_css() {
+    gtk::Window::set_default_icon_name(APP_ID);
     let provider = gtk::CssProvider::new();
     provider.load_from_string(include_str!("style.css"));
     gtk::style_context_add_provider_for_display(

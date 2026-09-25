@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Kollate
+GenericName=Kobo Highlights
+Comment=Collect and curate highlights, notes and vocabulary from your Kobo
+Exec=kollate
+Icon=io.github.andrew_lawlor.Kollate
+Terminal=false
+Categories=Office;GTK;GNOME;
+Keywords=kobo;ereader;e-reader;highlights;annotations;notes;vocabulary;anki;obsidian;
+StartupNotify=true
+DBusActivatable=false

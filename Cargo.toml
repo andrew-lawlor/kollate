@@ -18,3 +18,8 @@ thiserror = "2"
 unicode-normalization = "0.1"
 blake3 = "1"
 clap = { version = "4", features = ["derive"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
