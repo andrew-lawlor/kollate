@@ -23,6 +23,10 @@ pub enum View {
     Trash,
     /// A book's active annotations, in reading order.
     Book(i64),
+    /// A book's active and archived annotations (for exports).
+    BookWithArchived(i64),
+    /// All of a book's annotations, including trashed ones (for backups).
+    BookAll(i64),
     /// Active annotations with a tag.
     Tag(i64),
 }
@@ -123,6 +127,14 @@ impl Library {
             View::Book(id) => {
                 let p = arg(Box::new(id), &mut args);
                 conditions.push(format!("{ACTIVE} AND a.book_id = {p}"));
+            }
+            View::BookWithArchived(id) => {
+                let p = arg(Box::new(id), &mut args);
+                conditions.push(format!("a.status != 'trashed' AND a.book_id = {p}"));
+            }
+            View::BookAll(id) => {
+                let p = arg(Box::new(id), &mut args);
+                conditions.push(format!("a.book_id = {p}"));
             }
             View::Tag(id) => {
                 let p = arg(Box::new(id), &mut args);

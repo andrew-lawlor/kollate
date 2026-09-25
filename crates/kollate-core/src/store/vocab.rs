@@ -35,6 +35,7 @@ pub struct Vocab {
 #[derive(Debug, Clone, Serialize)]
 pub struct Sighting {
     pub id: i64,
+    pub book_id: Option<i64>,
     pub book_title: Option<String>,
     /// The word exactly as it appeared.
     pub surface_form: String,
@@ -116,7 +117,7 @@ impl Library {
         };
         let mut stmt = self.conn.prepare(
             "SELECT s.id, coalesce(b.user_title, b.title), s.surface_form, s.looked_up_at, s.context_sentence,
-                    s.context_candidates
+                    s.context_candidates, s.book_id
              FROM vocab_sighting s LEFT JOIN book b ON b.id = s.book_id
              WHERE s.vocab_id = ?1 ORDER BY s.looked_up_at, s.id",
         )?;
@@ -132,6 +133,7 @@ impl Library {
                         .get::<_, Option<String>>(5)?
                         .and_then(|j| serde_json::from_str(&j).ok())
                         .unwrap_or_default(),
+                    book_id: r.get(6)?,
                 })
             })?
             .collect::<rusqlite::Result<_>>()?;

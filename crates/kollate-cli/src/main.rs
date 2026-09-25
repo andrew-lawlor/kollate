@@ -43,6 +43,38 @@ enum Command {
     /// Build or query offline dictionaries.
     #[command(subcommand)]
     Dict(DictCommand),
+    /// Export the library.
+    Export {
+        #[command(subcommand)]
+        format: ExportFormat,
+        /// Include archived highlights.
+        #[arg(long, global = true)]
+        archived: bool,
+        /// Include words marked Known.
+        #[arg(long, global = true)]
+        known: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ExportFormat {
+    /// Sync notes into a folder of an Obsidian vault.
+    Obsidian { folder: PathBuf },
+    /// Write an Anki package (.apkg).
+    Anki {
+        output: PathBuf,
+        /// Also add a deck of highlights.
+        #[arg(long)]
+        highlights: bool,
+    },
+    /// Full JSON backup.
+    Json { output: PathBuf },
+    /// Highlights as CSV.
+    Csv { output: PathBuf },
+    /// Vocabulary as CSV.
+    VocabCsv { output: PathBuf },
+    /// Readwise-compatible CSV.
+    Readwise { output: PathBuf },
 }
 
 #[derive(Subcommand)]
@@ -73,6 +105,49 @@ fn main() -> Result<()> {
         Command::Import { path, dry_run } => import(&path, &library_path, dry_run),
         Command::Library => library(&library_path),
         Command::Dict(cmd) => dict(cmd),
+        Command::Export {
+            format,
+            archived,
+            known,
+        } => {
+            use kollate_core::export::{self, ExportOptions};
+            let lib = Library::open(&library_path)?;
+            let opts = ExportOptions {
+                include_archived: archived,
+                include_known_words: known,
+                everything: false,
+            };
+            match format {
+                ExportFormat::Obsidian { folder } => {
+                    let s = export::sync_obsidian(&lib, &folder, opts)?;
+                    println!(
+                        "{} notes written, {} unchanged, {} images copied",
+                        s.notes_written, s.notes_unchanged, s.attachments_copied
+                    );
+                }
+                ExportFormat::Anki { output, highlights } => {
+                    let s = export::export_anki(&lib, &output, opts, highlights)?;
+                    println!(
+                        "{} words, {} highlights, {} cards",
+                        s.words, s.highlights, s.cards
+                    );
+                }
+                ExportFormat::Json { output } => {
+                    println!("{} books", export::export_json(&lib, &output)?)
+                }
+                ExportFormat::Csv { output } => println!(
+                    "{} rows",
+                    export::export_highlights_csv(&lib, &output, opts)?
+                ),
+                ExportFormat::VocabCsv { output } => {
+                    println!("{} rows", export::export_vocab_csv(&lib, &output, opts)?)
+                }
+                ExportFormat::Readwise { output } => {
+                    println!("{} rows", export::export_readwise_csv(&lib, &output, opts)?)
+                }
+            }
+            Ok(())
+        }
         Command::Contexts { mount } => {
             let snapshot = KoboDb::open_copy(&find_kobo_db(&mount)?)?.snapshot()?;
             for wc in kollate_core::kobo::epub::find_word_contexts(&mount, &snapshot, 3) {

@@ -110,6 +110,10 @@ pub struct Book {
     pub cover: Option<PathBuf>,
     pub percent_read: Option<i64>,
     pub last_read_at: Option<DateTime<Utc>>,
+    pub isbn: Option<String>,
+    pub publisher: Option<String>,
+    pub series: Option<String>,
+    pub series_number: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -245,7 +249,7 @@ impl Library {
             "SELECT b.id, coalesce(b.user_title, b.title), coalesce(b.user_author, b.author),
                     (SELECT count(*) FROM annotation a WHERE a.book_id = b.id AND a.status IN ('inbox', 'kept')),
                     (SELECT count(DISTINCT s.vocab_id) FROM vocab_sighting s WHERE s.book_id = b.id),
-                    b.cover_path, b.percent_read, b.last_read_at
+                    b.cover_path, b.percent_read, b.last_read_at, b.isbn, b.publisher, b.series, b.series_number
              FROM book b WHERE NOT b.hidden AND (?1 IS NULL OR b.id = ?1) ORDER BY 2 COLLATE NOCASE",
         )?;
         let books = stmt.query_map([id], |r| {
@@ -258,6 +262,10 @@ impl Library {
                 cover: r.get::<_, Option<String>>(5)?.map(PathBuf::from),
                 percent_read: r.get(6)?,
                 last_read_at: r.get(7)?,
+                isbn: r.get(8)?,
+                publisher: r.get(9)?,
+                series: r.get(10)?,
+                series_number: r.get(11)?,
             })
         })?;
         Ok(books.collect::<rusqlite::Result<_>>()?)

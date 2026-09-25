@@ -174,7 +174,7 @@ vocab_sighting(id, vocab_id, book_id, device_id, surface_form, looked_up_at, con
      UNIQUE(vocab_id, IFNULL(book_id,0), surface_form))
 tag(id, name UNIQUE NOCASE, color)   annotation_tag(...)   vocab_tag(...)
 import_run(id, device_id, started_at, finished_at, db_version, stats_json)
--- later migrations: export_target, export_item (M5), FTS5 tables (M2)
+-- export settings live in `setting` (M5); FTS5 not needed so far
 ```
 Schema versioning via `PRAGMA user_version` with forward-only migrations.
 
@@ -228,17 +228,19 @@ Content pane:
 
 ## 10. Export
 
-Priority: **Obsidian and Anki first**, then the cheap formats (JSON, CSV, Readwise).
+All exports read the library only. They're in `kollate-core/src/export/`, available in the app (Export dialog, Ctrl+E, or the sidebar button) and from `kollate-cli export …`.
 
-| Format | Scope | Notes |
+| Format | What you get | Notes |
 |---|---|---|
-| **Obsidian vault sync** | A folder in the vault (e.g. `Books/Kobo/`) | One note per book: YAML front matter (title, author, isbn, series, tags, `kollate_id`), then highlights grouped by chapter as `>` quotes with the note, a colour label and a `^block-id` (so the user can link to individual highlights). Vocabulary gets its own note per book or one global `Vocabulary.md`. Stylus markups are copied into an attachments folder and embedded as `![[...svg]]`. Templates use `minijinja` and are user-editable. Exports are idempotent: only changed books are rewritten, and anything below the `%% kollate:user %%` marker is preserved, so the user can add their own thoughts. |
-| **Anki (.apkg)** | Vocab (primary), highlights (optional) | A custom note type, "Kollate Vocab", with fields for word, lemma, definition, context (the word **bolded**), a cloze version of the context, book and author. Two card templates: recognition (word → meaning) and cloze. A stable deck ID and stable note GUIDs (from `vocab.id`), so re-importing into Anki updates the cards instead of duplicating them. Words marked "known" or "ignored" are excluded by default. |
-| **JSON** | Everything | A full dump plus a schema version, which doubles as the backup/restore format. |
-| **CSV** | Highlights / vocab | Flat columns, UTF‑8. |
-| **Readwise CSV** | Highlights | Readwise's documented import columns (Highlight, Title, Author, Note, Location, Date). Cheap to add, low priority. |
+| **Obsidian vault sync** | One note per book in a folder you choose, plus `Vocabulary.md` | YAML front matter (title, author, isbn, publisher, series, `tags: [book, kobo]`, `kollate_id`), then chapter headings and highlights as `>` quotes with a block ID (`^k<id>`) so you can link to them. Notes appear as plain paragraphs, followed by a `<small>` line with the local date, colour (when not yellow), ★ and `#tags`. Each book's words are listed under `## Vocabulary` with the definition and the context sentence, the word in bold. Markup page images go to `attachments/` and are embedded. `Vocabulary.md` lists all words with `[[links]]` back to their book notes. **Idempotent:** a note is rewritten only when its content changes. Everything from the `%% kollate:user` line down is kept. Notes are found again by `kollate_id`, so a renamed book moves its note. Optionally syncs after every import. |
+| **Anki (.apkg)** | The `Kollate::Vocabulary` deck, plus an optional `Kollate::Highlights` deck | Note type "Kollate Vocab" has fields Word, Lemma, Definition, Context, ContextBlank and Book, and two cards: **Recognition** (word and context → meaning) and **Fill In** (context with a blank, definition as a hint → word; only when a context exists). "Kollate Highlight" has one Review card. Deck IDs, note-type IDs and note GUIDs are stable. **Verified with Anki 26.09's importer:** the first import added 66 notes and 77 cards. Re-importing a new export updated all 66, added none, and kept study progress. Anki's integrity check passes. Known words are left out unless you opt in; ignored words are always left out. |
+| **JSON backup** | Everything, including trashed highlights and ignored words | `{"format": "kollate-backup", "version": 1, "books": [...]}`. Restore is future work. |
+| **CSV** | Highlights, or vocabulary | UTF-8, one row per highlight, or one per word and book. |
+| **Readwise CSV** | Highlight, Title, Author, URL, Note, Location, Date | Tags go in the note as Readwise inline tags (`.tag`). |
 
-Export dialog options: scope (selection, book, filter, everything), include archived yes/no, **only items new since the last export to this target**, and a preview of the first item. Obsidian and Anki targets can be saved and re-run with one click, and can optionally run automatically after each import.
+Options (stored in the `setting` table): include archived highlights, include known words, a highlights deck for Anki, the Obsidian folder, and sync after import. Settings keys replace the `export_target`/`export_item` tables planned earlier: Obsidian sync compares content and Anki matches notes by GUID, so neither needs per-item export tracking.
+
+Later: user-editable Markdown templates (minijinja), and a "since last export" option for CSV.
 
 ---
 
@@ -249,7 +251,7 @@ Export dialog options: scope (selection, book, filter, everything), include arch
 3. ✅ **M2, UI browse & curate:** books, highlights, notes, search, star/tag/archive, edit.
 4. ✅ **M3, device integration:** autodetect, auto-import, Inbox, toasts, eject, markup files, covers.
 5. ✅ **M4, vocab enrichment:** EPUB context extraction, WordNet bundle and dictionary import, lemma merge.
-6. **M5, export:** Obsidian vault sync and Anki, then JSON, CSV and Readwise.
+6. ✅ **M5, export:** Obsidian vault sync and Anki, then JSON, CSV and Readwise.
 7. **M6, polish & ship:** markup SVG rendering, Flatpak (no network), app icon, `.desktop` file.
 
 ---

@@ -3,6 +3,7 @@
 
 pub mod dict;
 pub mod error;
+pub mod export;
 pub mod import;
 pub mod kobo;
 pub mod normalize;

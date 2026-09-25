@@ -16,4 +16,5 @@ serde_json.workspace = true
 quick-xml = "0.42.0"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 flate2 = "1.1.10"
-
+csv = "1.4.0"
+sha1_smol = "1.0.1"
