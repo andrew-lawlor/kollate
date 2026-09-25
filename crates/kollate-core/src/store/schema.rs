@@ -175,4 +175,9 @@ pub const MIGRATIONS: &[&str] = &[
     );
     INSERT INTO vocab_form (key, language, vocab_id) SELECT key, language, id FROM vocab;
     "#,
+    // 5: remember the status of highlights auto-trashed because they were
+    // deleted on the Kobo, so they can go back if they reappear
+    r#"
+    ALTER TABLE annotation ADD COLUMN status_before_removal TEXT;
+    "#,
 ];

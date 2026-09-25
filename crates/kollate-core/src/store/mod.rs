@@ -5,7 +5,7 @@ mod query;
 mod schema;
 mod vocab;
 
-pub use query::{AnnotationFilter, SidebarCounts, Tag, View, VocabStatus};
+pub use query::{AnnotationFilter, DeviceDeletePolicy, SidebarCounts, Tag, View, VocabStatus};
 pub use vocab::{Sighting, Vocab, VocabDetail};
 
 use std::path::{Path, PathBuf};
@@ -383,9 +383,11 @@ impl Library {
         self.record_revision(id, column, old.as_deref(), value, "user")
     }
 
+    /// Sets the status. A manual change also forgets any status saved when
+    /// the highlight was auto-trashed, so a later re-import won't undo it.
     pub fn set_status(&self, id: i64, status: Status) -> Result<()> {
         self.conn.execute(
-            "UPDATE annotation SET status = ?2, updated_at = ?3 WHERE id = ?1",
+            "UPDATE annotation SET status = ?2, status_before_removal = NULL, updated_at = ?3 WHERE id = ?1",
             params![id, status.as_str(), Utc::now()],
         )?;
         Ok(())

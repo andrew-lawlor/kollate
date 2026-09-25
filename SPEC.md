@@ -145,7 +145,8 @@ kollate/                     (cargo workspace)
 - **Not in store:** insert it with `status=inbox`.
 - **In store, device `DateModified` unchanged:** skip it.
 - **In store, device changed (note edited, colour changed):** update the *device fields*. If the user has already edited that field in Kollate, keep the Kollate value, store the device value in `annotation_revisions`, and flag it as "device changed". The user can accept the device version from the UI.
-- **In store but missing from the device:** set `removed_on_device_at`. Nothing is ever deleted automatically.
+- **In store but missing from the device:** set `removed_on_device_at`. The card gets a "deleted on Kobo" badge, it's listed in the **Deleted on Kobo** sidebar view (shown only when non-empty), and the import toast says "N deleted on Kobo". Nothing is ever deleted from the library.
+- **Preference: "When a highlight is deleted on the Kobo"** (`setting.on_device_delete`). *Keep it* (the default) or *Move it to Trash*. Trashing saves the previous status in `annotation.status_before_removal` (migration 5). If the highlight reappears on the Kobo, it returns to that status, unless the user changed its status by hand in the meantime (`set_status` clears the saved value). The policy applies to deletions detected from then on, not retroactively.
 - **Hidden on device:** handled the same as removed.
 
 To support this, every annotation keeps the `device_*` fields (original) separate from `user_*` overrides (curated text, note), and the UI shows `coalesce(user, device)`.

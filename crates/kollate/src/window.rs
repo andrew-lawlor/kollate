@@ -12,7 +12,9 @@ use kollate_core::export::{self, ExportOptions};
 use kollate_core::kobo::assets::{CopiedAssets, copy_assets};
 use kollate_core::kobo::epub::find_word_contexts;
 use kollate_core::kobo::{DeviceInfo, KoboDb, find_kobo_db, find_mounted_kobos, is_kobo_mount};
-use kollate_core::store::{Annotation, AnnotationFilter, Status, View, Vocab, VocabStatus};
+use kollate_core::store::{
+    Annotation, AnnotationFilter, DeviceDeletePolicy, Status, View, Vocab, VocabStatus,
+};
 use kollate_core::{ImportStats, Library};
 
 use crate::{card, edit, word};
@@ -24,7 +26,7 @@ pub enum Nav {
     Vocab,
 }
 
-const TOP_LEVEL: [(Nav, &str, &str); 8] = [
+const TOP_LEVEL: [(Nav, &str, &str); 9] = [
     (
         Nav::Annotations(View::Inbox),
         "mail-unread-symbolic",
@@ -60,6 +62,11 @@ const TOP_LEVEL: [(Nav, &str, &str); 8] = [
         Nav::Annotations(View::Trash),
         "user-trash-symbolic",
         "Trash",
+    ),
+    (
+        Nav::Annotations(View::RemovedOnDevice),
+        "edit-delete-symbolic",
+        "Deleted on Kobo",
     ),
 ];
 
@@ -437,6 +444,7 @@ impl Window {
                     this.reload();
                 }
                 this.split.set_show_content(true);
+                this.update_counts();
             }
         });
 
@@ -642,6 +650,7 @@ impl Window {
             (Nav::Annotations(View::Starred), c.starred),
             (Nav::Annotations(View::Archive), c.archive),
             (Nav::Annotations(View::Trash), c.trash),
+            (Nav::Annotations(View::RemovedOnDevice), c.removed_on_device),
             (Nav::Vocab, c.vocab),
         ]);
         for b in lib.books().unwrap_or_default() {
@@ -653,6 +662,13 @@ impl Window {
         for (nav, label) in self.count_labels.borrow().iter() {
             let n = counts.get(nav).copied().unwrap_or(0);
             label.set_label(&if n > 0 { n.to_string() } else { String::new() });
+            // "Deleted on Kobo" only shows up when there's something in it
+            // (or while you're looking at it).
+            if *nav == Nav::Annotations(View::RemovedOnDevice)
+                && let Some(row) = label.ancestor(gtk::ListBoxRow::static_type())
+            {
+                row.set_visible(n > 0 || self.current.get() == *nav);
+            }
         }
     }
 
@@ -823,6 +839,11 @@ impl Window {
                     "Press S on a highlight to star it.",
                 ),
                 Nav::Annotations(View::Trash) => ("user-trash-symbolic", "Trash Is Empty", ""),
+                Nav::Annotations(View::RemovedOnDevice) => (
+                    "edit-delete-symbolic",
+                    "Nothing Deleted on Your Kobo",
+                    "Highlights you delete on your Kobo stay in Kollate and show up here.",
+                ),
                 Nav::Vocab => (
                     "accessories-dictionary-symbolic",
                     "No Words Yet",
@@ -1467,6 +1488,28 @@ impl Window {
         });
         group.add(&on_connect);
 
+        let delete_policy = adw::ComboRow::builder()
+            .title("When a Highlight Is Deleted on the Kobo")
+            .model(&gtk::StringList::new(&[
+                "Keep it, marked as deleted",
+                "Move it to Trash",
+            ]))
+            .build();
+        let policies = [DeviceDeletePolicy::Keep, DeviceDeletePolicy::Trash];
+        let current = self.lib.borrow().device_delete_policy().unwrap_or_default();
+        delete_policy.set_selected(policies.iter().position(|p| *p == current).unwrap_or(0) as u32);
+        delete_policy
+            .set_subtitle("Highlights moved to Trash go back if they reappear on the Kobo.");
+        let weak = Rc::downgrade(self);
+        delete_policy.connect_selected_notify(move |row| {
+            let Some(this) = weak.upgrade() else { return };
+            let policy = policies[(row.selected() as usize).min(1)];
+            if let Err(err) = this.lib.borrow().set_device_delete_policy(policy) {
+                this.error("Couldn’t Save Preference", err);
+            }
+        });
+        group.add(&delete_policy);
+
         page.add(&group);
         page.add(&self.dictionaries_group(&dialog));
 
@@ -1955,31 +1998,110 @@ impl Window {
     }
 
     fn import_toast(self: &Rc<Self>, s: &ImportStats) {
-        let mut parts = Vec::new();
-        if s.annotations_new > 0 {
-            parts.push(plural(s.annotations_new, "new highlight", "new highlights"));
-        }
-        if s.words_new > 0 {
-            parts.push(plural(s.words_new, "new word", "new words"));
-        }
-        if s.annotations_updated > 0 {
-            parts.push(format!("{} updated", s.annotations_updated));
-        }
-        let title = if parts.is_empty() {
-            "Nothing new on your Kobo".to_owned()
-        } else {
-            parts.join(" · ")
-        };
+        let (title, target) = import_summary(s);
         let toast = adw::Toast::builder().title(title).timeout(6).build();
-        if s.annotations_new > 0 {
-            toast.set_button_label(Some("Review"));
+        if let Some((label, view)) = target {
+            toast.set_button_label(Some(label));
             let weak = Rc::downgrade(self);
             toast.connect_button_clicked(move |_| {
                 if let Some(this) = weak.upgrade() {
-                    this.select_nav(Nav::Annotations(View::Inbox));
+                    this.select_nav(Nav::Annotations(view));
                 }
             });
         }
         self.show_toast(toast);
+    }
+}
+
+/// The import toast's text, and which view its button opens (if any).
+fn import_summary(s: &ImportStats) -> (String, Option<(&'static str, View)>) {
+    let mut parts = Vec::new();
+    if s.annotations_new > 0 {
+        parts.push(plural(s.annotations_new, "new highlight", "new highlights"));
+    }
+    if s.words_new > 0 {
+        parts.push(plural(s.words_new, "new word", "new words"));
+    }
+    if s.annotations_updated > 0 {
+        parts.push(format!("{} updated", s.annotations_updated));
+    }
+    if s.annotations_removed > 0 {
+        parts.push(if s.annotations_trashed == s.annotations_removed {
+            format!("{} deleted on Kobo, moved to Trash", s.annotations_removed)
+        } else {
+            format!("{} deleted on Kobo", s.annotations_removed)
+        });
+    }
+    if s.annotations_restored > 0 {
+        parts.push(format!("{} back on Kobo", s.annotations_restored));
+    }
+    let title = if parts.is_empty() {
+        "Nothing new on your Kobo".to_owned()
+    } else {
+        parts.join(" · ")
+    };
+    // New highlights are the most useful thing to jump to; otherwise show
+    // where the deleted ones went.
+    let target = if s.annotations_new > 0 {
+        Some(("Review", View::Inbox))
+    } else if s.annotations_removed > s.annotations_trashed {
+        Some(("Show", View::RemovedOnDevice))
+    } else if s.annotations_trashed > 0 {
+        Some(("Show", View::Trash))
+    } else {
+        None
+    };
+    (title, target)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn import_summary_mentions_deletions() {
+        let s = ImportStats {
+            annotations_removed: 2,
+            ..Default::default()
+        };
+        assert_eq!(
+            import_summary(&s),
+            (
+                "2 deleted on Kobo".to_owned(),
+                Some(("Show", View::RemovedOnDevice))
+            )
+        );
+
+        let s = ImportStats {
+            annotations_removed: 1,
+            annotations_trashed: 1,
+            ..Default::default()
+        };
+        assert_eq!(
+            import_summary(&s),
+            (
+                "1 deleted on Kobo, moved to Trash".to_owned(),
+                Some(("Show", View::Trash))
+            )
+        );
+
+        let s = ImportStats {
+            annotations_new: 3,
+            annotations_removed: 1,
+            annotations_restored: 1,
+            ..Default::default()
+        };
+        assert_eq!(
+            import_summary(&s),
+            (
+                "3 new highlights · 1 deleted on Kobo · 1 back on Kobo".to_owned(),
+                Some(("Review", View::Inbox))
+            )
+        );
+
+        assert_eq!(
+            import_summary(&ImportStats::default()),
+            ("Nothing new on your Kobo".to_owned(), None)
+        );
     }
 }

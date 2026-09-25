@@ -15,6 +15,7 @@ use unicode_normalization::UnicodeNormalization;
 use crate::Result;
 use crate::kobo::{AnnotationKind, DeviceInfo, KoboBook, KoboBookmark, KoboSnapshot, KoboWord};
 use crate::normalize::{annotation_fingerprint, book_fingerprint, markup_fingerprint};
+use crate::store::DeviceDeletePolicy;
 use crate::store::Library;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -25,6 +26,9 @@ pub struct ImportStats {
     pub annotations_unchanged: usize,
     /// Present in the library from this device but gone from it now.
     pub annotations_removed: usize,
+    /// Of the removed ones, how many were moved to Trash (see
+    /// [`DeviceDeletePolicy`](crate::store::DeviceDeletePolicy)).
+    pub annotations_trashed: usize,
     /// Previously flagged as removed and now back on the device.
     pub annotations_restored: usize,
     /// Page bookmarks (dogears) and unknown kinds, which aren't imported.
@@ -395,6 +399,10 @@ impl Importer<'_> {
                     content_id = ?7, spine_index = ?8, start_path = ?9, start_offset = ?10, end_path = ?11,
                     end_offset = ?12, chapter_progress = ?13, device_modified_at = ?14,
                     fingerprint = coalesce(?15, fingerprint), removed_on_device_at = NULL, position_key = ?19,
+                    status = CASE WHEN removed_on_device_at IS NOT NULL AND status = 'trashed'
+                                       AND status_before_removal IS NOT NULL
+                                  THEN status_before_removal ELSE status END,
+                    status_before_removal = NULL,
                     device_changed_at = CASE WHEN ?16 THEN ?17 ELSE device_changed_at END,
                     updated_at = CASE WHEN ?18 THEN ?17 ELSE updated_at END
              WHERE id = ?1",
@@ -424,7 +432,18 @@ impl Importer<'_> {
     }
 
     /// Flags annotations previously seen on this device that are gone now.
+    /// Flags annotations previously seen on this device that are gone now,
+    /// and moves them to Trash if the user chose that.
     fn flag_removed(&mut self, seen: &HashSet<i64>) -> Result<()> {
+        let policy: Option<String> = self
+            .tx
+            .query_row(
+                "SELECT value FROM setting WHERE key = ?1",
+                [DeviceDeletePolicy::SETTING],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let trash = DeviceDeletePolicy::parse(policy.as_deref()) == DeviceDeletePolicy::Trash;
         let mut stmt = self.tx.prepare(
             "SELECT DISTINCT a.id FROM annotation_source s JOIN annotation a ON a.id = s.annotation_id
              WHERE s.device_id = ?1 AND a.removed_on_device_at IS NULL",
@@ -440,6 +459,13 @@ impl Importer<'_> {
                 "UPDATE annotation SET removed_on_device_at = ?2, updated_at = ?2 WHERE id = ?1",
                 params![id, self.now],
             )?;
+            if trash {
+                self.stats.annotations_trashed += self.tx.execute(
+                    "UPDATE annotation SET status_before_removal = status, status = 'trashed'
+                     WHERE id = ?1 AND status != 'trashed'",
+                    [id],
+                )?;
+            }
         }
         self.stats.annotations_removed += gone.len();
         Ok(())

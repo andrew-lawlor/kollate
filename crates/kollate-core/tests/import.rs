@@ -279,3 +279,93 @@ fn attaches_copied_assets_and_stores_settings() {
     lib.set_setting("on_connect", "auto").unwrap();
     assert_eq!(lib.setting("on_connect").unwrap().as_deref(), Some("auto"));
 }
+
+#[test]
+fn deleted_on_device_view_and_count() {
+    use kollate_core::store::{AnnotationFilter, View};
+    let (mut lib, snap) = imported();
+    let mut fewer = snap.clone();
+    let removed = fewer.bookmarks.remove(0);
+    let id = lib
+        .annotation_id_for_bookmark(&removed.bookmark_id)
+        .unwrap()
+        .unwrap();
+    lib.import(&fewer, &device("A"), false).unwrap();
+
+    let view = lib
+        .query_annotations(&AnnotationFilter {
+            view: View::RemovedOnDevice,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(view.iter().map(|a| a.id).collect::<Vec<_>>(), [id]);
+    assert_eq!(lib.sidebar_counts().unwrap().removed_on_device, 1);
+
+    // Trashed items leave the view.
+    lib.set_status(id, Status::Trashed).unwrap();
+    assert_eq!(lib.sidebar_counts().unwrap().removed_on_device, 0);
+}
+
+#[test]
+fn auto_trash_policy_trashes_and_restores() {
+    use kollate_core::store::DeviceDeletePolicy;
+    let (mut lib, snap) = imported();
+    assert_eq!(
+        lib.device_delete_policy().unwrap(),
+        DeviceDeletePolicy::Keep
+    );
+    lib.set_device_delete_policy(DeviceDeletePolicy::Trash)
+        .unwrap();
+
+    let first = lib
+        .annotation_id_for_bookmark(&snap.bookmarks[0].bookmark_id)
+        .unwrap()
+        .unwrap();
+    let second = lib
+        .annotation_id_for_bookmark(&snap.bookmarks[1].bookmark_id)
+        .unwrap()
+        .unwrap();
+    lib.set_status(first, Status::Kept).unwrap();
+    let mut fewer = snap.clone();
+    fewer.bookmarks.drain(0..2);
+
+    let stats = lib.import(&fewer, &device("A"), false).unwrap();
+    assert_eq!(
+        (stats.annotations_removed, stats.annotations_trashed),
+        (2, 2)
+    );
+    assert_eq!(
+        lib.annotation(first).unwrap().unwrap().status,
+        Status::Trashed
+    );
+
+    // The user rescues the second one by hand; it must stay where they put it.
+    lib.set_status(second, Status::Archived).unwrap();
+
+    // Both reappear on the Kobo.
+    let stats = lib.import(&snap, &device("A"), false).unwrap();
+    assert_eq!(stats.annotations_restored, 2);
+    let a = lib.annotation(first).unwrap().unwrap();
+    assert_eq!(
+        (a.status, a.removed_on_device_at),
+        (Status::Kept, None),
+        "back to its previous status"
+    );
+    assert_eq!(
+        lib.annotation(second).unwrap().unwrap().status,
+        Status::Archived,
+        "manual choice kept"
+    );
+
+    // A highlight the user trashed themselves isn't un-trashed by a restore.
+    lib.set_status(first, Status::Trashed).unwrap();
+    let mut again = snap.clone();
+    again.bookmarks.remove(0);
+    let stats = lib.import(&again, &device("A"), false).unwrap();
+    assert_eq!(stats.annotations_trashed, 0, "already in Trash");
+    lib.import(&snap, &device("A"), false).unwrap();
+    assert_eq!(
+        lib.annotation(first).unwrap().unwrap().status,
+        Status::Trashed
+    );
+}

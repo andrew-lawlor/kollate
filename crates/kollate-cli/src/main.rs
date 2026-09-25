@@ -209,11 +209,12 @@ fn import(path: &Path, library_path: &Path, dry_run: bool) -> Result<()> {
     );
     println!("  books:        {} new", s.books_new);
     println!(
-        "  annotations:  {} new, {} updated, {} unchanged, {} removed on device, {} restored, {} skipped",
+        "  annotations:  {} new, {} updated, {} unchanged, {} removed on device ({} moved to Trash), {} restored, {} skipped",
         s.annotations_new,
         s.annotations_updated,
         s.annotations_unchanged,
         s.annotations_removed,
+        s.annotations_trashed,
         s.annotations_restored,
         s.annotations_skipped
     );

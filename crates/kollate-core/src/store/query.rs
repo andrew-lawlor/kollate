@@ -21,6 +21,8 @@ pub enum View {
     Starred,
     Archive,
     Trash,
+    /// Deleted on the Kobo but still in the library (and not trashed).
+    RemovedOnDevice,
     /// A book's active annotations, in reading order.
     Book(i64),
     /// A book's active and archived annotations (for exports).
@@ -49,6 +51,7 @@ pub struct SidebarCounts {
     pub starred: i64,
     pub archive: i64,
     pub trash: i64,
+    pub removed_on_device: i64,
     pub vocab: i64,
 }
 
@@ -91,6 +94,34 @@ impl VocabStatus {
     }
 }
 
+/// What an import does with highlights that were deleted on the Kobo.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub enum DeviceDeletePolicy {
+    /// Keep them where they are, marked "deleted on Kobo".
+    #[default]
+    Keep,
+    /// Move them to Trash (and back if they reappear on the Kobo).
+    Trash,
+}
+
+impl DeviceDeletePolicy {
+    pub const SETTING: &str = "on_device_delete";
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Keep => "keep",
+            Self::Trash => "trash",
+        }
+    }
+
+    pub(crate) fn parse(s: Option<&str>) -> Self {
+        match s {
+            Some("trash") => Self::Trash,
+            _ => Self::Keep,
+        }
+    }
+}
+
 const ACTIVE: &str = "a.status IN ('inbox', 'kept')";
 
 /// `LIKE` pattern matching `s` anywhere, with wildcards escaped by `\`.
@@ -124,6 +155,8 @@ impl Library {
             View::Starred => conditions.push("a.starred AND a.status != 'trashed'".into()),
             View::Archive => conditions.push("a.status = 'archived'".into()),
             View::Trash => conditions.push("a.status = 'trashed'".into()),
+            View::RemovedOnDevice => conditions
+                .push("a.removed_on_device_at IS NOT NULL AND a.status != 'trashed'".into()),
             View::Book(id) => {
                 let p = arg(Box::new(id), &mut args);
                 conditions.push(format!("{ACTIVE} AND a.book_id = {p}"));
@@ -199,6 +232,7 @@ impl Library {
                         count(*) FILTER (WHERE a.starred AND a.status != 'trashed'),
                         count(*) FILTER (WHERE a.status = 'archived'),
                         count(*) FILTER (WHERE a.status = 'trashed'),
+                        count(*) FILTER (WHERE a.removed_on_device_at IS NOT NULL AND a.status != 'trashed'),
                         (SELECT count(*) FROM vocab)
                  FROM annotation a"
             ),
@@ -212,10 +246,21 @@ impl Library {
                     starred: r.get(4)?,
                     archive: r.get(5)?,
                     trash: r.get(6)?,
-                    vocab: r.get(7)?,
+                    removed_on_device: r.get(7)?,
+                    vocab: r.get(8)?,
                 })
             },
         )?)
+    }
+
+    pub fn device_delete_policy(&self) -> Result<DeviceDeletePolicy> {
+        Ok(DeviceDeletePolicy::parse(
+            self.setting(DeviceDeletePolicy::SETTING)?.as_deref(),
+        ))
+    }
+
+    pub fn set_device_delete_policy(&self, policy: DeviceDeletePolicy) -> Result<()> {
+        self.set_setting(DeviceDeletePolicy::SETTING, policy.as_str())
     }
 
     pub fn set_starred(&self, id: i64, starred: bool) -> Result<()> {

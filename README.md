@@ -51,7 +51,7 @@ And export:
 
 - Kollate **never writes to your Kobo.** It copies the Kobo's database to a temporary folder and reads the copy, so you can eject at any time. The Flatpak enforces this: its sandbox can only read the Kobo.
 - **No duplicates, ever.** Highlights are matched by the Kobo's own IDs, and by content if the IDs change (a factory reset, a second device, or calibre re-sending a book). Re-importing the same Kobo changes nothing.
-- **Your library is the source of truth.** Highlights you delete on the Kobo stay in Kollate, flagged "deleted on Kobo". If you've edited something in Kollate and it later changes on the Kobo, your version wins and the Kobo's is kept alongside it.
+- **Your library is the source of truth.** Highlights you delete on the Kobo stay in Kollate, flagged "deleted on Kobo" and gathered in a *Deleted on Kobo* view. If you prefer, they can go to Kollate's Trash instead (Preferences), and they come back if they reappear on the Kobo. If you've edited something in Kollate and it later changes on the Kobo, your version wins and the Kobo's is kept alongside it.
 - **Fully offline.** Definitions come from the bundled [Open English WordNet](https://en-word.net). You can add StarDict dictionaries or [kaikki.org](https://kaikki.org) Wiktionary extracts in Preferences.
 
 ## Install
