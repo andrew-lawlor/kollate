@@ -33,7 +33,7 @@ A Linux desktop app that pulls highlights, notes, stylus markups and Vocab Build
 | `Text` | Highlighted text. Contains stray leading/trailing whitespace and `\n`, so it needs normalizing. |
 | `Annotation` | The user's note. Empty string or NULL when there isn't one. |
 | `Type` | `highlight`, `note` (a highlight with an annotation), or `markup` (stylus handwriting; `Text` is NULL). |
-| `Color` | 0–3. Seen: 0, 2, 3. Kobo's palette is 0 yellow, 1 pink, 2 blue, 3 green (to verify on the device). |
+| `Color` | 0 yellow, 1 pink, 2 blue, 3 green (verified on the device). |
 | `StartContainerPath` / `StartOffset` / `End*` | Position inside the chapter, e.g. `span#kobo\.10\.4`. Used for sort order and fingerprinting. |
 | `ChapterProgress` | 0–1 progress within the chapter. Used for ordering. |
 | `DateCreated`, `DateModified` | ISO strings in mixed formats (`…36.152` without a Z, `…36Z`). Normalize to UTC. |
@@ -261,4 +261,4 @@ Export dialog options: scope (selection, book, filter, everything), include arch
 - Dictionaries: `.kobo/dict/dicthtml.zip` (English, **no `-en` suffix**) plus `dicthtml-en-zh-CN.zip` / `-zh-TW`. Inside: `words` / `prefix_exceptions` are marisa tries, and the `*.html` shards are **encrypted** (not gzip). **Decision: we don't use Kobo's dictionaries** (see §8).
 - `Exported Annotations/` and `Exported Notebooks/` exist (Kobo's own export feature) and are empty. Ignore them.
 - `driveinfo.calibre` is present, so the user manages books with calibre. Calibre may rename or re-send books, which the book fingerprint (§6) handles.
-- Still open: Kobo's colour index → colour name mapping. Check by making one highlight in each colour.
+- Colour index: 0 yellow, 1 pink, 2 blue, 3 green (verified with test highlights in *Free Software, Free Society*).

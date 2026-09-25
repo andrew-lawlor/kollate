@@ -25,7 +25,7 @@ impl AnnotationKind {
     }
 }
 
-/// Kobo highlight colour index. Mapping still to be verified on the device.
+/// Kobo highlight colour index (verified on a Libra Colour).
 pub fn color_name(color: i64) -> &'static str {
     match color {
         0 => "yellow",
