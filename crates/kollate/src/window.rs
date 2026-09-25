@@ -7,7 +7,8 @@ use std::rc::Rc;
 
 use adw::prelude::*;
 use gtk::{gdk, gio, glib};
-use kollate_core::kobo::{DeviceInfo, KoboDb, find_kobo_db, find_mounted_kobos};
+use kollate_core::kobo::assets::{CopiedAssets, copy_assets};
+use kollate_core::kobo::{DeviceInfo, KoboDb, find_kobo_db, find_mounted_kobos, is_kobo_mount};
 use kollate_core::store::{Annotation, AnnotationFilter, Status, View, Vocab, VocabStatus};
 use kollate_core::{ImportStats, Library};
 
@@ -59,6 +60,48 @@ const TOP_LEVEL: [(Nav, &str, &str); 8] = [
     ),
 ];
 
+/// What to do when a Kobo is plugged in (setting `on_connect`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnConnect {
+    Import,
+    Ask,
+    Nothing,
+}
+
+impl OnConnect {
+    pub const ALL: [Self; 3] = [Self::Import, Self::Ask, Self::Nothing];
+    pub const LABELS: [&str; 3] = ["Import automatically", "Ask first", "Do nothing"];
+
+    fn key(self) -> &'static str {
+        match self {
+            Self::Import => "import",
+            Self::Ask => "ask",
+            Self::Nothing => "nothing",
+        }
+    }
+
+    fn from_key(key: Option<&str>) -> Self {
+        Self::ALL
+            .into_iter()
+            .find(|v| Some(v.key()) == key)
+            .unwrap_or(Self::Import)
+    }
+}
+
+/// A Kobo that is currently mounted.
+struct Connected {
+    mount: gio::Mount,
+    root: PathBuf,
+    name: &'static str,
+}
+
+/// What the banner's button does.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BannerAction {
+    Import,
+    Eject,
+}
+
 const VOCAB_STATUS_LABELS: [&str; 4] = ["New", "Learning", "Known", "Ignored"];
 
 pub struct Window {
@@ -79,6 +122,11 @@ pub struct Window {
 
     content_page: adw::NavigationPage,
     title: adw::WindowTitle,
+    banner: adw::Banner,
+    banner_action: Cell<BannerAction>,
+    monitor: gio::VolumeMonitor,
+    kobo: RefCell<Option<Connected>>,
+    importing: Cell<bool>,
     search_bar: gtk::SearchBar,
     search: gtk::SearchEntry,
     stack: gtk::Stack,
@@ -113,6 +161,7 @@ impl Window {
         import.append(Some("Import from _Folder…"), Some("win.import-folder"));
         menu.append_section(None, &import);
         let help = gio::Menu::new();
+        help.append(Some("_Preferences"), Some("win.preferences"));
         help.append(Some("_Keyboard Shortcuts"), Some("win.shortcuts"));
         help.append(Some("_About Kollate"), Some("win.about"));
         menu.append_section(None, &help);
@@ -195,8 +244,10 @@ impl Window {
         let stack = gtk::Stack::new();
         stack.add_named(&scrolled, Some("list"));
         stack.add_named(&empty, Some("empty"));
+        let banner = adw::Banner::new("");
         let content_toolbar = adw::ToolbarView::new();
         content_toolbar.add_top_bar(&header);
+        content_toolbar.add_top_bar(&banner);
         content_toolbar.add_top_bar(&search_bar);
         content_toolbar.set_content(Some(&stack));
         let content_page = adw::NavigationPage::new(&content_toolbar, "Inbox");
@@ -231,6 +282,11 @@ impl Window {
             rebuilding_sidebar: Cell::new(false),
             content_page,
             title,
+            banner,
+            banner_action: Cell::new(BannerAction::Import),
+            monitor: gio::VolumeMonitor::get(),
+            kobo: RefCell::default(),
+            importing: Cell::new(false),
             search_bar,
             search,
             stack,
@@ -245,6 +301,7 @@ impl Window {
         this.setup_actions();
         this.rebuild_sidebar();
         this.reload();
+        this.setup_device_monitor();
 
         // The window owns the controller for as long as it's open.
         let keep_alive = this.clone();
@@ -394,11 +451,13 @@ impl Window {
             }
         });
         self.add_win_action("import", |this| {
-            match find_mounted_kobos().into_iter().next() {
+            let connected = this.kobo.borrow().as_ref().map(|k| k.root.clone());
+            match connected.or_else(|| find_mounted_kobos().into_iter().next()) {
                 Some(mount) => this.import_from(mount),
                 None => this.choose_import_folder(),
             }
         });
+        self.add_win_action("preferences", |this| this.show_preferences());
         self.add_win_action("import-folder", |this| this.choose_import_folder());
         self.add_win_action("about", |this| {
             adw::AboutDialog::builder()
@@ -418,7 +477,7 @@ impl Window {
                      K  Keep  ·  A  Archive  ·  S  Star\n\
                      E or Enter  Edit  ·  I  Move to Inbox  ·  Delete  Trash\n\
                      ↑ ↓  Previous / next\n\n\
-                     Ctrl+F  Search  ·  Ctrl+I  Import from Kobo\n\
+                     Ctrl+F  Search  ·  Ctrl+I  Import from Kobo  ·  Ctrl+,  Preferences\n\
                      Ctrl+W  Close window  ·  Ctrl+Q  Quit",
                 ),
             );
@@ -646,9 +705,10 @@ impl Window {
         }
         self.update_title();
         self.update_empty_state();
-        if let Some(first) = self.list.row_at_index(0) {
-            self.list.select_row(Some(&first));
-        }
+        let first = (0..)
+            .map_while(|i| self.list.row_at_index(i))
+            .find(|r| r.is_selectable());
+        self.list.select_row(first.as_ref());
     }
 
     fn fill_annotations(self: &Rc<Self>, view: View) -> kollate_core::Result<()> {
@@ -659,6 +719,13 @@ impl Window {
         };
         let items = self.lib.borrow().query_annotations(&filter)?;
         let in_book_view = matches!(view, View::Book(_));
+        if let View::Book(id) = view
+            && self.search_text().is_none()
+            && let Some(book) = self.lib.borrow().book(id)?
+        {
+            self.groups.borrow_mut().push(String::new());
+            self.list.append(&card::book_header(&book));
+        }
         for a in &items {
             let group = if !in_book_view {
                 match &a.book_author {
@@ -693,7 +760,7 @@ impl Window {
     }
 
     fn update_empty_state(&self) {
-        let empty = self.groups.borrow().is_empty();
+        let empty = self.shown.get() == (0, 0);
         self.stack
             .set_visible_child_name(if empty { "empty" } else { "list" });
         if !empty {
@@ -841,6 +908,20 @@ impl Window {
             }
         });
         add("edit", |this, row, id| this.edit(row, id));
+        add("open-image", |this, _, id| {
+            let Some(path) = this
+                .lib
+                .borrow()
+                .annotation(id)
+                .ok()
+                .flatten()
+                .and_then(|a| a.markup_image)
+            else {
+                return;
+            };
+            let launcher = gtk::FileLauncher::new(Some(&gio::File::for_path(path)));
+            launcher.launch(Some(&this.win), gio::Cancellable::NONE, |_| {});
+        });
         row.insert_action_group("card", Some(&group));
         row
     }
@@ -995,39 +1076,243 @@ impl Window {
         });
     }
 
+    /// Imports from a Kobo mount point (or a folder/DB file) in the
+    /// background: reads a copy of the database and copies covers and
+    /// markup images, then merges everything into the library.
     fn import_from(self: &Rc<Self>, path: PathBuf) {
+        if self.importing.replace(true) {
+            return;
+        }
         let this = self.clone();
+        let is_connected = self.kobo.borrow().as_ref().is_some_and(|k| k.root == path);
+        if is_connected {
+            self.set_banner(&format!("Importing from your {}…", self.kobo_name()), None);
+        } else {
+            self.show_toast(adw::Toast::builder().title("Importing…").timeout(0).build());
+        }
+        let assets_dir = self.lib.borrow().assets_dir();
         glib::spawn_future_local(async move {
-            let progress = adw::Toast::builder()
-                .title("Importing from Kobo…")
-                .timeout(0)
-                .build();
-            this.show_toast(progress.clone());
             let read = gio::spawn_blocking(move || -> kollate_core::Result<_> {
                 let device = DeviceInfo::identify(&path)?;
                 let snapshot = KoboDb::open_copy(&find_kobo_db(&path)?)?.snapshot()?;
-                Ok((device, snapshot))
+                // Asset copying is best-effort; a failure never blocks the import.
+                let assets = match (&assets_dir, path.is_dir()) {
+                    (Some(dir), true) => {
+                        copy_assets(&path, &snapshot, dir).map_err(|e| e.to_string())
+                    }
+                    _ => Ok(CopiedAssets::default()),
+                };
+                Ok((device, snapshot, assets))
             })
             .await;
-            progress.dismiss();
+            this.importing.set(false);
+            if let Some(toast) = this.last_toast.borrow().as_ref() {
+                toast.dismiss();
+            }
             let outcome = match read {
-                Ok(Ok((device, snapshot))) => this
-                    .lib
-                    .borrow_mut()
-                    .import(&snapshot, &device, false)
-                    .map_err(|e| e.to_string()),
+                Ok(Ok((device, snapshot, assets))) => {
+                    let mut lib = this.lib.borrow_mut();
+                    lib.import(&snapshot, &device, false)
+                        .and_then(|stats| {
+                            if let Ok(assets) = &assets {
+                                lib.attach_assets(&device, assets)?;
+                            }
+                            Ok((stats, assets.err()))
+                        })
+                        .map_err(|e| e.to_string())
+                }
                 Ok(Err(err)) => Err(err.to_string()),
                 Err(_) => Err("The import stopped unexpectedly.".to_owned()),
             };
             match outcome {
-                Ok(stats) => {
+                Ok((stats, asset_error)) => {
                     this.rebuild_sidebar();
                     this.reload();
                     this.import_toast(&stats);
+                    if let Some(err) = asset_error {
+                        this.toast(&format!("Some images couldn’t be copied: {err}"));
+                    }
                 }
                 Err(err) => this.error("Import Failed", err),
             }
+            if is_connected {
+                this.show_connected_banner();
+            }
         });
+    }
+
+    // ---- Device ------------------------------------------------------------
+
+    fn kobo_name(&self) -> &'static str {
+        self.kobo.borrow().as_ref().map_or("Kobo", |k| k.name)
+    }
+
+    fn set_banner(&self, title: &str, action: Option<BannerAction>) {
+        self.banner.set_title(title);
+        self.banner.set_button_label(action.map(|a| match a {
+            BannerAction::Import => "Import",
+            BannerAction::Eject => "Eject",
+        }));
+        if let Some(action) = action {
+            self.banner_action.set(action);
+        }
+        self.banner.set_revealed(true);
+    }
+
+    fn show_connected_banner(&self) {
+        let title = format!("Your {} is connected", self.kobo_name());
+        self.set_banner(&title, Some(BannerAction::Eject));
+    }
+
+    fn on_connect_setting(&self) -> OnConnect {
+        OnConnect::from_key(
+            self.lib
+                .borrow()
+                .setting("on_connect")
+                .ok()
+                .flatten()
+                .as_deref(),
+        )
+    }
+
+    fn setup_device_monitor(self: &Rc<Self>) {
+        let weak = Rc::downgrade(self);
+        self.banner.connect_button_clicked(move |_| {
+            let Some(this) = weak.upgrade() else { return };
+            match this.banner_action.get() {
+                BannerAction::Import => {
+                    if let Some(root) = this.kobo.borrow().as_ref().map(|k| k.root.clone()) {
+                        this.import_from(root);
+                    }
+                }
+                BannerAction::Eject => this.eject(),
+            }
+        });
+
+        let weak = Rc::downgrade(self);
+        self.monitor.connect_mount_added(move |_, mount| {
+            if let Some(this) = weak.upgrade() {
+                this.mount_added(mount);
+            }
+        });
+        let weak = Rc::downgrade(self);
+        self.monitor.connect_mount_removed(move |_, mount| {
+            let Some(this) = weak.upgrade() else { return };
+            let root = mount.root().path();
+            let ours = this
+                .kobo
+                .borrow()
+                .as_ref()
+                .is_some_and(|k| Some(&k.root) == root.as_ref());
+            if ours {
+                this.kobo.replace(None);
+                this.banner.set_revealed(false);
+            }
+        });
+        for mount in self.monitor.mounts() {
+            self.mount_added(&mount);
+        }
+    }
+
+    fn mount_added(self: &Rc<Self>, mount: &gio::Mount) {
+        let Some(root) = mount.root().path() else {
+            return;
+        };
+        if !is_kobo_mount(&root) || self.kobo.borrow().is_some() {
+            return;
+        }
+        let name = DeviceInfo::read(&root).map_or("Kobo", |info| info.model_name());
+        self.kobo.replace(Some(Connected {
+            mount: mount.clone(),
+            root: root.clone(),
+            name,
+        }));
+        match self.on_connect_setting() {
+            OnConnect::Import => self.import_from(root),
+            OnConnect::Ask => self.set_banner(
+                &format!("Your {name} is connected"),
+                Some(BannerAction::Import),
+            ),
+            OnConnect::Nothing => {}
+        }
+    }
+
+    fn eject(self: &Rc<Self>) {
+        if self.importing.get() {
+            return;
+        }
+        let Some(mount) = self.kobo.borrow().as_ref().map(|k| k.mount.clone()) else {
+            return;
+        };
+        let name = self.kobo_name();
+        self.set_banner(&format!("Ejecting your {name}…"), None);
+        let this = self.clone();
+        glib::spawn_future_local(async move {
+            let operation = gtk::MountOperation::new(Some(&this.win));
+            let result = if mount.can_eject() {
+                mount
+                    .eject_with_operation_future(gio::MountUnmountFlags::NONE, Some(&operation))
+                    .await
+            } else {
+                mount
+                    .unmount_with_operation_future(gio::MountUnmountFlags::NONE, Some(&operation))
+                    .await
+            };
+            match result {
+                Ok(()) => {
+                    this.kobo.replace(None);
+                    this.banner.set_revealed(false);
+                    this.toast(&format!("You can unplug your {name}"));
+                }
+                Err(err) => {
+                    this.show_connected_banner();
+                    this.error("Couldn’t Eject", err.message());
+                }
+            }
+        });
+    }
+
+    fn show_preferences(self: &Rc<Self>) {
+        let dialog = adw::PreferencesDialog::new();
+        let page = adw::PreferencesPage::new();
+        let group = adw::PreferencesGroup::builder()
+            .title("Kobo")
+            .description("Kollate only ever reads from your Kobo. Nothing on it is changed.")
+            .build();
+        let on_connect = adw::ComboRow::builder()
+            .title("When a Kobo Is Connected")
+            .model(&gtk::StringList::new(&OnConnect::LABELS))
+            .build();
+        let current = OnConnect::ALL
+            .iter()
+            .position(|v| *v == self.on_connect_setting())
+            .unwrap_or(0);
+        on_connect.set_selected(current as u32);
+        let weak = Rc::downgrade(self);
+        on_connect.connect_selected_notify(move |row| {
+            let Some(this) = weak.upgrade() else { return };
+            let value = OnConnect::ALL[(row.selected() as usize).min(OnConnect::ALL.len() - 1)];
+            if let Err(err) = this.lib.borrow().set_setting("on_connect", value.key()) {
+                this.error("Couldn’t Save Preference", err);
+            }
+        });
+        group.add(&on_connect);
+
+        if let Some(dir) = self.lib.borrow().assets_dir() {
+            let location = adw::ActionRow::builder()
+                .title("Library Location")
+                .subtitle(dir.display().to_string())
+                .subtitle_selectable(true)
+                .build();
+            let library = adw::PreferencesGroup::builder().title("Library").build();
+            library.add(&location);
+            page.add(&group);
+            page.add(&library);
+        } else {
+            page.add(&group);
+        }
+        dialog.add(&page);
+        dialog.present(Some(&self.win));
     }
 
     fn import_toast(self: &Rc<Self>, s: &ImportStats) {

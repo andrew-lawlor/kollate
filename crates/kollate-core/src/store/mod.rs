@@ -16,6 +16,8 @@ use crate::Result;
 
 pub struct Library {
     pub(crate) conn: Connection,
+    /// Folder holding the database; assets are stored beside it.
+    dir: Option<PathBuf>,
 }
 
 /// `$XDG_DATA_HOME/kollate/library.db`, defaulting to `~/.local/share`.
@@ -77,6 +79,8 @@ pub struct Annotation {
     pub book_title: String,
     pub book_author: Option<String>,
     pub tags: Vec<String>,
+    /// Copied page image of a stylus markup.
+    pub markup_image: Option<PathBuf>,
 }
 
 impl Annotation {
@@ -101,6 +105,9 @@ pub struct Book {
     pub author: Option<String>,
     pub annotation_count: i64,
     pub vocab_count: i64,
+    pub cover: Option<PathBuf>,
+    pub percent_read: Option<i64>,
+    pub last_read_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -128,7 +135,8 @@ pub(crate) const ANNOTATION_SELECT: &str = "SELECT a.id, a.book_id, a.kind, a.de
      a.device_changed_at, a.removed_on_device_at, coalesce(b.user_title, b.title),
      coalesce(b.user_author, b.author),
      (SELECT group_concat(name, char(31)) FROM (SELECT t.name FROM annotation_tag x JOIN tag t ON t.id = x.tag_id
-      WHERE x.annotation_id = a.id ORDER BY t.name COLLATE NOCASE))
+      WHERE x.annotation_id = a.id ORDER BY t.name COLLATE NOCASE)),
+     a.markup_jpg_path
      FROM annotation a JOIN book b ON b.id = a.book_id";
 
 pub(crate) fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotation> {
@@ -153,6 +161,7 @@ pub(crate) fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotat
             .get::<_, Option<String>>(16)?
             .map(|s| s.split('\u{1f}').map(str::to_owned).collect())
             .unwrap_or_default(),
+        markup_image: r.get::<_, Option<String>>(17)?.map(PathBuf::from),
     })
 }
 
@@ -161,14 +170,22 @@ impl Library {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        Self::init(Connection::open(path)?)
+        Self::init(
+            Connection::open(path)?,
+            path.parent().map(Path::to_path_buf),
+        )
     }
 
     pub fn open_in_memory() -> Result<Self> {
-        Self::init(Connection::open_in_memory()?)
+        Self::init(Connection::open_in_memory()?, None)
     }
 
-    fn init(conn: Connection) -> Result<Self> {
+    /// Where copied covers and markup images go (`None` for in-memory libraries).
+    pub fn assets_dir(&self) -> Option<PathBuf> {
+        self.dir.clone()
+    }
+
+    fn init(conn: Connection, dir: Option<PathBuf>) -> Result<Self> {
         conn.pragma_update(None, "foreign_keys", true)?;
         conn.pragma_update(None, "journal_mode", "wal")?;
         let version: usize = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
@@ -178,7 +195,7 @@ impl Library {
             tx.pragma_update(None, "user_version", i + 1)?;
             tx.commit()?;
         }
-        let lib = Self { conn };
+        let lib = Self { conn, dir };
         lib.backfill_position_keys()?;
         Ok(lib)
     }
@@ -225,22 +242,76 @@ impl Library {
     }
 
     pub fn books(&self) -> Result<Vec<Book>> {
+        self.query_books(None)
+    }
+
+    pub fn book(&self, id: i64) -> Result<Option<Book>> {
+        Ok(self.query_books(Some(id))?.into_iter().next())
+    }
+
+    fn query_books(&self, id: Option<i64>) -> Result<Vec<Book>> {
         let mut stmt = self.conn.prepare(
             "SELECT b.id, coalesce(b.user_title, b.title), coalesce(b.user_author, b.author),
-                    (SELECT count(*) FROM annotation a WHERE a.book_id = b.id AND a.status != 'trashed'),
-                    (SELECT count(DISTINCT s.vocab_id) FROM vocab_sighting s WHERE s.book_id = b.id)
-             FROM book b WHERE NOT b.hidden ORDER BY 2 COLLATE NOCASE",
+                    (SELECT count(*) FROM annotation a WHERE a.book_id = b.id AND a.status IN ('inbox', 'kept')),
+                    (SELECT count(DISTINCT s.vocab_id) FROM vocab_sighting s WHERE s.book_id = b.id),
+                    b.cover_path, b.percent_read, b.last_read_at
+             FROM book b WHERE NOT b.hidden AND (?1 IS NULL OR b.id = ?1) ORDER BY 2 COLLATE NOCASE",
         )?;
-        let books = stmt.query_map([], |r| {
+        let books = stmt.query_map([id], |r| {
             Ok(Book {
                 id: r.get(0)?,
                 title: r.get(1)?,
                 author: r.get(2)?,
                 annotation_count: r.get(3)?,
                 vocab_count: r.get(4)?,
+                cover: r.get::<_, Option<String>>(5)?.map(PathBuf::from),
+                percent_read: r.get(6)?,
+                last_read_at: r.get(7)?,
             })
         })?;
         Ok(books.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Records where a device's covers and markup images were copied to.
+    pub fn attach_assets(
+        &self,
+        device: &crate::kobo::DeviceInfo,
+        assets: &crate::kobo::assets::CopiedAssets,
+    ) -> Result<()> {
+        let path = |p: &Option<PathBuf>| p.as_ref().map(|p| p.to_string_lossy().into_owned());
+        for (volume_id, cover) in &assets.covers {
+            self.conn.execute(
+                "UPDATE book SET cover_path = ?3 WHERE id = (
+                    SELECT s.book_id FROM book_source s JOIN device d ON d.id = s.device_id
+                    WHERE d.serial = ?1 AND s.volume_id = ?2)",
+                params![device.serial, volume_id, cover.to_string_lossy()],
+            )?;
+        }
+        for (bookmark_id, svg, jpg) in &assets.markups {
+            self.conn.execute(
+                "UPDATE annotation SET markup_svg_path = ?2, markup_jpg_path = ?3
+                 WHERE id = (SELECT annotation_id FROM annotation_source WHERE bookmark_id = ?1)",
+                params![bookmark_id, path(svg), path(jpg)],
+            )?;
+        }
+        Ok(())
+    }
+
+    pub fn setting(&self, key: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row("SELECT value FROM setting WHERE key = ?1", [key], |r| {
+                r.get(0)
+            })
+            .optional()?)
+    }
+
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO setting (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )?;
+        Ok(())
     }
 
     pub fn annotation(&self, id: i64) -> Result<Option<Annotation>> {

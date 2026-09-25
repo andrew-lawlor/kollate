@@ -237,3 +237,45 @@ fn books_list_in_reading_order() {
     let items = lib.annotations_for_book(tantra.id).unwrap();
     assert_eq!(items[0].chapter_title.as_deref(), Some("Preface"));
 }
+
+#[test]
+fn attaches_copied_assets_and_stores_settings() {
+    use kollate_core::kobo::assets::CopiedAssets;
+    let (lib, snap) = imported();
+    let markup = snap
+        .bookmarks
+        .iter()
+        .find(|b| b.kind == kollate_core::kobo::AnnotationKind::Markup)
+        .unwrap();
+    let book = &snap.books[0];
+    let assets = CopiedAssets {
+        covers: vec![(book.volume_id.clone(), "/lib/covers/x.jpg".into())],
+        markups: vec![(
+            markup.bookmark_id.clone(),
+            None,
+            Some("/lib/markups/m.jpg".into()),
+        )],
+    };
+    lib.attach_assets(&device("A"), &assets).unwrap();
+
+    let id = lib
+        .annotation_id_for_bookmark(&markup.bookmark_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        lib.annotation(id).unwrap().unwrap().markup_image,
+        Some("/lib/markups/m.jpg".into())
+    );
+    let covered = lib
+        .books()
+        .unwrap()
+        .into_iter()
+        .filter(|b| b.cover.is_some())
+        .count();
+    assert_eq!(covered, 1);
+
+    assert_eq!(lib.setting("on_connect").unwrap(), None);
+    lib.set_setting("on_connect", "ask").unwrap();
+    lib.set_setting("on_connect", "auto").unwrap();
+    assert_eq!(lib.setting("on_connect").unwrap().as_deref(), Some("auto"));
+}

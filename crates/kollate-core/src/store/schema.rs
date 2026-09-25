@@ -156,4 +156,11 @@ pub const MIGRATIONS: &[&str] = &[
     ALTER TABLE annotation ADD COLUMN position_key TEXT;
     CREATE INDEX annotation_reading_order ON annotation(book_id, spine_index, position_key);
     "#,
+    // 3: key/value settings
+    r#"
+    CREATE TABLE setting (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+    "#,
 ];

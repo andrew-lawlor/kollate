@@ -21,6 +21,11 @@ pub fn find_kobo_db(path: &Path) -> Result<PathBuf> {
     }
 }
 
+/// Whether `path` is the root of a mounted Kobo.
+pub fn is_kobo_mount(path: &Path) -> bool {
+    path.join(DB_RELATIVE_PATH).is_file()
+}
+
 /// Contents of `.kobo/version`: `serial,?,firmware,?,?,model-id`.
 /// Verified on a Libra Colour (model ID suffix `0390`), firmware 4.45.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +47,18 @@ impl DeviceInfo {
                 .filter(|_| fields.len() > 1)
                 .map(|s| s.to_string()),
         })
+    }
+
+    /// Marketing name for known model IDs.
+    pub fn model_name(&self) -> &'static str {
+        match self
+            .model_id
+            .as_deref()
+            .and_then(|id| id.rsplit('-').next())
+        {
+            Some("000000000390") => "Kobo Libra Colour",
+            _ => "Kobo",
+        }
     }
 
     pub fn read(mount: &Path) -> Option<Self> {
@@ -80,7 +97,7 @@ pub fn find_mounted_kobos() -> Vec<PathBuf> {
         .filter_map(|root| std::fs::read_dir(root).ok())
         .flatten()
         .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.join(DB_RELATIVE_PATH).is_file())
+        .filter(|p| is_kobo_mount(p))
         .collect();
     found.sort();
     found
@@ -108,5 +125,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(real.firmware.as_deref(), Some("4.45.23697"));
+        assert_eq!(real.model_name(), "Kobo Libra Colour");
     }
 }

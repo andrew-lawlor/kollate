@@ -114,17 +114,19 @@ kollate/                     (cargo workspace)
 ## 5. Device detection & import flow
 
 - **Autodetect** by subscribing to `gio::VolumeMonitor` `mount-added` / `mount-removed`. On startup, also scan existing mounts. A mount counts as a Kobo if it contains `.kobo/KoboReader.sqlite`. There's no hard-coded path; `/media/andrew/KOBOeReader` is just the typical one. A manual "Import from folder/file…" option handles DB backups.
-- On detection there are three behaviours, set in Preferences: **Auto-import** (default), **Ask**, or **Ignore**.
+- On detection there are three behaviours, set in Preferences (stored in the library's `setting` table, key `on_connect`): **Import automatically** (default), **Ask first** (the banner offers Import), or **Do nothing**.
+- An `AdwBanner` at the top of the content pane shows the connection state: "Importing from your Kobo Libra Colour…", then "Your Kobo Libra Colour is connected" with an **Eject** button.
 - **Import pipeline while the reader is mounted:**
   1. Copy the DB, then diff and merge highlights, notes and vocab (§6).
   2. Copy markup `.svg`/`.jpg` files for new markups.
   3. **Vocab context pass (§8):** for every word without a context sentence, open the book's EPUB on the device and extract candidate sentences. This runs in the background, with progress shown in the header bar.
   4. Look up definitions offline for new words (§8).
-  5. Cache covers from `.kobo-images/` for new books.
+  5. Copy covers from `.kobo-images/<h&0xff>/<(h&0xff00)>>8>/<ImageId> - N3_LIBRARY_FULL.parsed` (JPEG; `h` = Kobo's qhash of the ImageId, verified on the device) into `<library dir>/covers/`. Markup images go to `<library dir>/markups/<BookmarkID>.{svg,jpg}`. Files are written atomically (`.part`, then rename) and skipped when unchanged.
 - Steps 2–5 are best-effort. If the reader is unplugged mid-way, the unfinished work is queued and resumes on the next connect.
 - After an import, a toast reads "Kobo Libra Colour: 7 new highlights, 2 new words · Review". Clicking it opens the **Inbox**.
 - Every import writes an `import_runs` row (device, time, counts: new, updated, unchanged, removed-on-device) for traceability.
-- The app shows an "Eject" button once the import finishes (via `gio::Mount::unmount_with_operation`).
+- Eject uses `gio::Mount::eject_with_operation` (or unmount when the mount can't eject). It's disabled while an import is running.
+- Book pages open with a header showing the cover, % read and last-read date. Markup cards show the page image, and "Open Page Image" opens it in the default viewer.
 
 ---
 
@@ -241,7 +243,7 @@ Export dialog options: scope (selection, book, filter, everything), include arch
 1. ✅ **M0, core + CLI:** Kobo reader, normalization, chapter resolution and `kollate-cli inspect <mount|db>`. Tests run against the fixture DB here: 52 bookmarks, 12 words, 5 books.
 2. ✅ **M1, store + dedup:** the schema, importer and merge rules. Tests cover re-importing the same DB (0 changes), an edited note, a deleted row and a factory reset (new IDs, same text).
 3. ✅ **M2, UI browse & curate:** books, highlights, notes, search, star/tag/archive, edit.
-4. **M3, device integration:** autodetect, auto-import, Inbox, toasts, eject, markup files, covers.
+4. ✅ **M3, device integration:** autodetect, auto-import, Inbox, toasts, eject, markup files, covers.
 5. **M4, vocab enrichment:** EPUB context extraction, WordNet bundle and dictionary import, lemma merge.
 6. **M5, export:** Obsidian vault sync and Anki, then JSON, CSV and Readwise.
 7. **M6, polish & ship:** markup SVG rendering, Flatpak (no network), app icon, `.desktop` file.

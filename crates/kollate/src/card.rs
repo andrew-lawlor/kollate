@@ -4,7 +4,7 @@ use adw::prelude::*;
 use chrono::Local;
 use gtk::gio;
 use kollate_core::kobo::color_name;
-use kollate_core::store::{Annotation, Status};
+use kollate_core::store::{Annotation, Book, Status};
 
 pub fn format_date(date: chrono::DateTime<chrono::Utc>) -> String {
     date.with_timezone(&Local).format("%-d %b %Y").to_string()
@@ -38,6 +38,9 @@ fn menu(a: &Annotation) -> gio::Menu {
     main.append(Some("_Edit…"), Some("card.edit"));
     main.append(Some("_Copy Text"), Some("card.copy"));
     main.append(Some("Copy as _Markdown"), Some("card.copy-markdown"));
+    if a.markup_image.is_some() {
+        main.append(Some("_Open Page Image"), Some("card.open-image"));
+    }
     menu.append_section(None, &main);
 
     let status = gio::Menu::new();
@@ -111,15 +114,32 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
     body.set_hexpand(true);
     match (a.kind.as_str(), a.text()) {
         (_, Some(text)) => body.append(&wrapped_label(text, &["quote"])),
-        ("markup", None) => {
-            let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-            row.append(&gtk::Image::from_icon_name("input-tablet-symbolic"));
-            row.append(&wrapped_label(
-                "Handwritten markup. The page image is copied when the Kobo is connected.",
-                &["dim-label"],
-            ));
-            body.append(&row);
-        }
+        ("markup", None) => match a.markup_image.as_ref().filter(|p| p.is_file()) {
+            Some(path) => {
+                let picture = gtk::Picture::builder()
+                    .file(&gtk::gio::File::for_path(path))
+                    .content_fit(gtk::ContentFit::Contain)
+                    .can_shrink(true)
+                    .height_request(320)
+                    .halign(gtk::Align::Start)
+                    .css_classes(["markup-image"])
+                    .build();
+                picture.set_tooltip_text(Some("Handwritten markup (page image from your Kobo)"));
+                picture.update_property(&[gtk::accessible::Property::Label(
+                    "Handwritten markup page image",
+                )]);
+                body.append(&picture);
+            }
+            None => {
+                let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+                row.append(&gtk::Image::from_icon_name("input-tablet-symbolic"));
+                row.append(&wrapped_label(
+                    "Handwritten markup. The page image is copied when the Kobo is connected.",
+                    &["dim-label"],
+                ));
+                body.append(&row);
+            }
+        },
         _ => body.append(&wrapped_label("(no text)", &["dim-label"])),
     }
 
@@ -199,6 +219,59 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
     body.append(&details);
     root.append(&body);
     root.upcast()
+}
+
+/// The header row at the top of a book's page: cover, title and progress.
+pub fn book_header(book: &Book) -> gtk::ListBoxRow {
+    let hbox = gtk::Box::builder()
+        .spacing(18)
+        .margin_top(6)
+        .margin_bottom(12)
+        .build();
+    let cover = gtk::Picture::builder()
+        .content_fit(gtk::ContentFit::Cover)
+        .width_request(96)
+        .height_request(144)
+        .valign(gtk::Align::Start)
+        .css_classes(["book-cover"])
+        .build();
+    match book.cover.as_ref().filter(|p| p.is_file()) {
+        Some(path) => cover.set_filename(Some(path)),
+        None => cover.add_css_class("no-cover"),
+    }
+    cover.update_property(&[gtk::accessible::Property::Label("Cover")]);
+    hbox.append(&cover);
+
+    let text = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(4)
+        .valign(gtk::Align::Center)
+        .build();
+    text.append(&wrapped_label(&book.title, &["title-2"]));
+    if let Some(author) = &book.author {
+        text.append(&wrapped_label(author, &["dim-label"]));
+    }
+    let mut facts = Vec::new();
+    if let Some(p) = book.percent_read.filter(|p| *p > 0) {
+        facts.push(format!("{p}% read"));
+    }
+    if let Some(date) = book.last_read_at {
+        facts.push(format!("last read {}", format_date(date)));
+    }
+    if !facts.is_empty() {
+        let label = wrapped_label(&facts.join(" · "), &["caption", "dim-label"]);
+        label.set_margin_top(6);
+        text.append(&label);
+    }
+    hbox.append(&text);
+
+    gtk::ListBoxRow::builder()
+        .child(&hbox)
+        .selectable(false)
+        .activatable(false)
+        .focusable(false)
+        .css_classes(["book-header"])
+        .build()
 }
 
 /// Markdown blockquote with the note and source, for "Copy as Markdown".
