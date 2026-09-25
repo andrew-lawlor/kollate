@@ -109,6 +109,8 @@ kollate/                     (cargo workspace)
 2. Open the copy with `?mode=ro`. Never hold a handle on the device, because that blocks a clean eject.
 3. Treat `ExtraAnnotationData` and any unexpected column as bytes. Check `DbVersion` and warn (don't fail) on unknown schema versions.
 
+
+**Never writing to the device** is enforced in the core. `kobo::ensure_not_on_kobo(path)` rejects any path on a Kobo: the path or its nearest existing ancestor is resolved through symlinks and checked for `.kobo/KoboReader.sqlite`. It's called before every write: `Library::open`, every export (Obsidian, Anki, JSON, CSV, Readwise), `DictionaryBuilder::create`, `copy_assets`, and even the temp folder for the database copy. The app also rejects a Kobo folder as the Obsidian target when you pick it. The error is `Error::OnKobo`, and a test confirms a fake Kobo stays byte-for-byte unchanged. Remaining caveat: on the `.deb`, Linux may update FAT last-access dates when files are read; the Flatpak's read-only access prevents that.
 ---
 
 ## 5. Device detection & import flow

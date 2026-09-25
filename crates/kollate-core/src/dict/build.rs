@@ -20,6 +20,7 @@ pub struct DictionaryBuilder {
 impl DictionaryBuilder {
     /// Creates `out` (replacing any existing file).
     pub fn create(out: &Path, name: &str, language: Option<&str>, source: &str) -> Result<Self> {
+        crate::kobo::ensure_not_on_kobo(out)?;
         if out.exists() {
             std::fs::remove_file(out)?;
         }

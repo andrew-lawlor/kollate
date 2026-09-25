@@ -197,3 +197,66 @@ fn csv_readwise_and_json() {
         .sum();
     assert_eq!(total, 52);
 }
+
+#[test]
+fn nothing_can_be_written_to_a_kobo() {
+    use kollate_core::Error;
+    let lib = library();
+    let dir = tempfile::tempdir().unwrap();
+    let kobo = dir.path().join("KOBOeReader");
+    std::fs::create_dir_all(kobo.join(".kobo")).unwrap();
+    std::fs::write(kobo.join(".kobo/KoboReader.sqlite"), b"").unwrap();
+    let before: Vec<_> = walk(&kobo);
+
+    let on_kobo = |r: kollate_core::Result<_>| matches!(r, Err(Error::OnKobo(_)));
+    let opts = ExportOptions::default();
+    assert!(on_kobo(
+        export::sync_obsidian(&lib, &kobo.join("Vault/Books"), opts).map(|_| ())
+    ));
+    assert!(on_kobo(
+        export::export_anki(&lib, &kobo.join("Kollate.apkg"), opts, true).map(|_| ())
+    ));
+    assert!(on_kobo(
+        export::export_json(&lib, &kobo.join("backup.json")).map(|_| ())
+    ));
+    assert!(on_kobo(
+        export::export_highlights_csv(&lib, &kobo.join("h.csv"), opts).map(|_| ())
+    ));
+    assert!(on_kobo(
+        export::export_vocab_csv(&lib, &kobo.join("v.csv"), opts).map(|_| ())
+    ));
+    assert!(on_kobo(
+        export::export_readwise_csv(&lib, &kobo.join("r.csv"), opts).map(|_| ())
+    ));
+    assert!(on_kobo(
+        Library::open(&kobo.join("kollate/library.db")).map(|_| ())
+    ));
+    assert!(on_kobo(
+        kollate_core::dict::DictionaryBuilder::create(&kobo.join("d.db"), "x", None, "x")
+            .map(|_| ())
+    ));
+    let err = export::export_json(&lib, &kobo.join("backup.json"))
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("Kollate never writes to your Kobo"), "{err}");
+
+    assert_eq!(
+        walk(&kobo),
+        before,
+        "the fake Kobo is byte-for-byte untouched"
+    );
+}
+
+fn walk(dir: &std::path::Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap().flatten() {
+        let p = entry.path();
+        if p.is_dir() {
+            out.extend(walk(&p));
+        } else {
+            out.push((p.clone(), std::fs::read(&p).unwrap()));
+        }
+    }
+    out.sort();
+    out
+}

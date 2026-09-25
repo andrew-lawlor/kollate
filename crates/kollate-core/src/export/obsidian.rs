@@ -247,6 +247,7 @@ pub fn sync_obsidian(
     folder: &Path,
     options: ExportOptions,
 ) -> Result<ObsidianStats> {
+    crate::kobo::ensure_not_on_kobo(folder)?;
     std::fs::create_dir_all(folder)?;
     let books = lib.export_books(options)?;
     let mut stats = ObsidianStats::default();

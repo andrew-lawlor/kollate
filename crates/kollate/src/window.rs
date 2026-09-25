@@ -2300,6 +2300,9 @@ impl Window {
                         return;
                     };
                     let Some(path) = folder.path() else { return };
+                    if let Err(err) = kollate_core::kobo::ensure_not_on_kobo(&path) {
+                        return this.error("That Folder Is on Your Kobo", err);
+                    }
                     if let Err(err) = this
                         .lib
                         .borrow()

@@ -55,6 +55,8 @@ impl KoboDb {
     /// Opens a copy of the database at `db_path` (see [`super::find_kobo_db`]).
     pub fn open_copy(db_path: &Path) -> Result<Self> {
         let dir = tempfile::Builder::new().prefix("kollate-kobo-").tempdir()?;
+        // Even the scratch copy must not land on the device (e.g. via TMPDIR).
+        super::ensure_not_on_kobo(dir.path())?;
         let copy = dir.path().join("KoboReader.sqlite");
         std::fs::copy(db_path, &copy)?;
         let wal = db_path.with_extension("sqlite-wal");

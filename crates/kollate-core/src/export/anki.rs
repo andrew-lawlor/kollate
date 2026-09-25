@@ -217,6 +217,7 @@ pub fn export_anki(
     options: ExportOptions,
     include_highlights: bool,
 ) -> Result<AnkiStats> {
+    crate::kobo::ensure_not_on_kobo(out)?;
     let books: Vec<ExportBook> = lib.export_books(options)?;
     let dir = tempfile::tempdir()?;
     let db_path = dir.path().join("collection.anki2");

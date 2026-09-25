@@ -24,6 +24,7 @@ struct Backup {
 
 /// Everything in the library (including trashed and ignored items) as JSON.
 pub fn export_json(lib: &Library, out: &Path) -> Result<usize> {
+    crate::kobo::ensure_not_on_kobo(out)?;
     let books = lib.export_books(ExportOptions {
         everything: true,
         ..Default::default()
@@ -44,6 +45,7 @@ pub fn export_json(lib: &Library, out: &Path) -> Result<usize> {
 
 /// One row per highlight or note.
 pub fn export_highlights_csv(lib: &Library, out: &Path, options: ExportOptions) -> Result<usize> {
+    crate::kobo::ensure_not_on_kobo(out)?;
     let mut w = csv::Writer::from_path(out).map_err(csv_err)?;
     w.write_record([
         "Book",
@@ -83,6 +85,7 @@ pub fn export_highlights_csv(lib: &Library, out: &Path, options: ExportOptions) 
 
 /// One row per word and book it was looked up in.
 pub fn export_vocab_csv(lib: &Library, out: &Path, options: ExportOptions) -> Result<usize> {
+    crate::kobo::ensure_not_on_kobo(out)?;
     let mut w = csv::Writer::from_path(out).map_err(csv_err)?;
     w.write_record([
         "Word",
@@ -121,6 +124,7 @@ pub fn export_vocab_csv(lib: &Library, out: &Path, options: ExportOptions) -> Re
 /// Readwise's CSV import format. Tags become Readwise inline tags (`.tag`)
 /// in the note.
 pub fn export_readwise_csv(lib: &Library, out: &Path, options: ExportOptions) -> Result<usize> {
+    crate::kobo::ensure_not_on_kobo(out)?;
     let mut w = csv::Writer::from_path(out).map_err(csv_err)?;
     w.write_record([
         "Highlight",

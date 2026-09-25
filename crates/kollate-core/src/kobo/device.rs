@@ -26,6 +26,33 @@ pub fn is_kobo_mount(path: &Path) -> bool {
     path.join(DB_RELATIVE_PATH).is_file()
 }
 
+/// The root of the Kobo that `path` is on, if any. `path` may not exist yet
+/// (e.g. a file about to be written): its nearest existing ancestor is
+/// checked, with symlinks resolved so a link can't point onto the device.
+pub fn kobo_root_containing(path: &Path) -> Option<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir().ok()?.join(path)
+    };
+    let existing = absolute.ancestors().find(|p| p.exists())?;
+    let resolved = std::fs::canonicalize(existing).unwrap_or_else(|_| existing.to_path_buf());
+    resolved
+        .ancestors()
+        .find(|p| is_kobo_mount(p))
+        .map(Path::to_path_buf)
+}
+
+/// Kollate never writes to a Kobo. Every place that creates or changes a
+/// file calls this first, so no export, library or dictionary path can be
+/// on the device, even if the user picks one.
+pub fn ensure_not_on_kobo(path: &Path) -> Result<()> {
+    match kobo_root_containing(path) {
+        Some(_) => Err(Error::OnKobo(path.to_path_buf())),
+        None => Ok(()),
+    }
+}
+
 /// Contents of `.kobo/version`: `serial,?,firmware,?,?,model-id`.
 /// Verified on a Libra Colour (model ID suffix `0390`), firmware 4.45.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,6 +133,31 @@ pub fn find_mounted_kobos() -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn refuses_paths_on_a_kobo() {
+        let dir = tempfile::tempdir().unwrap();
+        let kobo = dir.path().join("KOBOeReader");
+        std::fs::create_dir_all(kobo.join(".kobo")).unwrap();
+        std::fs::write(kobo.join(DB_RELATIVE_PATH), b"").unwrap();
+        let elsewhere = dir.path().join("Documents");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+
+        // The mount itself, files on it, and folders that don't exist yet.
+        assert!(ensure_not_on_kobo(&kobo).is_err());
+        assert!(ensure_not_on_kobo(&kobo.join("export.csv")).is_err());
+        assert!(ensure_not_on_kobo(&kobo.join("Vault/Books/new/deeper")).is_err());
+        assert_eq!(
+            kobo_root_containing(&kobo.join("x/y.md")),
+            Some(std::fs::canonicalize(&kobo).unwrap())
+        );
+        // A symlink elsewhere that points onto the Kobo.
+        std::os::unix::fs::symlink(&kobo, elsewhere.join("link")).unwrap();
+        assert!(ensure_not_on_kobo(&elsewhere.join("link/out.json")).is_err());
+        // Ordinary locations are fine.
+        assert!(ensure_not_on_kobo(&elsewhere.join("out.json")).is_ok());
+        assert!(ensure_not_on_kobo(&dir.path().join("Library/new/library.db")).is_ok());
+    }
 
     #[test]
     fn parses_version_file() {

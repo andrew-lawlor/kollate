@@ -72,6 +72,7 @@ pub fn copy_assets(
     snapshot: &KoboSnapshot,
     assets_dir: &Path,
 ) -> Result<CopiedAssets> {
+    super::ensure_not_on_kobo(assets_dir)?;
     let mut out = CopiedAssets::default();
     for book in &snapshot.books {
         let Some(image_id) = &book.image_id else {

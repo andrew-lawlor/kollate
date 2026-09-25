@@ -193,6 +193,7 @@ pub(crate) fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotat
 
 impl Library {
     pub fn open(path: &Path) -> Result<Self> {
+        crate::kobo::ensure_not_on_kobo(path)?;
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }

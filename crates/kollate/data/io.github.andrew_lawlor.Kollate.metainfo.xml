@@ -41,7 +41,7 @@
           <li>A new preference can move them to Trash automatically</li>
         </ul>
         <p>A new Books page shows your library as covers, sorted by most recent; the sidebar keeps your five latest books, and books with nothing left to show are hidden.</p>
-        <p>Search is now always visible, starring a highlight in the Inbox also keeps it, and you can select several highlights to keep, archive, star or trash them at once, or keep the whole Inbox. A new Keyboard Shortcuts window (Ctrl+?) lists every shortcut.</p>
+        <p>Search is now always visible, starring a highlight in the Inbox also keeps it, and you can select several highlights to keep, archive, star or trash them at once, or keep the whole Inbox. A new Keyboard Shortcuts window (Ctrl+?) lists every shortcut. Kollate now refuses to save exports or its library onto the Kobo itself.</p>
       </description>
     </release>
     <release version="0.1.0" date="2026-09-25">
