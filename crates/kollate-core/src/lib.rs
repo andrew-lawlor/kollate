@@ -1,6 +1,7 @@
 //! Core library for Kollate: reading Kobo data, normalizing it, and storing
 //! and merging it into the local library. Contains no GTK code.
 
+pub mod dict;
 pub mod error;
 pub mod import;
 pub mod kobo;

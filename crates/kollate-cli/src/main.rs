@@ -38,6 +38,31 @@ enum Command {
     },
     /// Show what the library contains.
     Library,
+    /// Find context sentences for Vocab Builder words in the books on a mounted Kobo.
+    Contexts { mount: PathBuf },
+    /// Build or query offline dictionaries.
+    #[command(subcommand)]
+    Dict(DictCommand),
+}
+
+#[derive(Subcommand)]
+enum DictCommand {
+    /// Convert Open English WordNet (WN-LMF XML, optionally .gz).
+    BuildWordnet { input: PathBuf, output: PathBuf },
+    /// Convert a StarDict dictionary (path to its .ifo file).
+    BuildStardict { ifo: PathBuf, output: PathBuf },
+    /// Convert a kaikki.org Wiktionary extract (.jsonl or .jsonl.gz).
+    BuildKaikki {
+        input: PathBuf,
+        output: PathBuf,
+        #[arg(long, default_value = "Wiktionary")]
+        name: String,
+    },
+    /// Look words up in a dictionary database.
+    Lookup {
+        dictionary: PathBuf,
+        words: Vec<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -47,7 +72,53 @@ fn main() -> Result<()> {
         Command::Inspect { path, json } => inspect(path, json),
         Command::Import { path, dry_run } => import(&path, &library_path, dry_run),
         Command::Library => library(&library_path),
+        Command::Dict(cmd) => dict(cmd),
+        Command::Contexts { mount } => {
+            let snapshot = KoboDb::open_copy(&find_kobo_db(&mount)?)?.snapshot()?;
+            for wc in kollate_core::kobo::epub::find_word_contexts(&mount, &snapshot, 3) {
+                println!("{}", wc.word);
+                for c in &wc.contexts {
+                    println!("  [ch {}] {}", c.chapter, c.sentence);
+                }
+            }
+            Ok(())
+        }
     }
+}
+
+fn dict(cmd: DictCommand) -> Result<()> {
+    use kollate_core::dict;
+    let started = std::time::Instant::now();
+    let built = match cmd {
+        DictCommand::BuildWordnet { input, output } => {
+            dict::build_from_wordnet_lmf(&input, &output)?
+        }
+        DictCommand::BuildStardict { ifo, output } => dict::build_from_stardict(&ifo, &output)?,
+        DictCommand::BuildKaikki {
+            input,
+            output,
+            name,
+        } => dict::build_from_kaikki(&input, &output, &name)?,
+        DictCommand::Lookup { dictionary, words } => {
+            let d = dict::Dictionary::open(&dictionary)?;
+            for word in words {
+                match d.lookup(&word)? {
+                    Some(def) => println!(
+                        "{word} → {}\n  {}",
+                        def.headword,
+                        def.to_text(3).replace('\n', "\n  ")
+                    ),
+                    None => println!("{word} → (not found)"),
+                }
+            }
+            return Ok(());
+        }
+    };
+    println!(
+        "Wrote {built} senses in {:.1}s",
+        started.elapsed().as_secs_f32()
+    );
+    Ok(())
 }
 
 fn import(path: &Path, library_path: &Path, dry_run: bool) -> Result<()> {

@@ -163,4 +163,16 @@ pub const MIGRATIONS: &[&str] = &[
         value TEXT NOT NULL
     );
     "#,
+    // 4: vocab enrichment
+    r#"
+    ALTER TABLE vocab_sighting ADD COLUMN context_candidates TEXT; -- JSON array of sentences
+    -- Every lookup key ever merged into a word, so re-imports find it.
+    CREATE TABLE vocab_form (
+        key      TEXT NOT NULL,
+        language TEXT NOT NULL,
+        vocab_id INTEGER NOT NULL REFERENCES vocab(id) ON DELETE CASCADE,
+        PRIMARY KEY (key, language)
+    );
+    INSERT INTO vocab_form (key, language, vocab_id) SELECT key, language, id FROM vocab;
+    "#,
 ];

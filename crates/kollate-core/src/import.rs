@@ -451,7 +451,7 @@ impl Importer<'_> {
         let existing: Option<i64> = self
             .tx
             .query_row(
-                "SELECT id FROM vocab WHERE key = ?1 AND language = ?2",
+                "SELECT vocab_id FROM vocab_form WHERE key = ?1 AND language = ?2",
                 params![key, language],
                 |r| r.get(0),
             )
@@ -475,6 +475,10 @@ impl Importer<'_> {
                 )?
             }
         };
+        self.tx.execute(
+            "INSERT OR IGNORE INTO vocab_form (key, language, vocab_id) VALUES (?1, ?2, ?3)",
+            params![key, language, vocab_id],
+        )?;
         let inserted = self.tx.execute(
             "INSERT INTO vocab_sighting (vocab_id, book_id, device_id, surface_form, looked_up_at)
              VALUES (?1, ?2, ?3, ?4, ?5)

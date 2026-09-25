@@ -3,8 +3,10 @@
 
 mod query;
 mod schema;
+mod vocab;
 
 pub use query::{AnnotationFilter, SidebarCounts, Tag, View, VocabStatus};
+pub use vocab::{Sighting, Vocab, VocabDetail};
 
 use std::path::{Path, PathBuf};
 
@@ -108,17 +110,6 @@ pub struct Book {
     pub cover: Option<PathBuf>,
     pub percent_read: Option<i64>,
     pub last_read_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct Vocab {
-    pub id: i64,
-    pub word: String,
-    pub language: String,
-    pub first_seen_at: Option<DateTime<Utc>>,
-    pub status: VocabStatus,
-    /// Titles of the books the word was looked up in.
-    pub books: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -342,42 +333,6 @@ impl Library {
                 |r| r.get(0),
             )
             .optional()?)
-    }
-
-    pub fn vocab(&self) -> Result<Vec<Vocab>> {
-        self.query_vocab(None, None)
-    }
-
-    /// Vocab words, newest first, optionally limited to one book and/or
-    /// matching a search string.
-    pub fn query_vocab(&self, book_id: Option<i64>, search: Option<&str>) -> Result<Vec<Vocab>> {
-        let pattern = search
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(query::like_pattern);
-        let mut stmt = self.conn.prepare(
-            "SELECT v.id, v.word, v.language, v.first_seen_at, v.status,
-                    (SELECT group_concat(title, char(31)) FROM (SELECT DISTINCT coalesce(b.user_title, b.title) AS title
-                     FROM vocab_sighting s JOIN book b ON b.id = s.book_id WHERE s.vocab_id = v.id))
-             FROM vocab v
-             WHERE (?1 IS NULL OR EXISTS (SELECT 1 FROM vocab_sighting s WHERE s.vocab_id = v.id AND s.book_id = ?1))
-               AND (?2 IS NULL OR v.word LIKE ?2 ESCAPE '\\' OR v.definition LIKE ?2 ESCAPE '\\')
-             ORDER BY v.first_seen_at DESC, v.id DESC",
-        )?;
-        let vocab = stmt.query_map(params![book_id, pattern], |r| {
-            Ok(Vocab {
-                id: r.get(0)?,
-                word: r.get(1)?,
-                language: r.get(2)?,
-                first_seen_at: r.get(3)?,
-                status: VocabStatus::parse(&r.get::<_, String>(4)?),
-                books: r
-                    .get::<_, Option<String>>(5)?
-                    .map(|s| s.split('\u{1f}').map(str::to_owned).collect())
-                    .unwrap_or_default(),
-            })
-        })?;
-        Ok(vocab.collect::<rusqlite::Result<_>>()?)
     }
 
     fn record_revision(

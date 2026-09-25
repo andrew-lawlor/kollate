@@ -7,12 +7,14 @@ use std::rc::Rc;
 
 use adw::prelude::*;
 use gtk::{gdk, gio, glib};
+use kollate_core::dict::{self, Dictionary};
 use kollate_core::kobo::assets::{CopiedAssets, copy_assets};
+use kollate_core::kobo::epub::find_word_contexts;
 use kollate_core::kobo::{DeviceInfo, KoboDb, find_kobo_db, find_mounted_kobos, is_kobo_mount};
 use kollate_core::store::{Annotation, AnnotationFilter, Status, View, Vocab, VocabStatus};
 use kollate_core::{ImportStats, Library};
 
-use crate::{card, edit};
+use crate::{card, edit, word};
 
 /// What the content pane shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -137,6 +139,7 @@ pub struct Window {
     /// Number of (annotation, vocab) rows currently listed.
     shown: Cell<(usize, usize)>,
     current: Cell<Nav>,
+    dictionaries: RefCell<Vec<Dictionary>>,
 }
 
 fn plural(n: usize, one: &str, many: &str) -> String {
@@ -295,10 +298,13 @@ impl Window {
             groups: Rc::default(),
             shown: Cell::new((0, 0)),
             current: Cell::new(Nav::Annotations(View::Inbox)),
+            dictionaries: RefCell::default(),
         });
         this.setup_list();
         this.setup_signals();
         this.setup_actions();
+        this.load_dictionaries();
+        this.enrich_vocab();
         this.rebuild_sidebar();
         this.reload();
         this.setup_device_monitor();
@@ -460,14 +466,20 @@ impl Window {
         self.add_win_action("preferences", |this| this.show_preferences());
         self.add_win_action("import-folder", |this| this.choose_import_folder());
         self.add_win_action("about", |this| {
-            adw::AboutDialog::builder()
+            let about = adw::AboutDialog::builder()
                 .application_name("Kollate")
                 .application_icon("accessories-dictionary")
                 .version(env!("CARGO_PKG_VERSION"))
                 .comments("Collect and curate highlights, notes and vocabulary from your Kobo.")
                 .license_type(gtk::License::Gpl30)
-                .build()
-                .present(Some(&this.win));
+                .build();
+            about.add_legal_section(
+                "Open English WordNet",
+                Some("© Princeton University and the Open English WordNet contributors"),
+                gtk::License::Custom,
+                Some("Definitions from Open English WordNet, licensed under <a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a>."),
+            );
+            about.present(Some(&this.win));
         });
         self.add_win_action("shortcuts", |this| {
             let dialog = adw::AlertDialog::new(
@@ -812,18 +824,77 @@ impl Window {
     }
 
     fn vocab_row(self: &Rc<Self>, v: &Vocab, show_books: bool) -> gtk::ListBoxRow {
-        let mut subtitle = Vec::new();
+        let hbox = gtk::Box::builder()
+            .spacing(12)
+            .margin_top(10)
+            .margin_bottom(10)
+            .margin_start(14)
+            .margin_end(10)
+            .build();
+        let text = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(3)
+            .hexpand(true)
+            .build();
+        let label = |markup: &str, css: &[&str]| {
+            gtk::Label::builder()
+                .use_markup(true)
+                .label(markup)
+                .xalign(0.0)
+                .wrap(true)
+                .wrap_mode(gtk::pango::WrapMode::WordChar)
+                .css_classes(css.iter().map(|c| c.to_string()).collect::<Vec<_>>())
+                .build()
+        };
+        let mut title = format!("<b>{}</b>", glib::markup_escape_text(&v.word));
+        if let Some(lemma) = v
+            .lemma
+            .as_deref()
+            .filter(|l| !l.eq_ignore_ascii_case(&v.word))
+        {
+            title.push_str(&format!(
+                "  <span alpha=\"60%\">{}</span>",
+                glib::markup_escape_text(lemma)
+            ));
+        }
+        text.append(&label(&title, &[]));
+        match v.definition.as_deref().and_then(|d| d.lines().next()) {
+            Some(first) => {
+                let def = label(&glib::markup_escape_text(first), &[]);
+                def.set_lines(2);
+                def.set_ellipsize(gtk::pango::EllipsizeMode::End);
+                text.append(&def);
+            }
+            None => text.append(&label("No definition yet", &["dim-label"])),
+        }
+        if let Some(context) = &v.context {
+            let words = [v.word.as_str(), v.lemma.as_deref().unwrap_or("")];
+            let ctx = label(
+                &word::context_markup(context, &words),
+                &["quote", "dim-label"],
+            );
+            ctx.set_lines(3);
+            ctx.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            ctx.set_margin_top(2);
+            text.append(&ctx);
+        }
+        let mut meta = Vec::new();
         if show_books && !v.books.is_empty() {
-            subtitle.push(v.books.join(", "));
+            meta.push(v.books.join(", "));
         }
         if let Some(date) = v.first_seen_at {
-            subtitle.push(card::format_date(date));
+            meta.push(card::format_date(date));
         }
-        let row = adw::ActionRow::builder()
-            .title(glib::markup_escape_text(&v.word))
-            .subtitle(glib::markup_escape_text(&subtitle.join(" · ")))
-            .subtitle_lines(2)
-            .build();
+        if !meta.is_empty() {
+            let m = label(
+                &glib::markup_escape_text(&meta.join(" · ")),
+                &["caption", "dim-label"],
+            );
+            m.set_margin_top(2);
+            text.append(&m);
+        }
+        hbox.append(&text);
+
         let status = gtk::DropDown::from_strings(&VOCAB_STATUS_LABELS);
         status.set_valign(gtk::Align::Center);
         status.add_css_class("flat");
@@ -842,8 +913,83 @@ impl Window {
                 this.error("Couldn’t Update Word", err);
             }
         });
-        row.add_suffix(&status);
-        row.upcast()
+        hbox.append(&status);
+
+        let row = gtk::ListBoxRow::builder().child(&hbox).build();
+        let group = gio::SimpleActionGroup::new();
+        let edit = gio::SimpleAction::new("edit", None);
+        let weak = Rc::downgrade(self);
+        edit.connect_activate(move |_, _| {
+            if let Some(this) = weak.upgrade() {
+                this.open_word(id);
+            }
+        });
+        group.add_action(&edit);
+        row.insert_action_group("card", Some(&group));
+        row
+    }
+
+    fn open_word(self: &Rc<Self>, id: i64) {
+        let detail = match self.lib.borrow().vocab_detail(id) {
+            Ok(Some(d)) => d,
+            Ok(None) => return,
+            Err(err) => return self.error("Couldn’t Open Word", err),
+        };
+        let weak = Rc::downgrade(self);
+        let look_up_again = move || {
+            let this = weak.upgrade()?;
+            let dicts = this.dictionaries.borrow();
+            let mut lib = this.lib.borrow_mut();
+            lib.set_vocab_definition(id, None).ok()?;
+            lib.enrich_definitions(&dicts).ok()?;
+            lib.vocab_detail(id).ok()??.vocab.definition
+        };
+        let weak = Rc::downgrade(self);
+        word::present(&self.win, &detail, look_up_again, move |edit| {
+            let Some(this) = weak.upgrade() else { return };
+            let result = (|| {
+                let lib = this.lib.borrow();
+                if let Some(def) = &edit.definition {
+                    lib.set_vocab_definition(id, Some(def))?;
+                }
+                for (sighting, context) in &edit.contexts {
+                    lib.set_sighting_context(*sighting, context.as_deref())?;
+                }
+                kollate_core::Result::Ok(())
+            })();
+            if let Err(err) = result {
+                this.error("Couldn’t Save Word", err);
+            }
+            this.reload();
+        });
+    }
+
+    /// (Re)opens all installed and imported dictionaries.
+    fn load_dictionaries(&self) {
+        let mut dirs = dict::search_dirs(self.lib.borrow().assets_dir().as_deref());
+        if cfg!(debug_assertions) {
+            // Development builds use the WordNet built by scripts/fetch-wordnet.sh.
+            dirs.push(PathBuf::from(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../data/dictionaries"
+            )));
+        }
+        *self.dictionaries.borrow_mut() = dict::open_all(&dirs);
+    }
+
+    /// Defines any words still missing a definition. Returns how many were defined.
+    fn enrich_vocab(&self) -> usize {
+        let dicts = self.dictionaries.borrow();
+        if dicts.is_empty() {
+            return 0;
+        }
+        match self.lib.borrow_mut().enrich_definitions(&dicts) {
+            Ok(n) => n,
+            Err(err) => {
+                self.error("Couldn’t Look Up Words", err);
+                0
+            }
+        }
     }
 
     // ---- Annotation rows and actions ----------------------------------------
@@ -1102,7 +1248,13 @@ impl Window {
                     }
                     _ => Ok(CopiedAssets::default()),
                 };
-                Ok((device, snapshot, assets))
+                // Context sentences come from the books themselves.
+                let contexts = if path.is_dir() {
+                    find_word_contexts(&path, &snapshot, 5)
+                } else {
+                    Vec::new()
+                };
+                Ok((device, snapshot, assets, contexts))
             })
             .await;
             this.importing.set(false);
@@ -1110,13 +1262,14 @@ impl Window {
                 toast.dismiss();
             }
             let outcome = match read {
-                Ok(Ok((device, snapshot, assets))) => {
+                Ok(Ok((device, snapshot, assets, contexts))) => {
                     let mut lib = this.lib.borrow_mut();
                     lib.import(&snapshot, &device, false)
                         .and_then(|stats| {
                             if let Ok(assets) = &assets {
                                 lib.attach_assets(&device, assets)?;
                             }
+                            lib.set_word_contexts(&device, &contexts)?;
                             Ok((stats, assets.err()))
                         })
                         .map_err(|e| e.to_string())
@@ -1126,6 +1279,7 @@ impl Window {
             };
             match outcome {
                 Ok((stats, asset_error)) => {
+                    this.enrich_vocab();
                     this.rebuild_sidebar();
                     this.reload();
                     this.import_toast(&stats);
@@ -1298,6 +1452,9 @@ impl Window {
         });
         group.add(&on_connect);
 
+        page.add(&group);
+        page.add(&self.dictionaries_group(&dialog));
+
         if let Some(dir) = self.lib.borrow().assets_dir() {
             let location = adw::ActionRow::builder()
                 .title("Library Location")
@@ -1306,13 +1463,160 @@ impl Window {
                 .build();
             let library = adw::PreferencesGroup::builder().title("Library").build();
             library.add(&location);
-            page.add(&group);
             page.add(&library);
-        } else {
-            page.add(&group);
         }
         dialog.add(&page);
         dialog.present(Some(&self.win));
+    }
+
+    fn dictionaries_group(
+        self: &Rc<Self>,
+        dialog: &adw::PreferencesDialog,
+    ) -> adw::PreferencesGroup {
+        let group = adw::PreferencesGroup::builder()
+            .title("Dictionaries")
+            .description("Used to define Vocabulary words, in this order. Everything stays on this computer.")
+            .build();
+        let user_dir = self.lib.borrow().assets_dir().map(|d| dict::user_dir(&d));
+        let add = gtk::Button::builder()
+            .icon_name("list-add-symbolic")
+            .tooltip_text("Add a StarDict (.ifo) or Wiktionary (kaikki.org .jsonl) dictionary")
+            .valign(gtk::Align::Center)
+            .css_classes(["flat"])
+            .sensitive(user_dir.is_some())
+            .build();
+        add.update_property(&[gtk::accessible::Property::Label("Add Dictionary")]);
+        group.set_header_suffix(Some(&add));
+        let weak = Rc::downgrade(self);
+        add.connect_clicked(glib::clone!(
+            #[weak]
+            dialog,
+            move |_| {
+                if let Some(this) = weak.upgrade() {
+                    this.add_dictionary(&dialog);
+                }
+            }
+        ));
+
+        let dicts = self.dictionaries.borrow();
+        if dicts.is_empty() {
+            group.add(
+                &adw::ActionRow::builder()
+                    .title("No Dictionaries")
+                    .subtitle("Words can still be defined by hand.")
+                    .build(),
+            );
+        }
+        for d in dicts.iter() {
+            let imported = user_dir.as_ref().is_some_and(|u| d.path.starts_with(u));
+            let subtitle = match (&d.language, imported) {
+                (Some(lang), true) => format!("{lang} · added by you"),
+                (Some(lang), false) => format!("{lang} · included"),
+                (None, true) => "added by you".to_owned(),
+                (None, false) => "included".to_owned(),
+            };
+            let row = adw::ActionRow::builder()
+                .title(glib::markup_escape_text(&d.name))
+                .subtitle(subtitle)
+                .build();
+            if imported {
+                let remove = gtk::Button::builder()
+                    .icon_name("user-trash-symbolic")
+                    .tooltip_text("Remove")
+                    .valign(gtk::Align::Center)
+                    .css_classes(["flat"])
+                    .build();
+                remove.update_property(&[gtk::accessible::Property::Label("Remove Dictionary")]);
+                let path = d.path.clone();
+                let weak = Rc::downgrade(self);
+                remove.connect_clicked(glib::clone!(
+                    #[weak]
+                    dialog,
+                    move |_| {
+                        let Some(this) = weak.upgrade() else { return };
+                        this.dictionaries.borrow_mut().clear();
+                        if let Err(err) = std::fs::remove_file(&path) {
+                            this.error("Couldn’t Remove Dictionary", err);
+                        }
+                        this.load_dictionaries();
+                        dialog.close();
+                        this.show_preferences();
+                    }
+                ));
+                row.add_suffix(&remove);
+            }
+            group.add(&row);
+        }
+        group
+    }
+
+    /// Converts a user-chosen StarDict or kaikki.org file into the user's
+    /// dictionary folder, then defines any words still missing a definition.
+    fn add_dictionary(self: &Rc<Self>, prefs: &adw::PreferencesDialog) {
+        let Some(user_dir) = self.lib.borrow().assets_dir().map(|d| dict::user_dir(&d)) else {
+            return;
+        };
+        let filter = gtk::FileFilter::new();
+        filter.set_name(Some("Dictionaries"));
+        for pattern in ["*.ifo", "*.jsonl", "*.jsonl.gz", "*.json", "*.json.gz"] {
+            filter.add_pattern(pattern);
+        }
+        let filters = gio::ListStore::new::<gtk::FileFilter>();
+        filters.append(&filter);
+        let chooser = gtk::FileDialog::builder()
+            .title("Add Dictionary")
+            .filters(&filters)
+            .modal(true)
+            .build();
+        let this = self.clone();
+        let prefs = prefs.clone();
+        glib::spawn_future_local(async move {
+            let Ok(file) = chooser.open_future(Some(&this.win)).await else {
+                return;
+            };
+            let Some(input) = file.path() else { return };
+            let name = input
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            let stem = name.split('.').next().unwrap_or("dictionary").to_owned();
+            let output = user_dir.join(format!("{stem}.db"));
+            this.show_toast(
+                adw::Toast::builder()
+                    .title(format!("Adding {name}…"))
+                    .timeout(0)
+                    .build(),
+            );
+            let built = gio::spawn_blocking(move || -> kollate_core::Result<usize> {
+                std::fs::create_dir_all(output.parent().expect("has parent"))?;
+                if name.ends_with(".ifo") {
+                    dict::build_from_stardict(&input, &output)
+                } else {
+                    dict::build_from_kaikki(&input, &output, &format!("Wiktionary ({stem})"))
+                }
+            })
+            .await;
+            match built {
+                Ok(Ok(senses)) => {
+                    this.load_dictionaries();
+                    let defined = this.enrich_vocab();
+                    this.reload();
+                    this.toast(&format!(
+                        "Added {} entries · {}",
+                        senses,
+                        plural(defined, "word defined", "words defined")
+                    ));
+                    prefs.close();
+                    this.show_preferences();
+                }
+                Ok(Err(err)) => this.error("Couldn’t Add Dictionary", err),
+                Err(_) => this.error(
+                    "Couldn’t Add Dictionary",
+                    "The conversion stopped unexpectedly.",
+                ),
+            }
+        });
     }
 
     fn import_toast(self: &Rc<Self>, s: &ImportStats) {

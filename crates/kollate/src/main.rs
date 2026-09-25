@@ -3,6 +3,7 @@
 mod card;
 mod edit;
 mod window;
+mod word;
 
 use adw::prelude::*;
 use gtk::{gdk, gio, glib};

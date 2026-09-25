@@ -182,19 +182,23 @@ Schema versioning via `PRAGMA user_version` with forward-only migrations.
 
 ## 8. Vocab enrichment (offline only, while the reader is plugged in)
 
-**Context sentences** come from the book on the device:
-- For sideloaded, DRM-free books (`VolumeID` = `file:///mnt/onboard/...`), map `/mnt/onboard/` to the mount point, open the `.kepub.epub` zip, and walk the spine in order. Strip XHTML to text (Kobo's `span.koboSpan` wrappers are dropped), split into sentences and find whole-word, case-insensitive matches of the surface form.
-- **Picking the right sentence:** Kobo doesn't store where a word was looked up, so we narrow the candidates. We prefer chapters around the book's reading position at lookup time, estimated from highlights made near that timestamp and from `content.ChapterIDBookmarked`. We keep up to 5 candidates ranked by proximity, and the UI lets the user choose one (the first is the default).
-- Store books (encrypted) get no automatic context, and the user can paste one in.
-- The book text is **not** cached; only the chosen and candidate sentences are stored.
+**Context sentences** come from the book on the device (`kobo/epub.rs`):
+- A sideloaded, DRM-free book's `VolumeID` (`file:///mnt/onboard/...`) maps to its file under the mount. Books with `META-INF/encryption.xml` or `rights.xml` (store/DRM) are skipped.
+- `container.xml` → OPF → spine; each XHTML document is stripped to paragraphs (Kobo's `koboSpan` wrappers vanish, HTML entities are decoded) and split into sentences. Matches are whole-word and case-insensitive on the form that was looked up. Footnote markers like `[39]` are removed, and long sentences are trimmed to about 320 characters around the word.
+- **Ranking:** Kobo doesn't record where a word was looked up, so the nearest highlight in time (within 3 days) in the same book gives the likely chapter. Its `ContentID` maps to a zip entry: `…epub!OEBPS!ch09.xhtml` → `OEBPS/ch09.xhtml`. Candidates are sorted by spine distance from that chapter, and up to 5 are kept.
+- Candidates are stored per sighting (`vocab_sighting.context_candidates`, JSON). The first becomes the context unless the user has already chosen one, and the user can pick another in the word dialog. The book text itself is never stored.
+- Verified on the device: all 12 words resolved in about 0.15 s total, e.g. *soteriology* → "His soteriology is escapist."
 
-**Definitions** (offline, no network permission). Kobo's own dictionaries are encrypted (§13), so we don't use them. Instead:
-1. **Bundled: Open English WordNet** (CC BY 4.0), shipped as a compact SQLite file of about 15–25 MB. It covers most literary vocabulary, and it's the default for English.
-2. **User-imported:** StarDict dictionaries or a kaikki.org Wiktionary JSONL extract that the user downloads themselves and imports via a file picker (converted once into SQLite). This gives richer definitions and other languages, and the app still never touches the network.
-3. **Manual:** the user can edit any definition.
-Definitions are looked up at import and cached in the library DB.
+**Definitions** (offline, no network permission):
+- Kobo's own dictionaries are encrypted (§13), so they aren't used.
+- Every source is converted once into one SQLite format (`dict/`): `entry(key, headword, pos, gloss, example, rank)` plus `form(form, key)` for irregular forms, where `key` is lowercase with accents removed.
+- **Bundled:** Open English WordNet 2025 (CC BY 4.0). `scripts/fetch-wordnet.sh` downloads it, checks its sha256 and builds `data/dictionaries/oewn-2025.db` (185k senses, 24 MB, 0.7 s). Packages install it to `<prefix>/share/kollate/dictionaries/`, and it's credited in About.
+- **User-added:** in Preferences → Dictionaries, users can add StarDict (`.ifo` + `.idx` + `.dict[.dz]`) or kaikki.org Wiktionary JSONL. These are stored in `<library dir>/dictionaries/`, searched first, and can be removed.
+- **Search order:** user dictionaries, then `$KOLLATE_DATA_DIR/dictionaries`, then `$XDG_DATA_DIRS/kollate/dictionaries`. Debug builds also search the repo's `data/`.
+- Only words without a definition are looked up, so the user's own edits are never overwritten. "Look Up Again" clears a definition and fetches it again.
+- On the fixture words, WordNet defines 11 of 12. *hierophant* isn't in WordNet; a Wiktionary import covers it.
 
-**Lemma merge:** a rule-based English lemmatizer (`theophanies` → `theophany`, `daimons` → `daimon`), which also checks the dictionary's headwords for the lemma. Users can split or merge words.
+**Lemmas and merging:** a rule-based English lemmatizer proposes candidates (`theophanies` → `theophany`, `debouched` → `debouch`, `stopped` → `stop`). The dictionary's headwords and irregular forms decide which one is right. Words sharing a lemma are merged into the earliest one: sightings, tags and every lookup key (`vocab_form`) move over, and the most advanced learning status wins. Because the old forms stay recorded, a re-import doesn't split them apart again.
 
 ---
 
@@ -244,7 +248,7 @@ Export dialog options: scope (selection, book, filter, everything), include arch
 2. ✅ **M1, store + dedup:** the schema, importer and merge rules. Tests cover re-importing the same DB (0 changes), an edited note, a deleted row and a factory reset (new IDs, same text).
 3. ✅ **M2, UI browse & curate:** books, highlights, notes, search, star/tag/archive, edit.
 4. ✅ **M3, device integration:** autodetect, auto-import, Inbox, toasts, eject, markup files, covers.
-5. **M4, vocab enrichment:** EPUB context extraction, WordNet bundle and dictionary import, lemma merge.
+5. ✅ **M4, vocab enrichment:** EPUB context extraction, WordNet bundle and dictionary import, lemma merge.
 6. **M5, export:** Obsidian vault sync and Anki, then JSON, CSV and Readwise.
 7. **M6, polish & ship:** markup SVG rendering, Flatpak (no network), app icon, `.desktop` file.
 
