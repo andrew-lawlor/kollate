@@ -32,6 +32,16 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.1.1" date="2026-09-25">
+      <description>
+        <p>Highlights deleted on the Kobo are now easier to track:</p>
+        <ul>
+          <li>The import summary reports highlights deleted on (and restored to) the Kobo</li>
+          <li>A Deleted on Kobo view lists them</li>
+          <li>A new preference can move them to Trash automatically</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-09-25">
       <description>
         <p>First release: import, curation, vocabulary enrichment and export.</p>
