@@ -50,7 +50,8 @@ And export:
 
 - Kollate **never writes to your Kobo.** It copies the Kobo's database to a temporary folder and reads the copy, so you can eject at any time. The Flatpak enforces this: its sandbox can only read the Kobo. Kollate also refuses to save anything onto it, even if you pick the Kobo as an export or library location.
 - **No duplicates, ever.** Highlights are matched by the Kobo's own IDs, and by content if the IDs change (a factory reset, a second device, or calibre re-sending a book). Re-importing the same Kobo changes nothing.
-- **Your library is the source of truth.** Highlights you delete on the Kobo stay in Kollate, flagged "deleted on Kobo" and gathered in a *Deleted on Kobo* view. If you prefer, they can go to Kollate's Trash instead (Preferences), and they come back if they reappear on the Kobo. If you've edited something in Kollate and it later changes on the Kobo, your version wins and the Kobo's is kept alongside it.
+- **Your library is the source of truth.** Highlights you delete on the Kobo stay in Kollate, flagged "deleted on Kobo" and gathered in a *Deleted on Kobo* view. If you prefer, they can go to Kollate's Trash instead (Preferences), and they come back if they reappear on the Kobo.
+- **Your edits always win.** Corrected text, notes, tags, stars and triage survive every re-import. If something you edited in Kollate later changes on the Kobo, your version stays and the Kobo's is kept alongside it, flagged for you to review.
 - **Fully offline.** Definitions come from a bundled copy of the English [Wiktionary](https://www.wiktionary.org/) (over 800,000 words, compiled by [reader.dict](https://www.reader-dict.com/)). For other languages, download a reader.dict dictionary in DictFile format and add it in Preferences. StarDict and [kaikki.org](https://kaikki.org) extracts work too.
 
 ## Install
