@@ -1971,7 +1971,9 @@ impl Window {
         group.add(&delete_policy);
 
         page.add(&group);
-        page.add(&self.dictionaries_group(&dialog));
+        for group in self.dictionaries_groups(&dialog) {
+            page.add(&group);
+        }
 
         if let Some(dir) = self.lib.borrow().assets_dir() {
             let location = adw::ActionRow::builder()
@@ -1987,24 +1989,29 @@ impl Window {
         dialog.present(Some(&self.win));
     }
 
-    fn dictionaries_group(
+    /// The Dictionaries section: a header group (explanation, add button,
+    /// where to get more) and one group per language, in lookup order.
+    fn dictionaries_groups(
         self: &Rc<Self>,
         dialog: &adw::PreferencesDialog,
-    ) -> adw::PreferencesGroup {
-        let group = adw::PreferencesGroup::builder()
+    ) -> Vec<adw::PreferencesGroup> {
+        let header = adw::PreferencesGroup::builder()
             .title("Dictionaries")
-            .description("Used to define Vocabulary words, in this order. Everything stays on this computer. The included English dictionary is compiled from Wiktionary by reader.dict.")
+            .description(
+                "Each word is looked up in the dictionaries for its language. Dictionaries you add are tried \
+                 before the included one. Everything stays on this computer.",
+            )
             .build();
         let user_dir = self.lib.borrow().assets_dir().map(|d| dict::user_dir(&d));
         let add = gtk::Button::builder()
             .icon_name("list-add-symbolic")
-            .tooltip_text("Add a StarDict (.ifo) or Wiktionary (kaikki.org .jsonl) dictionary")
+            .tooltip_text("Add a dictionary (DictFile .df.bz2, StarDict .ifo or kaikki.org .jsonl)")
             .valign(gtk::Align::Center)
             .css_classes(["flat"])
             .sensitive(user_dir.is_some())
             .build();
         add.update_property(&[gtk::accessible::Property::Label("Add Dictionary")]);
-        group.set_header_suffix(Some(&add));
+        header.set_header_suffix(Some(&add));
         let weak = Rc::downgrade(self);
         add.connect_clicked(glib::clone!(
             #[weak]
@@ -2016,59 +2023,6 @@ impl Window {
             }
         ));
 
-        let dicts = self.dictionaries.borrow();
-        if dicts.is_empty() {
-            group.add(
-                &adw::ActionRow::builder()
-                    .title("No Dictionaries")
-                    .subtitle("Words can still be defined by hand.")
-                    .build(),
-            );
-        }
-        for d in dicts.iter() {
-            let imported = user_dir.as_ref().is_some_and(|u| d.path.starts_with(u));
-            let mut parts: Vec<String> = d.language.iter().cloned().collect();
-            parts.push(if imported {
-                "added by you".to_owned()
-            } else {
-                "included".to_owned()
-            });
-            if let Some(source) = &d.source {
-                parts.push(source.clone());
-            }
-            let subtitle = glib::markup_escape_text(&parts.join(" · ")).to_string();
-            let row = adw::ActionRow::builder()
-                .title(glib::markup_escape_text(&d.name))
-                .subtitle(subtitle)
-                .build();
-            if imported {
-                let remove = gtk::Button::builder()
-                    .icon_name("user-trash-symbolic")
-                    .tooltip_text("Remove")
-                    .valign(gtk::Align::Center)
-                    .css_classes(["flat"])
-                    .build();
-                remove.update_property(&[gtk::accessible::Property::Label("Remove Dictionary")]);
-                let path = d.path.clone();
-                let weak = Rc::downgrade(self);
-                remove.connect_clicked(glib::clone!(
-                    #[weak]
-                    dialog,
-                    move |_| {
-                        let Some(this) = weak.upgrade() else { return };
-                        this.dictionaries.borrow_mut().clear();
-                        if let Err(err) = std::fs::remove_file(&path) {
-                            this.error("Couldn’t Remove Dictionary", err);
-                        }
-                        this.load_dictionaries();
-                        dialog.close();
-                        this.show_preferences();
-                    }
-                ));
-                row.add_suffix(&remove);
-            }
-            group.add(&row);
-        }
         // Free Wiktionary dictionaries for other languages, with credit.
         let more = adw::ActionRow::builder()
             .title("Dictionaries for Other Languages")
@@ -2086,8 +2040,77 @@ impl Window {
                 );
             }
         });
-        group.add(&more);
-        group
+
+        let dicts = self.dictionaries.borrow();
+        if dicts.is_empty() {
+            header.add(
+                &adw::ActionRow::builder()
+                    .title("No Dictionaries")
+                    .subtitle("Words can still be defined by hand.")
+                    .build(),
+            );
+        }
+        header.add(&more);
+        let mut groups = vec![header];
+
+        // One group per language, languages by name, dictionaries in lookup order.
+        let mut languages: Vec<Option<&str>> = Vec::new();
+        for d in dicts.iter() {
+            if !languages.contains(&d.language.as_deref()) {
+                languages.push(d.language.as_deref());
+            }
+        }
+        languages.sort_by_key(|l| (l.is_none(), language_name(*l)));
+        for language in languages {
+            let group = adw::PreferencesGroup::builder()
+                .title(language_name(language))
+                .build();
+            for d in dicts.iter().filter(|d| d.language.as_deref() == language) {
+                let imported = user_dir.as_ref().is_some_and(|u| d.path.starts_with(u));
+                let mut parts = vec![if imported {
+                    "Added by you".to_owned()
+                } else {
+                    "Included".to_owned()
+                }];
+                if let Some(source) = &d.source {
+                    parts.push(source.clone());
+                }
+                let row = adw::ActionRow::builder()
+                    .title(glib::markup_escape_text(&d.name))
+                    .subtitle(glib::markup_escape_text(&parts.join(" · ")))
+                    .build();
+                if imported {
+                    let remove = gtk::Button::builder()
+                        .icon_name("user-trash-symbolic")
+                        .tooltip_text("Remove")
+                        .valign(gtk::Align::Center)
+                        .css_classes(["flat"])
+                        .build();
+                    remove
+                        .update_property(&[gtk::accessible::Property::Label("Remove Dictionary")]);
+                    let path = d.path.clone();
+                    let weak = Rc::downgrade(self);
+                    remove.connect_clicked(glib::clone!(
+                        #[weak]
+                        dialog,
+                        move |_| {
+                            let Some(this) = weak.upgrade() else { return };
+                            this.dictionaries.borrow_mut().clear();
+                            if let Err(err) = std::fs::remove_file(&path) {
+                                this.error("Couldn’t Remove Dictionary", err);
+                            }
+                            this.load_dictionaries();
+                            dialog.close();
+                            this.show_preferences();
+                        }
+                    ));
+                    row.add_suffix(&remove);
+                }
+                group.add(&row);
+            }
+            groups.push(group);
+        }
+        groups
     }
 
     /// Converts a user-chosen StarDict or kaikki.org file into the user's
@@ -2148,7 +2171,7 @@ impl Window {
                         .and_then(|r| r.split('-').next())
                         .filter(|l| l.len() <= 3);
                     let title = match lang {
-                        Some(l) => format!("Wiktionary ({l})"),
+                        Some(l) => format!("{} Wiktionary", language_name(Some(l))),
                         None => format!("Wiktionary ({stem})"),
                     };
                     dict::build_from_dictfile(&input, &output, &title, lang, WIKTIONARY_SOURCE)
@@ -2608,5 +2631,56 @@ mod tests {
             import_summary(&ImportStats::default()),
             ("Nothing new on your Kobo".to_owned(), None)
         );
+    }
+}
+
+/// English name of an ISO 639-1 language code, for Preferences.
+fn language_name(code: Option<&str>) -> String {
+    let Some(code) = code else {
+        return "Any Language".to_owned();
+    };
+    let name = match code {
+        "ar" => "Arabic",
+        "ca" => "Catalan",
+        "cs" => "Czech",
+        "da" => "Danish",
+        "de" => "German",
+        "el" => "Greek",
+        "en" => "English",
+        "eo" => "Esperanto",
+        "es" => "Spanish",
+        "fi" => "Finnish",
+        "fr" => "French",
+        "he" => "Hebrew",
+        "hu" => "Hungarian",
+        "it" => "Italian",
+        "ja" => "Japanese",
+        "ko" => "Korean",
+        "la" => "Latin",
+        "nb" | "no" => "Norwegian",
+        "nl" => "Dutch",
+        "pl" => "Polish",
+        "pt" => "Portuguese",
+        "ro" => "Romanian",
+        "ru" => "Russian",
+        "sv" => "Swedish",
+        "tr" => "Turkish",
+        "uk" => "Ukrainian",
+        "zh" => "Chinese",
+        other => return other.to_uppercase(),
+    };
+    name.to_owned()
+}
+
+#[cfg(test)]
+mod language_tests {
+    use super::language_name;
+
+    #[test]
+    fn names_languages() {
+        assert_eq!(language_name(Some("de")), "German");
+        assert_eq!(language_name(Some("en")), "English");
+        assert_eq!(language_name(Some("xq")), "XQ");
+        assert_eq!(language_name(None), "Any Language");
     }
 }
