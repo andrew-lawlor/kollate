@@ -134,6 +134,9 @@ pub struct Window {
     toasts: adw::ToastOverlay,
     /// The most recent toast; replaced rather than queued behind.
     last_toast: RefCell<Option<adw::Toast>>,
+    /// The Preferences or Export dialog, while open. Toasts go there,
+    /// because a dialog covers the window's own toasts.
+    open_dialog: RefCell<Option<glib::WeakRef<adw::PreferencesDialog>>>,
 
     sidebar: gtk::ListBox,
     /// Parallel to the sidebar's rows; `None` for section headers.
@@ -403,6 +406,7 @@ impl Window {
             split,
             toasts,
             last_toast: RefCell::default(),
+            open_dialog: RefCell::default(),
             sidebar,
             sidebar_navs: RefCell::default(),
             count_labels: RefCell::default(),
@@ -466,7 +470,24 @@ impl Window {
         if let Some(previous) = self.last_toast.replace(Some(toast.clone())) {
             previous.dismiss();
         }
-        self.toasts.add_toast(toast);
+        let dialog = self.open_dialog.borrow().as_ref().and_then(|d| d.upgrade());
+        match dialog {
+            Some(dialog) => dialog.add_toast(toast),
+            None => self.toasts.add_toast(toast),
+        }
+    }
+
+    /// Sends toasts to `dialog` until it closes.
+    fn track_dialog(self: &Rc<Self>, dialog: &adw::PreferencesDialog) {
+        *self.open_dialog.borrow_mut() = Some(dialog.downgrade());
+        let weak = Rc::downgrade(self);
+        dialog.connect_closed(move |closed| {
+            let Some(this) = weak.upgrade() else { return };
+            let mut open = this.open_dialog.borrow_mut();
+            if open.as_ref().and_then(|d| d.upgrade()).as_ref() == Some(closed) {
+                *open = None;
+            }
+        });
     }
 
     fn error(&self, heading: &str, err: impl std::fmt::Display) {
@@ -1924,6 +1945,7 @@ impl Window {
 
     fn show_preferences(self: &Rc<Self>) {
         let dialog = adw::PreferencesDialog::new();
+        self.track_dialog(&dialog);
         let page = adw::PreferencesPage::new();
         let group = adw::PreferencesGroup::builder()
             .title("Kobo")
@@ -2185,13 +2207,14 @@ impl Window {
                     this.load_dictionaries();
                     let defined = this.enrich_vocab();
                     this.reload();
+                    // Reopen Preferences first, so the toast lands on the new dialog.
+                    prefs.close();
+                    this.show_preferences();
                     this.toast(&format!(
                         "Added {} entries · {}",
                         senses,
                         plural(defined, "word defined", "words defined")
                     ));
-                    prefs.close();
-                    this.show_preferences();
                 }
                 Ok(Err(err)) => this.error("Couldn’t Add Dictionary", err),
                 Err(_) => this.error(
@@ -2308,6 +2331,7 @@ impl Window {
 
     fn show_export(self: &Rc<Self>) {
         let dialog = adw::PreferencesDialog::builder().title("Export").build();
+        self.track_dialog(&dialog);
         let page = adw::PreferencesPage::new();
         let button = |label: &str, suggested: bool| {
             let b = gtk::Button::builder()
