@@ -8,11 +8,13 @@ So I built Kollate, a Linux app that imports that data, curates it, and exports 
 
 The speed is the headline, but it isn't the lesson. What mattered were the same calls I'd want on any client engagement:
 
+📋 **Non-negotiables first.** Before any code, I wrote down the rules: never touch the device, my library is the source of truth, re-importing never creates duplicates, and my own edits survive every sync. Claude Code moved fast, but every design decision had to answer to those four lines.
+
 🏗️ **No shortcuts on architecture.** The usual way to build a quick side project is an Electron app or a thrown-together Python GUI. I didn't have to settle: Kollate is written in Rust with GTK 4, a native, compiled desktop app that's fast, lean and dependable. AI didn't lower the bar; it made the higher bar affordable.
 
 🔒 **Least privilege.** The app never writes to the device, and refuses to even if you ask it to. The packaged version can't reach the network and can only *read* the e-reader.
 
-⚖️ **Respecting boundaries.** Kobo's built-in dictionaries are encrypted. Rather than work around that, Kollate ships the community-built English Wiktionary: over 800,000 words, openly licensed and properly credited. Replacing our first open dictionary with it took under an hour, and every word I'd looked up got a better definition, even the arcane ones from Platonic philosophy like *hierophant*, *demiurge* and *daimon*. Other languages are now a single download.
+⚖️ **Respecting boundaries.** Kobo's built-in dictionaries are encrypted. Rather than work around that, Kollate ships the community-built English Wiktionary: over 800,000 words, openly licensed and properly credited. Replacing our first open dictionary with it took under an hour, and every word I'd looked up got a better definition, even the arcane ones from Platonic philosophy like *hierophant*, *demiurge* and *daimon*.
 
 🧪 **Verify, don't trust.** I tested against my real device, and that caught a subtle sorting bug no test data would have exposed. The Anki export was confirmed with Anki's own importer.
 
