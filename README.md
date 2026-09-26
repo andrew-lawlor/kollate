@@ -1,17 +1,11 @@
 <p align="center">
-  <img src="crates/kollate/data/io.github.andrew_lawlor.Kollate.svg" width="112" alt="Kollate icon">
+  <img src="docs/hero.png" alt="Kollate: your Kobo highlights, notes and vocabulary, curated on Linux. The dark Starred view in front of the Vocabulary view.">
 </p>
-
-<h1 align="center">Kollate</h1>
 
 <p align="center">
   Collect and curate the highlights, notes and vocabulary from your Kobo e-reader.<br>
   A native Linux app, built with GTK 4 and libadwaita. Designed for GNOME, and works on any desktop.<br>
   Offline, read-only on your device, and free of duplicates.
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/inbox.png" alt="Kollate's inbox listing new highlights grouped by book">
 </p>
 
 ## What it does
@@ -41,12 +35,16 @@ And export:
 
 | | |
 |---|---|
-| ![The Books page: a grid of covers with highlight and word counts](docs/screenshots/books.png) | ![A book page with its cover, reading progress and highlights by chapter](docs/screenshots/book.png) |
-| **Books:** your library by cover, most recent first | **A book:** cover, progress, highlights by chapter |
-| ![Vocabulary words with definitions and the sentence each was found in](docs/screenshots/vocabulary.png) | ![Word dialog for choosing the context sentence and editing the definition](docs/screenshots/word.png) |
-| **Vocabulary:** definition and the sentence from your book | **Words:** pick the context, edit the definition |
-| ![Dark mode: starred highlights from several books, with a note](docs/screenshots/dark.png) | ![Export dialog with Obsidian, Anki and file options](docs/screenshots/export.png) |
-| **Dark mode:** your starred highlights across books | **Export** to Obsidian, Anki and files |
+| ![The Inbox: new highlights grouped by book, with notes](docs/screenshots/inbox.png) | ![The Books page: a grid of covers with highlight and word counts](docs/screenshots/books.png) |
+| **Inbox:** new highlights to triage, with your notes | **Books:** your library by cover, most recent first |
+| ![A book page with its cover, reading progress and highlights by chapter](docs/screenshots/book.png) | ![Vocabulary words with definitions and the sentence each was found in](docs/screenshots/vocabulary.png) |
+| **A book:** cover, progress, highlights by chapter | **Vocabulary:** definition and the sentence from your book |
+| ![Word dialog for choosing the context sentence and editing the definition](docs/screenshots/word.png) | ![Dark mode: starred highlights from several books, with notes](docs/screenshots/dark.png) |
+| **Words:** pick the context, edit the definition | **Dark mode:** your starred highlights across books |
+
+<p align="center">
+  <img src="docs/screenshots/export.png" width="70%" alt="Export dialog with Obsidian, Anki and file options">
+</p>
 
 ## Your Kobo stays untouched, and nothing goes online
 
