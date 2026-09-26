@@ -2,6 +2,7 @@
 
 mod card;
 mod edit;
+mod portal;
 mod shortcuts;
 mod window;
 mod word;

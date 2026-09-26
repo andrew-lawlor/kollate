@@ -18,7 +18,7 @@ use kollate_core::store::{
 };
 use kollate_core::{ImportStats, Library};
 
-use crate::{card, edit, shortcuts, word};
+use crate::{card, edit, portal, shortcuts, word};
 
 /// What the content pane shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -2260,6 +2260,10 @@ impl Window {
 
     fn sync_obsidian_now(&self) -> Option<String> {
         let folder = self.obsidian_folder()?;
+        if let Err(err) = not_on_kobo(&folder) {
+            self.error("Couldn’t Sync to Obsidian", err);
+            return None;
+        }
         let result = export::sync_obsidian(&self.lib.borrow(), &folder, self.export_options());
         match result {
             Ok(s) if s.notes_written == 0 => Some("Obsidian notes are up to date".to_owned()),
@@ -2321,6 +2325,9 @@ impl Window {
                 return;
             };
             let Some(path) = file.path() else { return };
+            if let Err(err) = not_on_kobo(&path) {
+                return this.error("Export Failed", err);
+            }
             let result = write(&this.lib.borrow(), &path, this.export_options());
             match result {
                 Ok(message) => this.exported(message, path),
@@ -2374,7 +2381,7 @@ impl Window {
             .title("Folder in Your Vault")
             .subtitle(
                 self.obsidian_folder()
-                    .map_or("Not chosen".to_owned(), |p| p.display().to_string()),
+                    .map_or("Not chosen".to_owned(), |p| portal::display_path(&p)),
             )
             .build();
         let choose = button("Choose…", false);
@@ -2415,7 +2422,7 @@ impl Window {
                         return;
                     };
                     let Some(path) = folder.path() else { return };
-                    if let Err(err) = kollate_core::kobo::ensure_not_on_kobo(&path) {
+                    if let Err(err) = not_on_kobo(&path) {
                         return this.error("That Folder Is on Your Kobo", err);
                     }
                     if let Err(err) = this
@@ -2425,7 +2432,7 @@ impl Window {
                     {
                         return this.error("Couldn’t Save Setting", err);
                     }
-                    folder_row.set_subtitle(&path.display().to_string());
+                    folder_row.set_subtitle(&portal::display_path(&path));
                     sync.set_sensitive(true);
                 });
             }
@@ -2660,6 +2667,17 @@ mod tests {
             import_summary(&ImportStats::default()),
             ("Nothing new on your Kobo".to_owned(), None)
         );
+    }
+}
+
+/// Refuses destinations on a Kobo. In the Flatpak a chosen location arrives
+/// as a document-portal path, so its real location is checked as well (a
+/// subfolder of the Kobo wouldn't otherwise be recognisable).
+fn not_on_kobo(path: &std::path::Path) -> kollate_core::Result<()> {
+    kollate_core::kobo::ensure_not_on_kobo(path)?;
+    match portal::host_path(path) {
+        Some(real) => kollate_core::kobo::ensure_not_on_kobo(&real),
+        None => Ok(()),
     }
 }
 

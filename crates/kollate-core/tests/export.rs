@@ -278,7 +278,10 @@ fn old_marker_wording_is_refreshed_and_user_text_kept() {
     export::sync_obsidian(&lib, dir.path(), ExportOptions::default()).unwrap();
     let refreshed = std::fs::read_to_string(&path).unwrap();
     assert!(refreshed.contains("Kollate rewrites everything above this line"));
-    assert!(refreshed.ends_with("that part is never changed. %%\nMy thoughts.\nMore.\n"), "{refreshed}");
+    assert!(
+        refreshed.ends_with("that part is never changed. %%\nMy thoughts.\nMore.\n"),
+        "{refreshed}"
+    );
 
     // And from then on it's stable.
     let again = export::sync_obsidian(&lib, dir.path(), ExportOptions::default()).unwrap();
