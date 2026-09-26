@@ -2363,7 +2363,12 @@ impl Window {
         // Obsidian
         let obsidian = adw::PreferencesGroup::builder()
             .title("Obsidian")
-            .description("One note per book plus a Vocabulary note. Anything you write below the kollate:user line in a note is kept.")
+            .description(
+                "Kollate writes one note per book, plus a Vocabulary note, and rewrites them each time it syncs. \
+                 To add your own thoughts about a book, write at the bottom of its note, below the line that \
+                 starts with “kollate:user”; Kollate never changes that part. For a thought about one highlight, \
+                 add a note to it here in Kollate (E) and it appears under the highlight.",
+            )
             .build();
         let folder_row = adw::ActionRow::builder()
             .title("Folder in Your Vault")

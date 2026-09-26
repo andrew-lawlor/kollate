@@ -32,7 +32,7 @@ Then you curate:
 
 And export:
 
-- **Obsidian:** one note per book plus a Vocabulary note, synced into your vault (optionally after every import). Highlights can be linked individually, and anything you write under the `%% kollate:user` line is kept.
+- **Obsidian:** one note per book plus a Vocabulary note, synced into your vault (optionally after every import). Each highlight can be linked to individually. Kollate rewrites the notes on every sync, so write your own thoughts about a book at the bottom of its note, below the `kollate:user` line; that part is never changed. For a thought about one highlight, add a note to it in Kollate.
 - **Anki:** a vocabulary deck (word → meaning, plus fill-in-the-blank from the book's sentence) and an optional highlights deck. Exporting again updates your cards without losing study progress.
 - **JSON** backup, **CSV** (highlights or vocabulary) and **Readwise** CSV.
 

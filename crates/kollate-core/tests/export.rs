@@ -260,3 +260,27 @@ fn walk(dir: &std::path::Path) -> Vec<(PathBuf, Vec<u8>)> {
     out.sort();
     out
 }
+
+#[test]
+fn old_marker_wording_is_refreshed_and_user_text_kept() {
+    let lib = library();
+    let dir = tempfile::tempdir().unwrap();
+    export::sync_obsidian(&lib, dir.path(), ExportOptions::default()).unwrap();
+    let path = dir.path().join("Children of Ash and Elm.md");
+    let note = std::fs::read_to_string(&path).unwrap();
+    let (top, _) = note.split_once("%% kollate:user").unwrap();
+
+    // A note written by an earlier version, with the user's own text below.
+    let old = format!(
+        "{top}%% kollate:user: anything below this line is yours; Kollate keeps it when it syncs. %%\nMy thoughts.\nMore.\n"
+    );
+    std::fs::write(&path, &old).unwrap();
+    export::sync_obsidian(&lib, dir.path(), ExportOptions::default()).unwrap();
+    let refreshed = std::fs::read_to_string(&path).unwrap();
+    assert!(refreshed.contains("Kollate rewrites everything above this line"));
+    assert!(refreshed.ends_with("that part is never changed. %%\nMy thoughts.\nMore.\n"), "{refreshed}");
+
+    // And from then on it's stable.
+    let again = export::sync_obsidian(&lib, dir.path(), ExportOptions::default()).unwrap();
+    assert_eq!(again.notes_written, 0);
+}

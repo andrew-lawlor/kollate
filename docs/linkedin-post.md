@@ -12,7 +12,7 @@ The speed is the headline, but it isn't the lesson. What mattered were the same 
 
 🔒 **Least privilege.** The app never writes to the device, and refuses to even if you ask it to. The packaged version can't reach the network and can only *read* the e-reader.
 
-⚖️ **Respecting boundaries.** Kobo's built-in dictionaries are encrypted. Rather than work around that, Kollate ships the community-built English Wiktionary: over 800,000 words, openly licensed and properly credited. Replacing our first open dictionary with it took under an hour, and every word I'd looked up got a better definition. Other languages are now a single download.
+⚖️ **Respecting boundaries.** Kobo's built-in dictionaries are encrypted. Rather than work around that, Kollate ships the community-built English Wiktionary: over 800,000 words, openly licensed and properly credited. Replacing our first open dictionary with it took under an hour, and every word I'd looked up got a better definition, even the arcane ones from Platonic philosophy like *hierophant*, *demiurge* and *daimon*. Other languages are now a single download.
 
 🧪 **Verify, don't trust.** I tested against my real device, and that caught a subtle sorting bug no test data would have exposed. The Anki export was confirmed with Anki's own importer.
 

@@ -13,8 +13,8 @@ use crate::kobo::epub::word_span;
 use crate::store::{Annotation, Library, VocabDetail};
 
 const USER_MARKER: &str = "%% kollate:user";
-const USER_MARKER_LINE: &str =
-    "%% kollate:user: anything below this line is yours; Kollate keeps it when it syncs. %%";
+const USER_MARKER_LINE: &str = "%% kollate:user — Kollate rewrites everything above this line when it syncs. \
+     Write your own notes about this book below it; that part is never changed. %%";
 const VOCAB_NOTE_ID: &str = "vocabulary";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -226,10 +226,15 @@ fn vocab_note(books: &[ExportBook], note_names: &HashMap<i64, String>) -> String
 /// Writes `generated` to `path`, keeping the user part of an existing note.
 /// Returns whether the file changed.
 fn write_note(path: &Path, generated: &str, existing: Option<&str>) -> Result<bool> {
-    let user = existing
-        .and_then(user_part)
-        .map(str::to_owned)
-        .unwrap_or_else(|| format!("{USER_MARKER_LINE}\n"));
+    // Keep the user's text below the marker, refreshing the marker's own
+    // wording (older notes carry an earlier explanation).
+    let user = match existing.and_then(user_part) {
+        Some(part) => {
+            let rest = part.split_once('\n').map_or("", |(_, rest)| rest);
+            format!("{USER_MARKER_LINE}\n{rest}")
+        }
+        None => format!("{USER_MARKER_LINE}\n"),
+    };
     let content = format!("{generated}{user}");
     if existing == Some(content.as_str()) {
         return Ok(false);
