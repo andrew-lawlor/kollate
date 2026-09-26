@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/hero.png" alt="Kollate: your Kobo highlights, notes and vocabulary, curated on Linux. The dark Starred view in front of the Vocabulary view.">
+  <img src="docs/hero.png" alt="Kollate: your Kobo highlights, notes and vocabulary, curated on Linux. Verba volant, scripta manent: spoken words fly away, written words remain. The dark Starred view in front of the Vocabulary view.">
 </p>
 
 <p align="center">
