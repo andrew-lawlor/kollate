@@ -1,10 +1,10 @@
 # LinkedIn post
 
-**I built an app with Claude Code in an afternoon. The guardrails took more thought than the code.**
+**I built an app with Claude Code over a weekend. The first version took three hours. Making it trustworthy took the rest.**
 
 Outside of work, I read on a Kobo e-reader. Looking under the hood, I noticed it stores every highlight, note and looked-up word in a local SQLite database, with images of my stylus scribbles alongside: data that's mine but hard to get at.
 
-So I built Kollate, a Linux app that imports that data, curates it, and exports to Obsidian and Anki. With Claude Code, it went from written spec to a published open-source release in about three hours.
+So I built Kollate, a Linux app that imports that data, curates it, and exports to Obsidian and Anki. With Claude Code, it went from written spec to a first open-source release in about three hours. The rest of the weekend went into the parts that make it trustworthy.
 
 The speed is the headline, but it isn't the lesson. What mattered were the same calls I'd want on any client engagement:
 
