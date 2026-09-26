@@ -105,3 +105,47 @@ fn reads_vocab() {
     assert!(w.volume_id.as_deref().unwrap().contains("Hellenic Tantra"));
     assert!(w.created.is_some());
 }
+
+/// A writable copy of the fixture, changed by `sql`.
+fn modified_fixture(sql: &str) -> (tempfile::TempDir, PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("KoboReader.sqlite");
+    std::fs::copy(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/KoboReader.sqlite"),
+        &path,
+    )
+    .unwrap();
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute_batch(sql)
+        .unwrap();
+    (dir, path)
+}
+
+#[test]
+fn reads_untested_versions() {
+    assert!(kollate_core::kobo::is_tested_db_version(176));
+    let (_dir, path) = modified_fixture("UPDATE DbVersion SET version = 999");
+    let s = KoboDb::open_copy(&path).unwrap().snapshot().unwrap();
+    assert_eq!(s.db_version, 999);
+    assert!(!kollate_core::kobo::is_tested_db_version(s.db_version));
+    assert_eq!(s.bookmarks.len(), 52);
+}
+
+#[test]
+fn explains_failures_on_untested_versions() {
+    let (_dir, path) = modified_fixture(
+        "UPDATE DbVersion SET version = 999; ALTER TABLE WordList RENAME COLUMN Text TO Word",
+    );
+    let err = KoboDb::open_copy(&path).unwrap().snapshot().unwrap_err();
+    assert!(matches!(
+        err,
+        kollate_core::Error::UntestedDb { version: 999, .. }
+    ));
+    assert!(err.to_string().contains("version 999"), "{err}");
+
+    // On a tested version the plain error comes through.
+    let (_dir, path) = modified_fixture("ALTER TABLE WordList RENAME COLUMN Text TO Word");
+    let err = KoboDb::open_copy(&path).unwrap().snapshot().unwrap_err();
+    assert!(matches!(err, kollate_core::Error::Sqlite(_)), "{err}");
+}

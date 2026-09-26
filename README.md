@@ -121,7 +121,7 @@ kollate-cli dict build-stardict ~/dicts/foo.ifo foo.db # convert a dictionary
 
 ## Compatibility
 
-Developed and tested on a **Kobo Libra Colour** (firmware 4.45, database version 176). Other Kobo models use the same database layout and should work, but they aren't tested yet; reports are welcome. Context sentences need sideloaded, DRM-free books. Kobo Store books with DRM still import, just without context sentences.
+Developed and tested on a **Kobo Libra Colour** (firmware 4.45, database version 176). Other Kobo models use the same database layout and should work, but they aren't tested yet. If your Kobo's database version is new to Kollate, it still imports and shows a one-time notice with a **Report** button. Please [send a compatibility report](https://github.com/andrew-lawlor/kollate/issues/new?template=compatibility.yml), even if everything works. Context sentences need sideloaded, DRM-free books. Kobo Store books with DRM still import, just without context sentences.
 
 ## Development
 

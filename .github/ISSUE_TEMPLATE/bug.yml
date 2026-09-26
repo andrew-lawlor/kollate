@@ -1,0 +1,29 @@
+name: Bug report
+description: Something in Kollate doesn't work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead. Screenshots are welcome.
+    validations:
+      required: true
+  - type: input
+    id: kollate_version
+    attributes:
+      label: Kollate version and package
+      description: The version is in *Main Menu → About Kollate*.
+      placeholder: 0.1.4, Flatpak
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distribution and desktop
+      placeholder: Debian 13, GNOME 48
+  - type: input
+    id: kobo
+    attributes:
+      label: Kobo model and firmware (if relevant)
+      placeholder: Kobo Libra Colour, 4.45.23697

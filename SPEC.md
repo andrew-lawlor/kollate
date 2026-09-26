@@ -100,14 +100,15 @@ kollate/                     (cargo workspace)
     import.rs           # diff + merge device data into the store
     export/             # markdown(+vault), anki, csv, json, readwise
   crates/kollate-cli/     # `kollate-cli import <mount|db> [--dry-run]`, `export …`
-  crates/kollate/         # GTK4/libadwaita app: window.rs (sidebar, list, actions), card.rs, edit.rs, style.css
+  crates/kollate/         # GTK4/libadwaita app: window/ (mod: setup and actions; sidebar, content,
+                          #   annotations, device, preferences, exports), card.rs, edit.rs, word.rs, style.css
   tests/fixtures/KoboReader.sqlite
 ```
 
 **Reading the device safely**
 1. Detect the mount (§5), then copy `.kobo/KoboReader.sqlite` and any `-wal`/`-shm` files to a temp dir.
 2. Open the copy with `?mode=ro`. Never hold a handle on the device, because that blocks a clean eject.
-3. Treat `ExtraAnnotationData` and any unexpected column as bytes. Check `DbVersion` and warn (don't fail) on unknown schema versions.
+3. Treat `ExtraAnnotationData` and any unexpected column as bytes. Check `DbVersion` and warn (don't fail) on unknown schema versions: `TESTED_DB_VERSIONS` lists the verified ones (only 176 so far). Any other version is still read; the CLI prints a warning, and the app shows a one-time toast per version with a **Report** button that opens a pre-filled GitHub compatibility issue. If reading an untested version fails, the error is `Error::UntestedDb`, which names the version, so the cause is clear.
 
 
 **Flatpak document-portal paths:** locations picked in a file chooser arrive as `/run/user/<uid>/doc/<id>/<name>/…`. `portal.rs` resolves them to the real location with `org.freedesktop.portal.Documents.GetHostPaths`. The Export dialog uses that to show the folder as a person would recognise it (`~/Notes/Reading`), and the Kobo check uses it too, since the `.kobo` folder above a chosen subfolder isn't visible through a portal path.
@@ -139,7 +140,7 @@ kollate/                     (cargo workspace)
 ### 6.1 Identity keys
 | Entity | Primary key | Fallback fingerprint (catches factory reset, re-sideloaded books, a second device) |
 |---|---|---|
-| Book | `(device_id, VolumeID)` mapped to a `book_id` | `blake3(normalize(title) + normalize(author))`, plus ISBN if present |
+| Book | `(device_id, VolumeID)` mapped to a `book_id` | `blake3(normalize(title) + normalize(author))`. ISBN is stored but deliberately not part of the fingerprint: most sideloaded books have none (51 of 168 in the sample), and a store copy and a sideloaded copy of the same book often differ, so it would split one book in two. |
 | Annotation | `BookmarkID` (a globally unique UUID) | `blake3(book_fingerprint + normalize(text) + start_path + start_offset)`. For markups: `blake3(book_fingerprint + start/end anchors + created_at)`. |
 | Vocab word | `(normalize(word), language)` | n/a. Each device/book occurrence becomes a `vocab_sighting` row. |
 
@@ -282,6 +283,7 @@ Later: user-editable Markdown templates (minijinja), and a "since last export" o
 - Device: Kobo Libra Colour (colour highlights, stylus markups).
 - App ID `io.github.andrew_lawlor.Kollate`. License GPL-3.0-or-later. Maintainer Andrew Lawlor <andrew@lawlor.io>.
 - The .deb is packaged before the Flatpak.
+- Unknown Kobo database versions are imported with a warning rather than refused (§4); compatibility reports come through a GitHub issue form.
 
 ## 13. Verified on the device (2026-09-25, Libra Colour, firmware 4.45.23697)
 - `.kobo/version` = `N000000000000,4.9.77,4.45.23697,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390`, i.e. serial, ?, firmware, ?, ?, model ID (`…0390` = Libra Colour). The parser matches.

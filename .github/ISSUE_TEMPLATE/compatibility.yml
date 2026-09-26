@@ -1,0 +1,53 @@
+name: Kobo compatibility report
+description: Tell us how Kollate works with your Kobo model, whether it works or not.
+title: "Compatibility: "
+labels: [compatibility]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Kollate has only been tested on a Kobo Libra Colour (firmware 4.45, database version 176), so reports from other models help a lot, including "it just works".
+
+        If you came here from Kollate's **Report** button, the first three fields are already filled in. Otherwise, run `kollate-cli inspect /media/$USER/KOBOeReader` (or `flatpak run --command=kollate-cli io.github.andrew_lawlor.Kollate inspect /media/$USER/KOBOeReader`); its first two lines show the firmware and database version.
+
+        Please don't attach your `KoboReader.sqlite`: it contains your reading history.
+  - type: input
+    id: model
+    attributes:
+      label: Kobo model
+      placeholder: Kobo Clara BW
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: On the Kobo, *Settings → Device information*.
+      placeholder: 4.45.23697
+    validations:
+      required: true
+  - type: input
+    id: db_version
+    attributes:
+      label: Database version
+      placeholder: "176"
+  - type: dropdown
+    id: result
+    attributes:
+      label: How did it go?
+      options:
+        - Everything imported correctly
+        - Imported, but something looks wrong
+        - The import failed
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: What looked wrong, or the error message. Which kinds of items you have (highlights, notes, stylus markups, Vocabulary Builder words) also helps.
+  - type: input
+    id: kollate_version
+    attributes:
+      label: Kollate version and package
+      placeholder: 0.1.4, Flatpak

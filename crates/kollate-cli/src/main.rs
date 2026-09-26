@@ -5,7 +5,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use kollate_core::kobo::{AnnotationKind, DeviceInfo, KoboDb, color_name, find_kobo_db};
+use kollate_core::kobo::{
+    AnnotationKind, DeviceInfo, KoboDb, KoboSnapshot, color_name, find_kobo_db,
+    is_tested_db_version,
+};
 use kollate_core::{Library, default_library_path};
 
 #[derive(Parser)]
@@ -217,9 +220,24 @@ fn dict(cmd: DictCommand) -> Result<()> {
     Ok(())
 }
 
+/// Kobo database versions other than the tested ones are read anyway, with a
+/// note on stderr.
+fn warn_if_untested(snapshot: &KoboSnapshot) {
+    if !is_tested_db_version(snapshot.db_version) {
+        eprintln!(
+            "warning: Kobo database version {} hasn't been tested with Kollate yet. \
+             Please check the results, and report problems (or success) at {ISSUES_URL}",
+            snapshot.db_version
+        );
+    }
+}
+
+const ISSUES_URL: &str = "https://github.com/andrew-lawlor/kollate/issues";
+
 fn import(path: &Path, library_path: &Path, dry_run: bool) -> Result<()> {
     let device = DeviceInfo::identify(path)?;
     let snapshot = KoboDb::open_copy(&find_kobo_db(path)?)?.snapshot()?;
+    warn_if_untested(&snapshot);
     let mut lib = Library::open(library_path)?;
     let s = lib.import(&snapshot, &device, dry_run)?;
     println!(
@@ -271,6 +289,7 @@ fn library(library_path: &Path) -> Result<()> {
 
 fn inspect(path: PathBuf, json: bool) -> Result<()> {
     let snapshot = KoboDb::open_copy(&find_kobo_db(&path)?)?.snapshot()?;
+    warn_if_untested(&snapshot);
     if json {
         println!("{}", serde_json::to_string_pretty(&snapshot)?);
         return Ok(());

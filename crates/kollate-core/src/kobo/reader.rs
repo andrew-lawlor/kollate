@@ -11,8 +11,8 @@ use tempfile::TempDir;
 
 use super::chapters::{ChapterIndex, Resolution};
 use super::model::*;
-use crate::Result;
 use crate::normalize::{clean_opt, parse_kobo_date};
+use crate::{Error, Result};
 
 pub struct KoboDb {
     conn: Connection,
@@ -77,7 +77,23 @@ impl KoboDb {
             .query_row("SELECT version FROM DbVersion", [], |r| r.get(0))?)
     }
 
+    /// Reads everything Kollate imports. On an untested database version, a
+    /// failure is reported as [`Error::UntestedDb`] so the cause is clear.
     pub fn snapshot(&self) -> Result<KoboSnapshot> {
+        let db_version = self.db_version()?;
+        self.read_snapshot(db_version).map_err(|err| {
+            if is_tested_db_version(db_version) {
+                err
+            } else {
+                Error::UntestedDb {
+                    version: db_version,
+                    source: Box::new(err),
+                }
+            }
+        })
+    }
+
+    fn read_snapshot(&self, db_version: i64) -> Result<KoboSnapshot> {
         let (bookmarks, hidden_count) = self.bookmarks()?;
         let words = self.words()?;
         let volume_ids: BTreeSet<&str> = bookmarks
@@ -87,7 +103,7 @@ impl KoboDb {
             .collect();
         let books = self.books(&volume_ids)?;
         Ok(KoboSnapshot {
-            db_version: self.db_version()?,
+            db_version,
             books,
             bookmarks,
             words,

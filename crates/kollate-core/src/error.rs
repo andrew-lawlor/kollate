@@ -12,6 +12,14 @@ pub enum Error {
         "{0} is on a Kobo e-reader. Kollate never writes to your Kobo; choose a location on this computer instead."
     )]
     OnKobo(PathBuf),
+    #[error(
+        "this Kobo's database (version {version}) hasn't been tested with Kollate, and reading it failed: {source}"
+    )]
+    UntestedDb {
+        version: i64,
+        #[source]
+        source: Box<Error>,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
