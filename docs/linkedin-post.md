@@ -23,3 +23,12 @@ AI changes how fast we can build, and how high we can aim. It doesn't change who
 github.com/andrew-lawlor/kollate
 
 #AI #GenAI #PublicSector #GovTech #ResponsibleAI #Rust #OpenSource
+
+---
+
+**Images** (1080×1350, in posting order; `docs/linkedin/`):
+
+1. `1-starred.png`: Every highlight worth keeping (dark mode, starred highlights with notes)
+2. `2-vocabulary.png`: Every word, in the sentence you met it (Wiktionary definitions)
+3. `3-inbox.png`: Triage new highlights in seconds
+4. `4-books.png`: Your library, by cover
