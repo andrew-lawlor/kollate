@@ -35,7 +35,7 @@ modules:
       - install -Dm644 crates/kollate/data/io.github.andrew_lawlor.Kollate.svg -t /app/share/icons/hicolor/scalable/apps/
       - install -Dm644 crates/kollate/data/THIRD-PARTY.md LICENSE -t /app/share/doc/kollate/
       - mkdir -p /app/share/kollate/dictionaries
-      - target/release/kollate-cli dict build-wordnet english-wordnet-2025.xml.gz /app/share/kollate/dictionaries/oewn-2025.db
+      - target/release/kollate-cli dict build-dictfile dict-en-en.df.bz2 /app/share/kollate/dictionaries/wiktionary-en.db
     sources:
       - type: dir
         path: ..
@@ -46,6 +46,8 @@ modules:
           - flatpak/build-dir
           - flatpak/repo
       - cargo-sources.json
+      # English Wiktionary compiled by reader.dict (CC BY-SA 4.0), mirrored
+      # unmodified on Kollate's data release because the upstream URL isn't versioned.
       - type: file
-        url: https://github.com/globalwordnet/english-wordnet/releases/download/2025-edition/english-wordnet-2025.xml.gz
-        sha256: 9ca6d1dcb75f822fdd66617f7d9da48142ace38dd544d6ad5e2feca1674ad3fe
+        url: https://github.com/andrew-lawlor/kollate/releases/download/data-wiktionary-en-2026-09-09/dict-en-en.df.bz2
+        sha256: bd74da67652e66bc6a69a3321adb1de5922e7bbef9daf305fbc44bbc67b5db15

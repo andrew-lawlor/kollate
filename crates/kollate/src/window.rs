@@ -116,6 +116,12 @@ enum BannerAction {
     Eject,
 }
 
+/// Credit line for dictionaries converted from reader.dict's Wiktionary extracts.
+const WIKTIONARY_SOURCE: &str = "Wiktionary contributors, via reader.dict (CC BY-SA 4.0)";
+
+/// Where to get Wiktionary dictionaries for other languages.
+const MORE_DICTIONARIES_URL: &str = "https://www.reader-dict.com/";
+
 /// How many books the sidebar lists under Recent.
 const RECENT_BOOKS: usize = 5;
 
@@ -711,10 +717,10 @@ impl Window {
                 .license_type(gtk::License::Gpl30)
                 .build();
             about.add_legal_section(
-                "Open English WordNet",
-                Some("© Princeton University and the Open English WordNet contributors"),
+                "English Wiktionary",
+                Some("© Wiktionary contributors"),
                 gtk::License::Custom,
-                Some("Definitions from Open English WordNet, licensed under <a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a>."),
+                Some("Definitions from <a href=\"https://www.wiktionary.org/\">Wiktionary</a>, compiled by <a href=\"https://www.reader-dict.com/\">reader.dict</a>, licensed under <a href=\"https://creativecommons.org/licenses/by-sa/4.0/\">CC BY-SA 4.0</a>."),
             );
             about.present(Some(&this.win));
         });
@@ -1310,6 +1316,21 @@ impl Window {
         let dicts = self.dictionaries.borrow();
         if dicts.is_empty() {
             return 0;
+        }
+        // When the installed dictionaries change (e.g. a better one is
+        // bundled or added), look up again every definition that came from
+        // a dictionary. Definitions the user wrote are never touched.
+        let signature: String = dicts
+            .iter()
+            .map(|d| d.name.as_str())
+            .collect::<Vec<_>>()
+            .join("\u{1f}");
+        let previous = self.lib.borrow().setting("dictionaries").ok().flatten();
+        if previous.as_deref() != Some(signature.as_str()) {
+            if let Err(err) = self.lib.borrow_mut().refresh_definitions(&dicts) {
+                self.error("Couldn’t Look Up Words", err);
+            }
+            let _ = self.lib.borrow().set_setting("dictionaries", &signature);
         }
         match self.lib.borrow_mut().enrich_definitions(&dicts) {
             Ok(n) => n,
@@ -1972,7 +1993,7 @@ impl Window {
     ) -> adw::PreferencesGroup {
         let group = adw::PreferencesGroup::builder()
             .title("Dictionaries")
-            .description("Used to define Vocabulary words, in this order. Everything stays on this computer.")
+            .description("Used to define Vocabulary words, in this order. Everything stays on this computer. The included English dictionary is compiled from Wiktionary by reader.dict.")
             .build();
         let user_dir = self.lib.borrow().assets_dir().map(|d| dict::user_dir(&d));
         let add = gtk::Button::builder()
@@ -2006,12 +2027,16 @@ impl Window {
         }
         for d in dicts.iter() {
             let imported = user_dir.as_ref().is_some_and(|u| d.path.starts_with(u));
-            let subtitle = match (&d.language, imported) {
-                (Some(lang), true) => format!("{lang} · added by you"),
-                (Some(lang), false) => format!("{lang} · included"),
-                (None, true) => "added by you".to_owned(),
-                (None, false) => "included".to_owned(),
-            };
+            let mut parts: Vec<String> = d.language.iter().cloned().collect();
+            parts.push(if imported {
+                "added by you".to_owned()
+            } else {
+                "included".to_owned()
+            });
+            if let Some(source) = &d.source {
+                parts.push(source.clone());
+            }
+            let subtitle = glib::markup_escape_text(&parts.join(" · ")).to_string();
             let row = adw::ActionRow::builder()
                 .title(glib::markup_escape_text(&d.name))
                 .subtitle(subtitle)
@@ -2044,6 +2069,24 @@ impl Window {
             }
             group.add(&row);
         }
+        // Free Wiktionary dictionaries for other languages, with credit.
+        let more = adw::ActionRow::builder()
+            .title("Dictionaries for Other Languages")
+            .subtitle("Free Wiktionary dictionaries from reader.dict. Download the DictFile version (.df.bz2), then add it with +.")
+            .activatable(true)
+            .build();
+        more.add_suffix(&gtk::Image::from_icon_name("adw-external-link-symbolic"));
+        let weak = Rc::downgrade(self);
+        more.connect_activated(move |_| {
+            if let Some(this) = weak.upgrade() {
+                gtk::UriLauncher::new(MORE_DICTIONARIES_URL).launch(
+                    Some(&this.win),
+                    gio::Cancellable::NONE,
+                    |_| {},
+                );
+            }
+        });
+        group.add(&more);
         group
     }
 
@@ -2055,7 +2098,16 @@ impl Window {
         };
         let filter = gtk::FileFilter::new();
         filter.set_name(Some("Dictionaries"));
-        for pattern in ["*.ifo", "*.jsonl", "*.jsonl.gz", "*.json", "*.json.gz"] {
+        for pattern in [
+            "*.df",
+            "*.df.bz2",
+            "*.df.gz",
+            "*.ifo",
+            "*.jsonl",
+            "*.jsonl.gz",
+            "*.json",
+            "*.json.gz",
+        ] {
             filter.add_pattern(pattern);
         }
         let filters = gio::ListStore::new::<gtk::FileFilter>();
@@ -2089,6 +2141,17 @@ impl Window {
                 std::fs::create_dir_all(output.parent().expect("has parent"))?;
                 if name.ends_with(".ifo") {
                     dict::build_from_stardict(&input, &output)
+                } else if name.contains(".df") {
+                    // reader.dict names files dict-<lang>-<lang>.df.bz2.
+                    let lang = stem
+                        .strip_prefix("dict-")
+                        .and_then(|r| r.split('-').next())
+                        .filter(|l| l.len() <= 3);
+                    let title = match lang {
+                        Some(l) => format!("Wiktionary ({l})"),
+                        None => format!("Wiktionary ({stem})"),
+                    };
+                    dict::build_from_dictfile(&input, &output, &title, lang, WIKTIONARY_SOURCE)
                 } else {
                     dict::build_from_kaikki(&input, &output, &format!("Wiktionary ({stem})"))
                 }

@@ -1,8 +1,9 @@
-//! Offline dictionaries. Every source (the bundled Open English WordNet,
-//! user-imported StarDict or Wiktionary extracts) is converted once into the
+//! Offline dictionaries. Every source (the bundled English Wiktionary,
+//! user-imported DictFile, StarDict or kaikki.org extracts, WordNet) is converted once into the
 //! same small SQLite format and looked up with a rule-based lemmatizer.
 
 mod build;
+mod dictfile;
 mod lemma;
 
 use std::path::{Path, PathBuf};
@@ -12,6 +13,7 @@ use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 pub use build::{
     DictionaryBuilder, build_from_kaikki, build_from_stardict, build_from_wordnet_lmf,
 };
+pub use dictfile::build_from_dictfile;
 pub use lemma::{candidates, fold};
 
 use crate::Result;
@@ -82,6 +84,8 @@ pub struct Dictionary {
     pub name: String,
     /// ISO 639-1 language, when the source declares one.
     pub language: Option<String>,
+    /// Where the data comes from, for credits (e.g. "Wiktionary contributors, via reader.dict (CC BY-SA 4.0)").
+    pub source: Option<String>,
     pub path: PathBuf,
 }
 
@@ -100,10 +104,12 @@ impl Dictionary {
                 .into()
         });
         let language = meta("language")?;
+        let source = meta("source")?;
         Ok(Self {
             conn,
             name,
             language,
+            source,
             path: path.to_path_buf(),
         })
     }
@@ -142,24 +148,31 @@ impl Dictionary {
         let mut form_stmt = self
             .conn
             .prepare_cached("SELECT DISTINCT key FROM form WHERE form = ?1")?;
-        for candidate in candidates(word) {
-            if let Some((headword, senses)) = self.senses(&candidate)? {
-                return Ok(Some(Definition {
-                    headword,
-                    senses,
-                    source: self.name.clone(),
-                }));
+        let candidates = candidates(word);
+        let found = |headword: String, senses: Vec<Sense>| Definition {
+            headword,
+            senses,
+            source: self.name.clone(),
+        };
+        for candidate in &candidates {
+            if let Some((headword, senses)) = self.senses(candidate)? {
+                return Ok(Some(found(headword, senses)));
             }
-            let bases: Vec<String> = form_stmt
-                .query_map([&candidate], |r| r.get(0))?
+            let mut bases: Vec<String> = form_stmt
+                .query_map([candidate], |r| r.get(0))?
                 .collect::<rusqlite::Result<_>>()?;
+            // An inflection can be listed under several headwords (debouched:
+            // debouch and the variant debouche). Prefer the base the inflection
+            // rules also point to, then the shortest.
+            bases.sort_by_key(|b| {
+                (
+                    candidates.iter().position(|c| c == b).unwrap_or(usize::MAX),
+                    b.len(),
+                )
+            });
             for base in bases {
                 if let Some((headword, senses)) = self.senses(&base)? {
-                    return Ok(Some(Definition {
-                        headword,
-                        senses,
-                        source: self.name.clone(),
-                    }));
+                    return Ok(Some(found(headword, senses)));
                 }
             }
         }

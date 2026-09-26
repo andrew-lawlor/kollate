@@ -83,6 +83,20 @@ enum DictCommand {
     BuildWordnet { input: PathBuf, output: PathBuf },
     /// Convert a StarDict dictionary (path to its .ifo file).
     BuildStardict { ifo: PathBuf, output: PathBuf },
+    /// Convert a DictFile (.df, .df.bz2), e.g. reader.dict's Wiktionary extracts.
+    BuildDictfile {
+        input: PathBuf,
+        output: PathBuf,
+        #[arg(long, default_value = "English Wiktionary")]
+        name: String,
+        #[arg(long, default_value = "en")]
+        language: String,
+        #[arg(
+            long,
+            default_value = "Wiktionary contributors, via reader.dict (CC BY-SA 4.0)"
+        )]
+        source: String,
+    },
     /// Convert a kaikki.org Wiktionary extract (.jsonl or .jsonl.gz).
     BuildKaikki {
         input: PathBuf,
@@ -174,6 +188,13 @@ fn dict(cmd: DictCommand) -> Result<()> {
             output,
             name,
         } => dict::build_from_kaikki(&input, &output, &name)?,
+        DictCommand::BuildDictfile {
+            input,
+            output,
+            name,
+            language,
+            source,
+        } => dict::build_from_dictfile(&input, &output, &name, Some(&language), &source)?,
         DictCommand::Lookup { dictionary, words } => {
             let d = dict::Dictionary::open(&dictionary)?;
             for word in words {

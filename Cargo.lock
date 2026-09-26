@@ -111,6 +111,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
+name = "bzip2-rs"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "beeb59e7e4c811ab37cc73680c798c7a5da77fc9989c62b09138e31ee740f735"
+dependencies = [
+ "crc32fast",
+ "tinyvec",
+]
+
+[[package]]
 name = "cairo-rs"
 version = "0.22.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -742,7 +752,7 @@ dependencies = [
 
 [[package]]
 name = "kollate"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "chrono",
  "gtk4",
@@ -752,7 +762,7 @@ dependencies = [
 
 [[package]]
 name = "kollate-cli"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -762,9 +772,10 @@ dependencies = [
 
 [[package]]
 name = "kollate-core"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "blake3",
+ "bzip2-rs",
  "chrono",
  "csv",
  "flate2",

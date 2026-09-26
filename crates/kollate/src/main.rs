@@ -10,7 +10,13 @@ use adw::prelude::*;
 use gtk::{gdk, gio, glib};
 use kollate_core::{Library, default_library_path};
 
-pub const APP_ID: &str = "io.github.andrew_lawlor.Kollate";
+/// Development builds use a separate ID, so they run alongside an installed
+/// Kollate instead of handing their launch over to it.
+pub const APP_ID: &str = if cfg!(debug_assertions) {
+    "io.github.andrew_lawlor.Kollate.Devel"
+} else {
+    "io.github.andrew_lawlor.Kollate"
+};
 
 fn main() -> glib::ExitCode {
     let app = adw::Application::builder().application_id(APP_ID).build();

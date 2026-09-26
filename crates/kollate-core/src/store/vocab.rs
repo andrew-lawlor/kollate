@@ -188,6 +188,36 @@ impl Library {
         Ok(defined)
     }
 
+    /// Looks up again every word whose definition came from a dictionary
+    /// (never ones the user wrote or edited), e.g. after the installed
+    /// dictionaries change. Returns the number of definitions that changed.
+    pub fn refresh_definitions(&mut self, dictionaries: &[Dictionary]) -> Result<usize> {
+        let words: Vec<(i64, String, String, Option<String>)> = self
+            .conn
+            .prepare(
+                "SELECT id, word, language, definition FROM vocab
+                 WHERE definition_source IS NOT NULL AND definition_source != 'edited'",
+            )?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
+            .collect::<rusqlite::Result<_>>()?;
+        let mut changed = 0;
+        for (id, word, language, old) in words {
+            let Some(def) = lookup_any(dictionaries, &word, &language)? else {
+                continue;
+            };
+            let text = def.to_text(4);
+            if old.as_deref() != Some(text.as_str()) {
+                self.conn.execute(
+                    "UPDATE vocab SET lemma = ?2, definition = ?3, definition_source = ?4, updated_at = ?5 WHERE id = ?1",
+                    params![id, def.headword, text, def.source, Utc::now()],
+                )?;
+                changed += 1;
+            }
+        }
+        self.merge_by_lemma()?;
+        Ok(changed)
+    }
+
     /// Merges words with the same lemma and language into the earliest one.
     fn merge_by_lemma(&mut self) -> Result<()> {
         let rows: Vec<(i64, String, String, String)> = self

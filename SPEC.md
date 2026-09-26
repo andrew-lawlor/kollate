@@ -77,7 +77,7 @@ The host has GTK 4.18 and libadwaita 1.7, so we can target `v4_18` / `v1_7` feat
 | UI | `gtk4` 0.11 (`v4_18`), `libadwaita` 0.9 (`v1_7`), plus `gio` / `glib` for the mount monitor and async main loop. Widgets are built in Rust code (no `.ui` templates); styles live in `style.css`. |
 | SQLite (device + library) | `rusqlite` with the `bundled` feature (plus FTS5), so there's no system sqlite dependency. |
 | EPUB (context extraction) | `zip`, plus `quick-xml` to strip XHTML to text; sentence splitting with `unicode-segmentation`. |
-| Dictionaries (offline) | Bundled Open English WordNet (prebuilt SQLite), plus our own importers for StarDict and kaikki.org Wiktionary JSONL. |
+| Dictionaries (offline) | Bundled English Wiktionary (reader.dict DictFile, converted to SQLite), plus importers for DictFile, StarDict, kaikki.org JSONL and WordNet LMF. |
 | Export | `minijinja` (Markdown templates), `csv`, `serde_json`, and a hand-rolled `.apkg` writer (an SQLite file plus a media JSON, zipped). |
 | Misc | `serde`, `chrono`, `blake3` (fingerprints), `unicode-normalization`, `thiserror` / `anyhow`, `tracing`. |
 
@@ -96,7 +96,7 @@ kollate/                     (cargo workspace)
     kobo/epub.rs        # read book files on the device for vocab context
     normalize.rs        # text cleanup, date parsing, fingerprints
     store/              # local library DB (schema, migrations, repositories)
-    dict/               # WordNet + imported dictionaries (offline definitions)
+    dict/               # dictionary format, importers (DictFile, StarDict, kaikki, WordNet), lemmatizer
     import.rs           # diff + merge device data into the store
     export/             # markdown(+vault), anki, csv, json, readwise
   crates/kollate-cli/     # `kollate-cli import <mount|db> [--dry-run]`, `export …`
@@ -195,11 +195,14 @@ Schema versioning via `PRAGMA user_version` with forward-only migrations.
 **Definitions** (offline, no network permission):
 - Kobo's own dictionaries are encrypted (§13), so they aren't used.
 - Every source is converted once into one SQLite format (`dict/`): `entry(key, headword, pos, gloss, example, rank)` plus `form(form, key)` for irregular forms, where `key` is lowercase with accents removed.
-- **Bundled:** Open English WordNet 2025 (CC BY 4.0). `scripts/fetch-wordnet.sh` downloads it, checks its sha256 and builds `data/dictionaries/oewn-2025.db` (185k senses, 24 MB, 0.7 s). Packages install it to `<prefix>/share/kollate/dictionaries/`, and it's credited in About.
-- **User-added:** in Preferences → Dictionaries, users can add StarDict (`.ifo` + `.idx` + `.dict[.dz]`) or kaikki.org Wiktionary JSONL. These are stored in `<library dir>/dictionaries/`, searched first, and can be removed.
+- **Bundled:** the English Wiktionary as compiled by reader.dict (CC BY-SA 4.0), in DictFile format. It replaced Open English WordNet on 2026-09-26: it has far better coverage (819k headwords, 1.21M senses, 613k inflected forms) and better senses (e.g. *hierophant*, and the Greek sense of *daimon*). The upstream URL isn't versioned, so the exact file is mirrored on Kollate's `data-wiktionary-en-2026-09-09` release and pinned by sha256. `scripts/fetch-dictionary.sh` builds `data/dictionaries/wiktionary-en.db` (180 MB, about 9 s; roughly 55 MB compressed in the `.deb`). Packages install it to `<prefix>/share/kollate/dictionaries/`. Credits are in About, THIRD-PARTY.md and the Preferences row.
+- **DictFile import** (`dict/dictfile.rs`): `@` headword, `:` pronunciation, `&` inflected form, then HTML with one `<p><b>Part of speech</b></p><ol>` block per part of speech. Sub-senses in nested lists are kept, including lists that follow their parent `</li>`. A parent ending mid-sentence ("Synonym of demon, particularly as") prefixes its sub-senses. Synonym lists, quotations, usage notes, etymology and other non-part-of-speech sections are skipped.
+- **Changing dictionaries:** when the set of installed dictionaries changes (`setting.dictionaries`), every definition that came from a dictionary is looked up again (`refresh_definitions`). Definitions the user wrote are never touched.
+- **Ambiguous inflections:** when an inflected form is listed under several headwords, lookup prefers the base the inflection rules also produce, then the shortest.
+- **User-added:** in Preferences → Dictionaries, users can add DictFile (`.df`, `.df.bz2`; reader.dict's `dict-<lang>-<lang>` files get language `<lang>`), StarDict (`.ifo` + `.idx` + `.dict[.dz]`) or kaikki.org Wiktionary JSONL. A "Dictionaries for Other Languages" row links to reader.dict with credit. These are stored in `<library dir>/dictionaries/`, searched first, and can be removed.
 - **Search order:** user dictionaries, then `$KOLLATE_DATA_DIR/dictionaries`, then `$XDG_DATA_DIRS/kollate/dictionaries`. Debug builds also search the repo's `data/`.
 - Only words without a definition are looked up, so the user's own edits are never overwritten. "Look Up Again" clears a definition and fetches it again.
-- On the fixture words, WordNet defines 11 of 12. *hierophant* isn't in WordNet; a Wiktionary import covers it.
+- On your 12 fixture lookups, Wiktionary defines all 12; WordNet missed *hierophant*.
 
 **Lemmas and merging:** a rule-based English lemmatizer proposes candidates (`theophanies` → `theophany`, `debouched` → `debouch`, `stopped` → `stop`). The dictionary's headwords and irregular forms decide which one is right. Words sharing a lemma are merged into the earliest one: sightings, tags and every lookup key (`vocab_form`) move over, and the most advanced learning status wins. Because the old forms stay recorded, a re-import doesn't split them apart again.
 
@@ -257,11 +260,11 @@ Later: user-editable Markdown templates (minijinja), and a "since last export" o
 2. ✅ **M1, store + dedup:** the schema, importer and merge rules. Tests cover re-importing the same DB (0 changes), an edited note, a deleted row and a factory reset (new IDs, same text).
 3. ✅ **M2, UI browse & curate:** books, highlights, notes, search, star/tag/archive, edit.
 4. ✅ **M3, device integration:** autodetect, auto-import, Inbox, toasts, eject, markup files, covers.
-5. ✅ **M4, vocab enrichment:** EPUB context extraction, WordNet bundle and dictionary import, lemma merge.
+5. ✅ **M4, vocab enrichment:** EPUB context extraction, bundled dictionary (now English Wiktionary) and dictionary import, lemma merge.
 6. ✅ **M5, export:** Obsidian vault sync and Anki, then JSON, CSV and Readwise.
 7. **M6, polish & ship:**
-   - ✅ `.deb` via cargo-deb (`scripts/build-deb.sh` → `target/debian/kollate_<ver>_amd64.deb`). It contains `kollate`, `kollate-cli`, the desktop entry, AppStream metainfo, a scalable icon, the WordNet dictionary under `/usr/share/kollate/dictionaries/`, the GPL-3 copyright file and a WordNet notice. Dependencies come from shlibdeps. App ID: `io.github.andrew_lawlor.Kollate`.
-   - ✅ Flatpak: `flatpak/io.github.andrew_lawlor.Kollate.yml` on GNOME 51 with rust-stable//26.08. The build is offline, using pinned sources in `flatpak/cargo-sources.json`, and WordNet is downloaded by sha256 and converted at build time. Permissions: wayland, fallback-x11, dri, ipc, `/media:ro`, `/run/media:ro`, `org.gtk.vfs.*`. **No network.** `scripts/build-flatpak.sh` installs the app for the user and writes `target/flatpak/kollate.flatpak`. Verified with the Kobo connected: it autodetected the device through gvfs, imported 56 highlights, found 12 contexts, defined 10 of 11 words, and copied 6 covers and 1 markup image.
+   - ✅ `.deb` via cargo-deb (`scripts/build-deb.sh` → `target/debian/kollate_<ver>_amd64.deb`). It contains `kollate`, `kollate-cli`, the desktop entry, AppStream metainfo, a scalable icon, the English Wiktionary dictionary under `/usr/share/kollate/dictionaries/`, the GPL-3 copyright file and a third-party notice. Dependencies come from shlibdeps. App ID: `io.github.andrew_lawlor.Kollate`.
+   - ✅ Flatpak: `flatpak/io.github.andrew_lawlor.Kollate.yml` on GNOME 51 with rust-stable//26.08. The build is offline, using pinned sources in `flatpak/cargo-sources.json`, and the English Wiktionary is downloaded by sha256 from Kollate's data release and converted at build time. Permissions: wayland, fallback-x11, dri, ipc, `/media:ro`, `/run/media:ro`, `org.gtk.vfs.*`. **No network.** `scripts/build-flatpak.sh` installs the app for the user and writes `target/flatpak/kollate.flatpak`. Verified with the Kobo connected: it autodetected the device through gvfs, imported 56 highlights, found 12 contexts, defined 10 of 11 words, and copied 6 covers and 1 markup image.
    - ✅ README with screenshots. Public repo at https://github.com/andrew-lawlor/kollate.
    - ✅ Eject works from inside the Flatpak sandbox (confirmed by the user on the Libra Colour).
    - Still to do: markup SVG rendering, and a Flathub submission (which needs a git source in place of `type: dir`).

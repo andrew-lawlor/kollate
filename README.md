@@ -52,7 +52,7 @@ And export:
 - Kollate **never writes to your Kobo.** It copies the Kobo's database to a temporary folder and reads the copy, so you can eject at any time. The Flatpak enforces this: its sandbox can only read the Kobo. Kollate also refuses to save anything onto it, even if you pick the Kobo as an export or library location.
 - **No duplicates, ever.** Highlights are matched by the Kobo's own IDs, and by content if the IDs change (a factory reset, a second device, or calibre re-sending a book). Re-importing the same Kobo changes nothing.
 - **Your library is the source of truth.** Highlights you delete on the Kobo stay in Kollate, flagged "deleted on Kobo" and gathered in a *Deleted on Kobo* view. If you prefer, they can go to Kollate's Trash instead (Preferences), and they come back if they reappear on the Kobo. If you've edited something in Kollate and it later changes on the Kobo, your version wins and the Kobo's is kept alongside it.
-- **Fully offline.** Definitions come from the bundled [Open English WordNet](https://en-word.net). You can add StarDict dictionaries or [kaikki.org](https://kaikki.org) Wiktionary extracts in Preferences.
+- **Fully offline.** Definitions come from a bundled copy of the English [Wiktionary](https://www.wiktionary.org/) (over 800,000 words, compiled by [reader.dict](https://www.reader-dict.com/)). For other languages, download a reader.dict dictionary in DictFile format and add it in Preferences. StarDict and [kaikki.org](https://kaikki.org) extracts work too.
 
 ## Install
 
@@ -73,7 +73,7 @@ The bundle uses the GNOME 51 runtime from Flathub, and Flatpak installs it autom
 sudo apt install ./kollate_0.1.0-1_amd64.deb
 ```
 
-The package includes the app, the `kollate-cli` tool and the WordNet dictionary. It needs GTK ≥ 4.12 and libadwaita ≥ 1.5, which Debian 13 and Ubuntu 24.04 or newer provide.
+The package includes the app, the `kollate-cli` tool and the English Wiktionary dictionary. It needs GTK ≥ 4.12 and libadwaita ≥ 1.5, which Debian 13 and Ubuntu 24.04 or newer provide.
 
 ### Building the packages
 
@@ -90,7 +90,7 @@ The package includes the app, the `kollate-cli` tool and the WordNet dictionary.
 # Debian/Ubuntu build dependencies (plus Rust from https://rustup.rs)
 sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev
 
-./scripts/fetch-wordnet.sh      # one-time: download and build the dictionary (~24 MB)
+./scripts/fetch-dictionary.sh   # one-time: download (44 MB) and build the dictionary (~180 MB)
 cargo run --release -p kollate
 ```
 
@@ -143,6 +143,6 @@ cargo clippy --all-targets
 
 Kollate is free software under the **GNU General Public License v3.0 or later**; see [LICENSE](LICENSE).
 
-Definitions come from **Open English WordNet** © Princeton University and the Open English WordNet contributors, under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+Definitions come from **[Wiktionary](https://www.wiktionary.org/)** © Wiktionary contributors, compiled by [reader.dict](https://www.reader-dict.com/), under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The bundled dictionary is distributed under the same licence; see [THIRD-PARTY.md](crates/kollate/data/THIRD-PARTY.md). Kollate isn't affiliated with reader.dict or the Wikimedia Foundation.
 
 Kollate isn't affiliated with or endorsed by Rakuten Kobo. "Kobo" is a trademark of Rakuten Kobo Inc.

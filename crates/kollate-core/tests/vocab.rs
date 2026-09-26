@@ -158,3 +158,57 @@ fn stores_contexts_without_overriding_choice() {
         1
     );
 }
+
+#[test]
+fn refresh_replaces_dictionary_definitions_but_not_edits() {
+    let (mut lib, _snap, _device, dict, dir) = setup();
+    lib.enrich_definitions(std::slice::from_ref(&dict)).unwrap();
+    let demiurge = find(&lib, "Demiurge").id;
+    let theophany = find(&lib, "theophany").id;
+    lib.set_vocab_definition(demiurge, Some("my own words"))
+        .unwrap();
+
+    // A better dictionary arrives.
+    let df = dir.path().join("wikt.df");
+    std::fs::write(
+        &df,
+        "@ theophany\n& theophanies\n<html><p><b>Noun</b></p><ol><li>A manifestation of a deity to a person.</li></ol>\n\n\
+         @ demiurge\n<html><p><b>Noun</b></p><ol><li>(Platonic philosophy) The creator of the universe.</li></ol>\n\n\
+         @ hierophant\n<html><p><b>Noun</b></p><ol><li>An interpreter of sacred mysteries.</li></ol>\n",
+    )
+    .unwrap();
+    kollate_core::dict::build_from_dictfile(
+        &df,
+        &dir.path().join("wikt.db"),
+        "Wiktionary",
+        Some("en"),
+        "test",
+    )
+    .unwrap();
+    let wikt = Dictionary::open(&dir.path().join("wikt.db")).unwrap();
+
+    assert_eq!(
+        lib.refresh_definitions(std::slice::from_ref(&wikt))
+            .unwrap(),
+        1,
+        "only theophany came from a dictionary"
+    );
+    let t = lib.vocab_detail(theophany).unwrap().unwrap().vocab;
+    assert_eq!(
+        t.definition.as_deref(),
+        Some("noun: A manifestation of a deity to a person.")
+    );
+    assert_eq!(t.definition_source.as_deref(), Some("Wiktionary"));
+    assert_eq!(
+        find(&lib, "Demiurge").definition.as_deref(),
+        Some("my own words"),
+        "edits are never replaced"
+    );
+
+    // Words that had no definition get one from the new dictionary.
+    assert_eq!(
+        lib.enrich_definitions(std::slice::from_ref(&wikt)).unwrap(),
+        1
+    );
+    assert!(find(&lib, "hierophant").definition.is_some());
+}
