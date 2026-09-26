@@ -16,7 +16,7 @@ The speed is the headline, but it isn't the lesson. What mattered were the same 
 
 ⚖️ **Respecting boundaries.** Kobo's built-in dictionaries are encrypted. Rather than work around that, Kollate ships the community-built English Wiktionary: over 800,000 words, openly licensed and properly credited. Replacing our first open dictionary with it took under an hour, and every word I'd looked up got a better definition, even the arcane ones from Platonic philosophy like *hierophant*, *demiurge* and *daimon*.
 
-🧪 **Verify, don't trust.** I tested against my real device, and that caught a subtle sorting bug no test data would have exposed. The Anki export was confirmed with Anki's own importer.
+🧪 **Verify, don't trust.** I tested against my real device, and that caught a subtle sorting bug no test data would have exposed. The Anki export was confirmed with Anki's own importer. And releases come from a CI/CD pipeline in GitHub Actions with signed build provenance, so nobody has to take my word for what's in them.
 
 🗂️ **Data hygiene.** Before open-sourcing, I replaced my personal reading data in the test fixtures with a scrubbed minimum and purged it from the project history.
 
