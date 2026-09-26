@@ -283,6 +283,7 @@ Later: user-editable Markdown templates (minijinja), and a "since last export" o
 - Device: Kobo Libra Colour (colour highlights, stylus markups).
 - App ID `io.github.andrew_lawlor.Kollate`. License GPL-3.0-or-later. Maintainer Andrew Lawlor <andrew@lawlor.io>.
 - The .deb is packaged before the Flatpak.
+- Releases are built by GitHub Actions, not on a developer machine: a `v*` tag builds the .deb (on Ubuntu 24.04, the oldest supported platform) and the Flatpak (GNOME 51 container), attests their provenance, and creates a draft release. CI runs fmt, clippy, tests and a `cargo-sources.json` check on every push and pull request. The app's GTK/libadwaita feature flags (`v4_12`, `v1_5`) and its CSS (named colours, not CSS variables) match that minimum.
 - Unknown Kobo database versions are imported with a warning rather than refused (§4); compatibility reports come through a GitHub issue form.
 
 ## 13. Verified on the device (2026-09-25, Libra Colour, firmware 4.45.23697)

@@ -75,6 +75,14 @@ sudo apt install ./kollate_0.1.0-1_amd64.deb
 
 The package includes the app, the `kollate-cli` tool and the English Wiktionary dictionary. It needs GTK ≥ 4.12 and libadwaita ≥ 1.5, which Debian 13 and Ubuntu 24.04 or newer provide.
 
+### Verifying a download
+
+Releases are built by [GitHub Actions](.github/workflows/release.yml) from the tagged commit, with signed build provenance. To check that a file came from this repository's build:
+
+```sh
+gh attestation verify kollate.flatpak --repo andrew-lawlor/kollate
+```
+
 ### Building the packages
 
 ```sh
@@ -82,7 +90,7 @@ The package includes the app, the `kollate-cli` tool and the English Wiktionary 
 ./scripts/build-flatpak.sh   # installs for your user; bundle in target/flatpak/kollate.flatpak
 ```
 
-`build-flatpak.sh` needs `org.gnome.Sdk//51`, `org.freedesktop.Sdk.Extension.rust-stable//26.08` and `org.flatpak.Builder` from Flathub. After changing `Cargo.lock`, regenerate `flatpak/cargo-sources.json` with [flatpak-cargo-generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo).
+These are the same scripts the release workflow runs. `build-flatpak.sh` needs `org.gnome.Sdk//51`, `org.freedesktop.Sdk.Extension.rust-stable//26.08` and `org.flatpak.Builder` from Flathub. After changing `Cargo.lock`, regenerate `flatpak/cargo-sources.json` with [flatpak-cargo-generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo).
 
 ### From source
 
