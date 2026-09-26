@@ -32,6 +32,15 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.1.5" date="2026-09-26">
+      <description>
+        <p>Kollate now imports from Kobo database versions it hasn't been tested with yet, instead of possibly failing without explanation. The first time it sees a new version, it tells you and offers a Report button that opens a compatibility report with your Kobo's details filled in.</p>
+        <ul>
+          <li>Selected highlights and the "deleted on Kobo" label keep their colours on older GNOME versions, such as Ubuntu 24.04</li>
+          <li>Releases are now built by GitHub Actions from the tagged source, with signed build provenance</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.4" date="2026-09-26">
       <description>
         <p>In the Flatpak, the Obsidian folder is now shown as its real location (for example ~/Notes/Reading) instead of an internal sandbox path. The check that stops Kollate writing to your Kobo now also sees through those paths, so a folder on the e-reader is refused even when chosen through the file picker.</p>
