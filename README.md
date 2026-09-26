@@ -6,7 +6,8 @@
 
 <p align="center">
   Collect and curate the highlights, notes and vocabulary from your Kobo e-reader.<br>
-  A native GNOME app for Linux. Offline, read-only on your device, and free of duplicates.
+  A native Linux app, built with GTK 4 and libadwaita. Designed for GNOME, and works on any desktop.<br>
+  Offline, read-only on your device, and free of duplicates.
 </p>
 
 <p align="center">
