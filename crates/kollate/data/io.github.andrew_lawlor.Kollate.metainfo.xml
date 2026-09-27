@@ -32,6 +32,14 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.1.6" date="2026-09-26">
+      <description>
+        <p>Handwritten markups now show your ink. The Kobo saves the page and the ink as separate files, and Kollate was only showing the page. Markups are now shown zoomed in on the handwriting and the text it marks, so notes are readable at a glance; Open Page Image still shows the whole page.</p>
+        <ul>
+          <li>The Obsidian export includes the ink too, replacing earlier page images</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.5" date="2026-09-26">
       <description>
         <p>Kollate now imports from Kobo database versions it hasn't been tested with yet, instead of possibly failing without explanation. The first time it sees a new version, it tells you and offers a Report button that opens a compatibility report with your Kobo's details filled in.</p>
