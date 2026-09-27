@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="docs/hero.png" alt="Kollate: your Kobo highlights, notes and vocabulary, curated on Linux. Verba volant, scripta manent: spoken words fly away, written words remain. The dark Starred view in front of the Vocabulary view.">
+  <img src="docs/hero.png" alt="Kollate: your Kobo highlights, notes and handwriting, curated on Linux. Verba volant, scripta manent: spoken words fly away, written words remain. A handwritten note on a page of the Odyssey, read as text, in front of the Inbox.">
 </p>
 
 <p align="center">
-  Collect and curate the highlights, notes and vocabulary from your Kobo e-reader.<br>
+  Collect and curate the highlights, notes, handwriting and vocabulary from your Kobo e-reader.<br>
   A native Linux app, built with GTK 4 and libadwaita. Designed for GNOME, and works on any desktop.<br>
   Offline, read-only on your device, and free of duplicates.
 </p>
@@ -12,9 +12,9 @@
 
 Plug in your Kobo and Kollate imports everything you've marked while reading:
 
+- **Your handwriting as text** (optional). Kollate can read your stylus notes, and take the exact words you underlined or circled from the book, using a local model you download once. It runs on this computer, never online. Everything it reads is a suggestion you can correct.
 - **Highlights and notes**, in all four Kobo colours, sorted into chapters in reading order.
 - **Handwritten markups** from stylus models (tested on the Libra Colour), shown as the page with your ink on it.
-- **Your handwriting as text** (optional). Kollate can read your stylus notes, and take the exact words you underlined or circled from the book, using a local model you download once. It runs on this computer, never online. Everything it reads is a suggestion you can correct.
 - **Vocabulary Builder words.** Kollate goes further than the Kobo here: it finds the sentence you looked each word up in, inside the book itself, and adds an offline dictionary definition.
 
 Then you curate:
@@ -33,6 +33,14 @@ And export:
 - **JSON** backup, **CSV** (highlights or vocabulary) and **Readwise** CSV.
 
 ## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/markups.png" alt="A handwritten margin note on a page of the Odyssey. Below it, the underlined sentence taken from the book, and the note as Kollate read it.">
+</p>
+<p align="center">
+  <b>Your handwriting, as text:</b> the ink as you wrote it, the exact words you underlined, and your note as Kollate read it.<br>
+  <sub>The handwriting here is staged (a handwriting font on a public-domain page); the text below it is Kollate's real reading.</sub>
+</p>
 
 | | |
 |---|---|
