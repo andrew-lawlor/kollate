@@ -151,12 +151,18 @@ impl Window {
             if model.recommended {
                 subtitle.insert(0, "Recommended".into());
             }
+            // With one model installed there's nothing to choose between: a lone
+            // radio button would draw as a checkbox, so say it's in use instead.
+            let only = have && installed.len() == 1;
+            if only {
+                subtitle.insert(0, "In use".into());
+            }
             subtitle.push(model.summary.into());
             let row = adw::ExpanderRow::builder()
                 .title(model.name)
                 .subtitle(subtitle.join(" · "))
                 .build();
-            if have {
+            if have && !only {
                 let pick = gtk::CheckButton::builder()
                     .active(chosen == Some(model.id))
                     .valign(gtk::Align::Center)
@@ -180,7 +186,8 @@ impl Window {
                     }
                 });
                 row.add_prefix(&pick);
-
+            }
+            if have {
                 let files = adw::ActionRow::builder()
                     .title("Installed")
                     .subtitle(format!(
