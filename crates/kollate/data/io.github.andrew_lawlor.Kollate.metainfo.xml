@@ -32,6 +32,11 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.1.9" date="2026-09-27">
+      <description>
+        <p>Preferences now says which handwriting model is in use when only one is installed, instead of showing a checkbox that did nothing. Kollate also has a user guide, linked from its project page.</p>
+      </description>
+    </release>
     <release version="0.1.8" date="2026-09-27">
       <description>
         <p>Handwritten notes with wide gaps between words are now read as one note, in the right order. They could be split into pieces and read out of order before.</p>
