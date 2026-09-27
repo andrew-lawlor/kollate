@@ -6,6 +6,7 @@ pub mod error;
 pub mod export;
 pub mod import;
 pub mod kobo;
+pub mod markup;
 pub mod normalize;
 pub mod store;
 

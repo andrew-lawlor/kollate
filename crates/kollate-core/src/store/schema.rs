@@ -184,4 +184,13 @@ pub const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE annotation ADD COLUMN markup_crop TEXT;
     "#,
+    // 7: handwriting transcription (SPEC §8a): the model's reading of a
+    // markup, what it was made from, and the book's words near the markup
+    r#"
+    ALTER TABLE annotation ADD COLUMN ink_text TEXT;
+    ALTER TABLE annotation ADD COLUMN ink_note TEXT;
+    ALTER TABLE annotation ADD COLUMN ink_source TEXT;
+    ALTER TABLE annotation ADD COLUMN ink_hash TEXT;
+    ALTER TABLE annotation ADD COLUMN markup_context TEXT;
+    "#,
 ];

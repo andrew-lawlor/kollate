@@ -456,9 +456,142 @@ pub fn find_word_contexts(
     out
 }
 
+/// Words of the book around a stylus markup's anchor, for resolving what it
+/// underlines or circles to the book's exact text (SPEC §8a). `None` for
+/// store (DRM) books, other kinds of bookmark, or anything unreadable.
+pub fn markup_words(mount: &Path, bm: &KoboBookmark) -> Option<Vec<String>> {
+    if bm.kind != super::AnnotationKind::Markup {
+        return None;
+    }
+    let book = volume_path(mount, &bm.volume_id)?;
+    let entry = chapter_entry(&bm.content_id, &bm.volume_id)?;
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(book).ok()?).ok()?;
+    if zip.by_name("META-INF/encryption.xml").is_ok() || zip.by_name("META-INF/rights.xml").is_ok()
+    {
+        return None;
+    }
+    let mut xhtml = String::new();
+    zip.by_name(&entry).ok()?.read_to_string(&mut xhtml).ok()?;
+    Some(words_near(
+        &xhtml,
+        &[&bm.start.container_path, &bm.end.container_path],
+    ))
+}
+
+/// The words within about 1500 bytes of the Kobo spans (`span#kobo\.60\.2`)
+/// in an XHTML document, tags removed and entities decoded.
+fn words_near(xhtml: &str, spans: &[&str]) -> Vec<String> {
+    const REACH: usize = 1500;
+    let found: Vec<usize> = spans
+        .iter()
+        .filter_map(|p| {
+            let id = p.trim_start_matches("span#").replace('\\', "");
+            xhtml.find(&format!("id=\"{id}\""))
+        })
+        .collect();
+    let (from, to) = match (found.iter().min(), found.iter().max()) {
+        (Some(&a), Some(&b)) => (a.saturating_sub(REACH), (b + REACH).min(xhtml.len())),
+        _ => (0, xhtml.len()),
+    };
+    let (from, to) = (floor_char(xhtml, from), floor_char(xhtml, to));
+    // Drop a tag cut in half at the start of the window.
+    let window = &xhtml[from..to];
+    let window = match (window.find('>'), window.find('<')) {
+        (Some(close), Some(open)) if close < open => &window[close + 1..],
+        _ => window,
+    };
+    let mut text = String::new();
+    let mut tag: Option<String> = None;
+    let mut chars = window.chars().peekable();
+    while let Some(c) = chars.next() {
+        if let Some(name) = tag.as_mut() {
+            if c != '>' {
+                name.push(c);
+                continue;
+            }
+            // Block elements separate words; inline ones (span, i, em) don't.
+            let name = name
+                .trim_start_matches('/')
+                .split([' ', '/'])
+                .next()
+                .unwrap_or("");
+            if matches!(
+                name.to_ascii_lowercase().as_str(),
+                "p" | "div"
+                    | "br"
+                    | "li"
+                    | "blockquote"
+                    | "h1"
+                    | "h2"
+                    | "h3"
+                    | "h4"
+                    | "h5"
+                    | "h6"
+                    | "td"
+                    | "tr"
+            ) {
+                text.push(' ');
+            }
+            tag = None;
+            continue;
+        }
+        match c {
+            '<' => tag = Some(String::new()),
+            '&' => {
+                let mut name = String::new();
+                while let Some(&n) = chars.peek() {
+                    chars.next();
+                    if n == ';' || name.len() > 10 {
+                        break;
+                    }
+                    name.push(n);
+                }
+                let numeric =
+                    name.strip_prefix('#')
+                        .and_then(|n| match n.strip_prefix(['x', 'X']) {
+                            Some(hex) => u32::from_str_radix(hex, 16).ok(),
+                            None => n.parse().ok(),
+                        });
+                match numeric.and_then(char::from_u32) {
+                    Some(ch) => text.push(ch),
+                    None => text.push_str(html_entity(&name)),
+                }
+            }
+            _ => text.push(c),
+        }
+    }
+    text.split_whitespace().map(str::to_owned).collect()
+}
+
+fn floor_char(s: &str, mut i: usize) -> usize {
+    while !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_words_near_a_markup() {
+        let filler = "<p>filler words here.</p>".repeat(200);
+        let xhtml = format!(
+            "{filler}<p><span class=\"koboSpan\" id=\"kobo.60.2\">at his feet gave mute \
+             testimony</span> <span id=\"kobo.64.1\">that the fiend&#8217;s &amp; the \
+             <i>Kane</i>&rsquo;s</span></p>{filler}"
+        );
+        let words = words_near(&xhtml, &["span#kobo\\.60\\.2", "span#kobo.64.1"]);
+        let text = words.join(" ");
+        assert!(
+            text.contains("mute testimony that the fiend’s & the Kane’s"),
+            "{text}"
+        );
+        // Only the neighbourhood, not the whole chapter.
+        assert!(words.len() < 700, "{}", words.len());
+        assert!(!text.contains('<') && !text.contains('>'));
+    }
 
     #[test]
     fn extracts_paragraphs_from_kepub_xhtml() {

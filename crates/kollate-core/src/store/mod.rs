@@ -1,10 +1,12 @@
 //! The local library: Kollate's own SQLite database and the source of truth.
 //! Nothing here ever touches the device.
 
+mod markup;
 mod query;
 mod schema;
 mod vocab;
 
+pub use markup::MarkupJob;
 pub use query::{AnnotationFilter, DeviceDeletePolicy, SidebarCounts, Tag, View, VocabStatus};
 pub use vocab::{Sighting, Vocab, VocabDetail};
 
@@ -89,6 +91,12 @@ pub struct Annotation {
     /// The part of the page worth showing. See [`Annotation::markup_view`].
     #[serde(skip)]
     pub markup_crop: Option<Rect>,
+    /// A markup transcribed on this computer: the printed text it marks and
+    /// the handwriting. Shown when neither the Kobo nor the user supplied one.
+    pub ink_text: Option<String>,
+    pub ink_note: Option<String>,
+    /// The model that read the handwriting.
+    pub ink_source: Option<String>,
 }
 
 impl Annotation {
@@ -116,17 +124,27 @@ impl Annotation {
         })
     }
 
-    /// The text to display: the user's correction, else the device text.
+    /// The text to display: the user's correction, else the original.
     pub fn text(&self) -> Option<&str> {
-        self.user_text.as_deref().or(self.device_text.as_deref())
+        self.user_text.as_deref().or(self.original_text())
     }
 
-    /// The note to display. A user override of `""` hides the Kobo's note.
+    /// The note to display. A user override of `""` hides the original.
     pub fn note(&self) -> Option<&str> {
         self.user_note
             .as_deref()
-            .or(self.device_note.as_deref())
+            .or(self.original_note())
             .filter(|n| !n.is_empty())
+    }
+
+    /// The Kobo's text, or for a markup, its transcription.
+    pub fn original_text(&self) -> Option<&str> {
+        self.device_text.as_deref().or(self.ink_text.as_deref())
+    }
+
+    /// The Kobo's note, or for a markup, its transcribed handwriting.
+    pub fn original_note(&self) -> Option<&str> {
+        self.device_note.as_deref().or(self.ink_note.as_deref())
     }
 }
 
@@ -192,7 +210,7 @@ pub(crate) const ANNOTATION_SELECT: &str = "SELECT a.id, a.book_id, a.kind, a.de
      coalesce(b.user_author, b.author),
      (SELECT group_concat(name, char(31)) FROM (SELECT t.name FROM annotation_tag x JOIN tag t ON t.id = x.tag_id
       WHERE x.annotation_id = a.id ORDER BY t.name COLLATE NOCASE)),
-     a.markup_svg_path, a.markup_jpg_path, a.markup_crop
+     a.markup_svg_path, a.markup_jpg_path, a.markup_crop, a.ink_text, a.ink_note, a.ink_source
      FROM annotation a JOIN book b ON b.id = a.book_id";
 
 /// A crop stored as "left,top,right,bottom".
@@ -237,6 +255,9 @@ pub(crate) fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotat
             .get::<_, Option<String>>(19)?
             .as_deref()
             .and_then(parse_rect),
+        ink_text: r.get(20)?,
+        ink_note: r.get(21)?,
+        ink_source: r.get(22)?,
     })
 }
 

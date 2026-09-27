@@ -149,7 +149,7 @@ impl Library {
             View::Inbox => conditions.push("a.status = 'inbox'".into()),
             View::All => conditions.push(ACTIVE.into()),
             View::Notes => conditions.push(format!(
-                "{ACTIVE} AND nullif(coalesce(a.user_note, a.device_note), '') IS NOT NULL"
+                "{ACTIVE} AND nullif(coalesce(a.user_note, a.device_note, a.ink_note), '') IS NOT NULL"
             )),
             View::Markups => conditions.push(format!("{ACTIVE} AND a.kind = 'markup'")),
             View::Starred => conditions.push("a.starred AND a.status != 'trashed'".into()),
@@ -188,8 +188,8 @@ impl Library {
         {
             let p = arg(Box::new(like_pattern(search)), &mut args);
             conditions.push(format!(
-                "(coalesce(a.user_text, a.device_text, '') LIKE {p} ESCAPE '\\'
-                  OR coalesce(a.user_note, a.device_note, '') LIKE {p} ESCAPE '\\'
+                "(coalesce(a.user_text, a.device_text, a.ink_text, '') LIKE {p} ESCAPE '\\'
+                  OR coalesce(a.user_note, a.device_note, a.ink_note, '') LIKE {p} ESCAPE '\\'
                   OR coalesce(a.chapter_title, '') LIKE {p} ESCAPE '\\'
                   OR coalesce(b.user_title, b.title) LIKE {p} ESCAPE '\\'
                   OR coalesce(b.user_author, b.author, '') LIKE {p} ESCAPE '\\'
@@ -227,7 +227,7 @@ impl Library {
             &format!(
                 "SELECT count(*) FILTER (WHERE a.status = 'inbox'),
                         count(*) FILTER (WHERE {ACTIVE}),
-                        count(*) FILTER (WHERE {ACTIVE} AND nullif(coalesce(a.user_note, a.device_note), '') IS NOT NULL),
+                        count(*) FILTER (WHERE {ACTIVE} AND nullif(coalesce(a.user_note, a.device_note, a.ink_note), '') IS NOT NULL),
                         count(*) FILTER (WHERE {ACTIVE} AND a.kind = 'markup'),
                         count(*) FILTER (WHERE a.starred AND a.status != 'trashed'),
                         count(*) FILTER (WHERE a.status = 'archived'),
