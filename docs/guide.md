@@ -1,6 +1,6 @@
 # Kollate user guide
 
-For Kollate 0.1.8. Kollate brings everything you mark on a Kobo e-reader — highlights, notes, stylus markups and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
+For Kollate 0.1.10. Kollate brings everything you mark on a Kobo e-reader — highlights, notes, stylus markups and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
 
 **Contents**
 
@@ -76,7 +76,7 @@ Import as often as you like. Kollate recognises everything it has seen before, e
 
 - **Edited on the Kobo:** if you change a highlight's note on the Kobo, Kollate updates it — unless you've edited it in Kollate too. Then your version stays and the card shows **changed on Kobo**; the card's menu has **Use Kobo's Version**.
 - **Deleted on the Kobo:** Kollate keeps it. The card shows **deleted on Kobo**, and a **Deleted on Kobo** view appears in the sidebar. If you'd rather they go to Kollate's Trash, change **Preferences → When a Highlight Is Deleted on the Kobo**; they come back out of Trash if they reappear on the Kobo.
-- **A new kind of Kobo:** Kollate was developed on a Kobo Libra Colour. If your Kobo's database is a version Kollate hasn't been tested with, it imports anyway and shows a notice once, with a **Report** button that opens a pre-filled compatibility report. Reports, even "it all worked", are very welcome.
+- **A new kind of Kobo:** Kollate is tested on a Kobo Libra Colour and a Kobo Clara 2E. If your Kobo's database is a version Kollate hasn't been tested with, it imports anyway and shows a notice once, with a **Report** button that opens a pre-filled compatibility report. Reports, even "it all worked", are very welcome.
 
 ## 3. Triage the Inbox
 

@@ -149,3 +149,17 @@ fn explains_failures_on_untested_versions() {
     let err = KoboDb::open_copy(&path).unwrap().snapshot().unwrap_err();
     assert!(matches!(err, kollate_core::Error::Sqlite(_)), "{err}");
 }
+
+#[test]
+fn reads_kobos_without_colour() {
+    // Like a Clara 2E: DbVersion 174, and no Color column in Bookmark.
+    let (_dir, path) = modified_fixture(
+        "UPDATE DbVersion SET version = 174; ALTER TABLE Bookmark DROP COLUMN Color",
+    );
+    let s = KoboDb::open_copy(&path).unwrap().snapshot().unwrap();
+    assert_eq!(s.db_version, 174);
+    assert!(kollate_core::kobo::is_tested_db_version(174));
+    assert_eq!(s.bookmarks.len(), 52);
+    assert!(s.bookmarks.iter().all(|b| b.color == 0));
+    assert_eq!(s.words.len(), 12);
+}

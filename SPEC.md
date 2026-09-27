@@ -189,7 +189,7 @@ Schema versioning via `PRAGMA user_version` with forward-only migrations.
 ## 8. Vocab enrichment (offline only, while the reader is plugged in)
 
 **Context sentences** come from the book on the device (`kobo/epub.rs`):
-- A sideloaded, DRM-free book's `VolumeID` (`file:///mnt/onboard/...`) maps to its file under the mount. Books with `META-INF/encryption.xml` or `rights.xml` (store/DRM) are skipped.
+- A sideloaded, DRM-free book's `VolumeID` (`file:///mnt/onboard/...`) maps to its file under the mount. Books with `rights.xml`, or an `encryption.xml` that encrypts anything but fonts, are DRM-protected and skipped; an `encryption.xml` listing only fonts (the EPUB standard's font obfuscation, 14 of 96 books on the Clara 2E) leaves the text readable. A book that has moved since (calibre re-sending it into another folder, while `WordList` keeps the old path) is found by file name.
 - `container.xml` → OPF → spine; each XHTML document is stripped to paragraphs (Kobo's `koboSpan` wrappers vanish, HTML entities are decoded) and split into sentences. Matches are whole-word and case-insensitive on the form that was looked up. Footnote markers like `[39]` are removed, and long sentences are trimmed to about 320 characters around the word.
 - **Ranking:** Kobo doesn't record where a word was looked up, so the nearest highlight in time (within 3 days) in the same book gives the likely chapter. Its `ContentID` maps to a zip entry: `…epub!OEBPS!ch09.xhtml` → `OEBPS/ch09.xhtml`. Candidates are sorted by spine distance from that chapter, and up to 5 are kept.
 - Candidates are stored per sighting (`vocab_sighting.context_candidates`, JSON). The first becomes the context unless the user has already chosen one, and the user can pick another in the word dialog. The book text itself is never stored.
@@ -320,6 +320,11 @@ Later: user-editable Markdown templates (minijinja), and a "since last export" o
 - Releases are built by GitHub Actions, not on a developer machine: a `v*` tag builds the .deb (on Ubuntu 24.04, the oldest supported platform) and the Flatpak (GNOME 51 container), attests their provenance, and creates a draft release. CI runs fmt, clippy, tests and a `cargo-sources.json` check on every push and pull request. The app's GTK/libadwaita feature flags (`v4_12`, `v1_5`) and its CSS (named colours, not CSS variables) match that minimum.
 - Handwriting transcription will be local only (Qwen3-VL via llama.cpp, in-process); a cloud model was rejected as contrary to the offline promise. Models are user-added files, never downloaded by the app (§8a).
 - Unknown Kobo database versions are imported with a warning rather than refused (§4); compatibility reports come through a GitHub issue form.
+
+## 13a. Verified on a Kobo Clara 2E (2026-09-27, firmware 4.38.21908, DbVersion 174)
+- Model ID suffix `…0386`; serial prefix N506. `content`, `WordList` and `DbVersion` match the Libra Colour's; `Bookmark` lacks only `Color` (no colour screen). Highlights read as colour 0, what colour Kobos record for a default highlight.
+- Its `WordList` pointed at `/mnt/onboard/books/…` paths no longer in `content`: the books had been moved (one) or removed (four). Moved books are matched by file name; removed ones get their title and author from calibre's path (`Toole, John Kennedy/Confederacy of Dunces, A.kepub.epub` → *A Confederacy of Dunces*, John Kennedy Toole; `_` for characters files can't hold).
+- Context sentences: EPUB 3 note references (`<a epub:type="noteref">`, `role="doc-noteref"`) and numeric superscript notes after punctuation are dropped ("entropy,10" → "entropy,"); exponents after a letter stay.
 
 ## 13. Verified on the device (2026-09-25, Libra Colour, firmware 4.45.23697)
 - `.kobo/version` = `N000000000000,4.9.77,4.45.23697,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390`, i.e. serial, ?, firmware, ?, ?, model ID (`…0390` = Libra Colour). The parser matches.

@@ -84,6 +84,7 @@ impl DeviceInfo {
             .and_then(|id| id.rsplit('-').next())
         {
             Some("000000000390") => "Kobo Libra Colour",
+            Some("000000000386") => "Kobo Clara 2E",
             _ => "Kobo",
         }
     }
@@ -178,5 +179,11 @@ mod tests {
         .unwrap();
         assert_eq!(real.firmware.as_deref(), Some("4.45.23697"));
         assert_eq!(real.model_name(), "Kobo Libra Colour");
+        let clara = DeviceInfo::parse(
+            "N50629C036601,4.1.15,4.38.21908,4.1.15,4.1.15,00000000-0000-0000-0000-000000000386",
+        )
+        .unwrap();
+        assert_eq!(clara.model_name(), "Kobo Clara 2E");
+        assert_eq!(clara.firmware.as_deref(), Some("4.38.21908"));
     }
 }

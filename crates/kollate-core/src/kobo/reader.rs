@@ -112,16 +112,22 @@ impl KoboDb {
     }
 
     fn books(&self, volume_ids: &BTreeSet<&str>) -> Result<Vec<KoboBook>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT ContentID, Title, Attribution, Publisher, ISBN, Language, Series,
-                    SeriesNumber, ImageId, ___PercentRead, DateLastRead
-             FROM content WHERE ContentType = 6 AND ContentID = ?1",
-        )?;
+        const COLUMNS: &str = "ContentID, Title, Attribution, Publisher, ISBN, Language, Series,
+                    SeriesNumber, ImageId, ___PercentRead, DateLastRead";
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {COLUMNS} FROM content WHERE ContentType = 6 AND ContentID = ?1"
+        ))?;
+        // A book moved on the device (e.g. re-sent by calibre into another
+        // folder) keeps its file name; its old path lingers in WordList.
+        let mut moved = self.conn.prepare(&format!(
+            "SELECT {COLUMNS} FROM content WHERE ContentType = 6
+               AND substr(ContentID, -length(?1)) = ?1 LIMIT 2"
+        ))?;
         let mut books = Vec::new();
         for id in volume_ids {
-            let book = stmt.query_row([id], |r| {
+            let row = |r: &Row| -> rusqlite::Result<KoboBook> {
                 Ok(KoboBook {
-                    volume_id: text(r, 0)?.unwrap_or_default(),
+                    volume_id: id.to_string(),
                     title: clean_opt(text(r, 1)?.as_deref()).unwrap_or_else(|| "Untitled".into()),
                     author: clean_opt(text(r, 2)?.as_deref()),
                     publisher: clean_opt(text(r, 3)?.as_deref()),
@@ -133,14 +139,29 @@ impl KoboDb {
                     percent_read: int(r, 9)?,
                     last_read: parse_kobo_date(text(r, 10)?.as_deref()),
                 })
-            });
+            };
+            let book = stmt.query_row([id], row);
+            let book = match book {
+                Err(rusqlite::Error::QueryReturnedNoRows) => {
+                    let name = format!("/{}", id.rsplit('/').next().unwrap_or(id));
+                    let found: Vec<KoboBook> = moved
+                        .query_map([&name], row)?
+                        .collect::<rusqlite::Result<_>>()?;
+                    match <[KoboBook; 1]>::try_from(found) {
+                        Ok([b]) => Ok(b),
+                        Err(_) => Err(rusqlite::Error::QueryReturnedNoRows),
+                    }
+                }
+                other => other,
+            };
             match book {
                 Ok(b) => books.push(b),
-                // Book removed from the device but its annotations remain.
+                // Book removed from the device but its annotations remain:
+                // what its path says is all there is.
                 Err(rusqlite::Error::QueryReturnedNoRows) => books.push(KoboBook {
                     volume_id: id.to_string(),
-                    title: title_from_volume_id(id),
-                    author: None,
+                    title: book_from_path(id).0,
+                    author: book_from_path(id).1,
                     publisher: None,
                     isbn: None,
                     language: None,
@@ -184,15 +205,34 @@ impl KoboDb {
         Ok(indexes)
     }
 
+    fn has_column(&self, table: &str, column: &str) -> Result<bool> {
+        let mut stmt = self.conn.prepare(&format!("PRAGMA table_info({table})"))?;
+        let names = stmt.query_map([], |r| r.get::<_, String>(1))?;
+        for name in names {
+            if name? == column {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// Returns visible bookmarks in reading order, plus the number of hidden ones.
     fn bookmarks(&self) -> Result<(Vec<KoboBookmark>, usize)> {
-        let mut stmt = self.conn.prepare(
-            "SELECT BookmarkID, VolumeID, ContentID, Type, Text, Annotation, Color,
+        // Kobos without a colour screen (e.g. the Clara 2E, DbVersion 174)
+        // have no Color column; their highlights are the default colour,
+        // which is what colour Kobos record for an ordinary highlight.
+        let color = if self.has_column("Bookmark", "Color")? {
+            "Color"
+        } else {
+            "0"
+        };
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT BookmarkID, VolumeID, ContentID, Type, Text, Annotation, {color},
                     StartContainerPath, StartContainerChildIndex, StartOffset,
                     EndContainerPath, EndContainerChildIndex, EndOffset,
                     ChapterProgress, DateCreated, DateModified, Hidden, ExtraAnnotationData
-             FROM Bookmark",
-        )?;
+             FROM Bookmark"
+        ))?;
         let mut hidden = 0;
         let mut bookmarks = Vec::new();
         let mut rows = stmt.query([])?;
@@ -300,9 +340,97 @@ fn carry_chapters_forward(bookmarks: &mut [KoboBookmark], exact: &[bool], order:
 
 /// Best-effort title from a sideloaded path, e.g.
 /// `file:///mnt/onboard/Author/Title - Author.kepub.epub` becomes `Title - Author`.
-fn title_from_volume_id(id: &str) -> String {
-    let name = id.rsplit('/').next().unwrap_or(id);
-    name.trim_end_matches(".epub")
-        .trim_end_matches(".kepub")
-        .to_owned()
+/// Title and author from a book's path, the way calibre names files on a
+/// Kobo: `…/Toole, John Kennedy/Confederacy of Dunces, A.kepub.epub`, or
+/// `…/Crawford, Jackson/Poetic Edda_ Stories…, The - Jackson Crawford.kepub.epub`.
+/// Only for books no longer in the device's database.
+fn book_from_path(id: &str) -> (String, Option<String>) {
+    let mut parts = id.rsplit('/');
+    let file = parts.next().unwrap_or(id);
+    let folder = parts.next().unwrap_or("");
+    let stem = file.trim_end_matches(".epub").trim_end_matches(".kepub");
+    // calibre writes characters files can't hold (":" and others) as "_".
+    let unmangle = |s: &str| s.replace("_ ", ": ");
+    let (title, author) = match stem.rsplit_once(" - ") {
+        Some((title, author)) => (title, Some(initials(author))),
+        None => (stem, folder_author(folder)),
+    };
+    let mut title = unmangle(title).trim().to_owned();
+    for article in ["The", "A", "An"] {
+        if let Some(rest) = title.strip_suffix(&format!(", {article}")) {
+            title = format!("{article} {rest}");
+            break;
+        }
+    }
+    (title, author.filter(|a| !a.is_empty()))
+}
+
+/// "Toole, John Kennedy" → "John Kennedy Toole"; several joined by " & ".
+fn folder_author(folder: &str) -> Option<String> {
+    if folder.is_empty() || matches!(folder, "books" | "onboard") || folder.starts_with("file:") {
+        return None;
+    }
+    let names: Vec<String> = folder
+        .split(" & ")
+        .map(|name| match name.split_once(", ") {
+            Some((last, first)) if !first.contains(',') => format!("{first} {last}"),
+            _ => name.to_owned(),
+        })
+        .map(|n| initials(&n))
+        .collect();
+    Some(names.join(" & "))
+}
+
+/// calibre's "David W_" is "David W.".
+fn initials(name: &str) -> String {
+    name.split(' ')
+        .map(|w| match w.strip_suffix('_') {
+            Some(i) if i.chars().count() == 1 => format!("{i}."),
+            _ => w.to_owned(),
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_calibre_paths() {
+        let b = |p: &str| book_from_path(&format!("file:///mnt/onboard/books/{p}"));
+        assert_eq!(
+            b("Toole, John Kennedy/Confederacy of Dunces, A.kepub.epub"),
+            (
+                "A Confederacy of Dunces".into(),
+                Some("John Kennedy Toole".into())
+            )
+        );
+        assert_eq!(
+            b(
+                "Crawford, Jackson/Poetic Edda_ Stories of the Norse Gods and Heroes, The - Jackson Crawford.kepub.epub"
+            ),
+            (
+                "The Poetic Edda: Stories of the Norse Gods and Heroes".into(),
+                Some("Jackson Crawford".into())
+            )
+        );
+        assert_eq!(
+            b("Anthony, David W_/Horse, the Wheel, and Language, The.kepub.epub"),
+            (
+                "The Horse, the Wheel, and Language".into(),
+                Some("David W. Anthony".into())
+            )
+        );
+        assert_eq!(
+            b("Conrique, Sarah & Haynes, Graham I_/Some Book.epub")
+                .1
+                .as_deref(),
+            Some("Sarah Conrique & Graham I. Haynes")
+        );
+        assert_eq!(
+            book_from_path("file:///mnt/onboard/Loose File.epub"),
+            ("Loose File".into(), None)
+        );
+    }
 }

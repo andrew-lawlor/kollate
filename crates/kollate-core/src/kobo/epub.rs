@@ -15,10 +15,34 @@ use super::{KoboBookmark, KoboSnapshot};
 use crate::Result;
 
 /// Maps a sideloaded `VolumeID` (`file:///mnt/onboard/…`) to its path under
-/// the mount point. Store books (UUID volume IDs) return `None`.
+/// the mount point. Store books (UUID volume IDs) return `None`. A book that
+/// has moved since (calibre re-sending it into another folder, while the
+/// Kobo keeps the old path in its vocabulary list) is found by its file name.
 pub fn volume_path(mount: &Path, volume_id: &str) -> Option<PathBuf> {
     let relative = volume_id.strip_prefix("file:///mnt/onboard/")?;
-    Some(mount.join(relative)).filter(|p| p.is_file())
+    let path = mount.join(relative);
+    if path.is_file() {
+        return Some(path);
+    }
+    let name = path.file_name()?;
+    find_file(mount, name, 3)
+}
+
+fn find_file(dir: &Path, name: &std::ffi::OsStr, depth: usize) -> Option<PathBuf> {
+    let mut subdirs = Vec::new();
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        if entry.file_name() == name && path.is_file() {
+            return Some(path);
+        }
+        // Skip the Kobo's own folders (.kobo, .kobo-images).
+        if depth > 0 && path.is_dir() && !entry.file_name().to_string_lossy().starts_with('.') {
+            subdirs.push(path);
+        }
+    }
+    subdirs
+        .into_iter()
+        .find_map(|d| find_file(&d, name, depth - 1))
 }
 
 /// The zip entry of a bookmark's chapter file: `…epub!OEBPS!ch09.xhtml#x`
@@ -28,6 +52,35 @@ fn chapter_entry(content_id: &str, volume_id: &str) -> Option<String> {
     let rest = content_id.strip_prefix(book)?.strip_prefix('!')?;
     let file = rest.split('#').next()?;
     Some(file.replace('!', "/").trim_start_matches('/').to_owned())
+}
+
+/// Whether a book's text is locked. `rights.xml` is Adobe DRM. An
+/// `encryption.xml` usually is too, but many DRM-free books carry one only
+/// for obfuscated embedded fonts (the EPUB standard's font "embedding"),
+/// which leaves the text readable: 14 of 96 books on one Kobo.
+fn is_drm<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> bool {
+    if zip.by_name("META-INF/rights.xml").is_ok() {
+        return true;
+    }
+    let Ok(mut file) = zip.by_name("META-INF/encryption.xml") else {
+        return false;
+    };
+    let mut xml = String::new();
+    if file.read_to_string(&mut xml).is_err() {
+        return true;
+    }
+    let is_font = |uri: &str| {
+        let uri = uri.to_ascii_lowercase();
+        [".otf", ".ttf", ".woff", ".woff2"]
+            .iter()
+            .any(|ext| uri.ends_with(ext))
+    };
+    let uris: Vec<&str> = xml
+        .split("URI=\"")
+        .skip(1)
+        .filter_map(|rest| rest.split('"').next())
+        .collect();
+    uris.is_empty() || !uris.iter().all(|u| is_font(u))
 }
 
 /// A book's text, one entry per spine document, in reading order.
@@ -144,6 +197,13 @@ fn paragraphs(xhtml: &str) -> Vec<String> {
     let mut current = String::new();
     let mut skip_depth = 0usize;
     let mut in_body = false;
+    // Where the text of an open <sup> starts; a footnote marker ("10", "*",
+    // "[3]") written as a superscript is dropped when it closes.
+    let mut sup_start: Option<usize> = None;
+    let mut sup_link = false;
+    // Where an EPUB 3 note reference (<a epub:type="noteref">) starts; its
+    // text (the note number) is dropped.
+    let mut noteref_start: Option<usize> = None;
     let flush = |current: &mut String, out: &mut Vec<String>| {
         let text = current.split_whitespace().collect::<Vec<_>>().join(" ");
         if !text.is_empty() {
@@ -158,6 +218,22 @@ fn paragraphs(xhtml: &str) -> Vec<String> {
                 match name.as_str() {
                     "body" => in_body = true,
                     "script" | "style" | "head" | "rt" => skip_depth += 1,
+                    "sup" => {
+                        sup_start = Some(current.len());
+                        sup_link = false;
+                    }
+                    "a" => {
+                        sup_link |= sup_start.is_some();
+                        let noteref = e.attributes().flatten().any(|a| {
+                            let key = a.key.as_ref();
+                            let value: &str = &a.value;
+                            (key.ends_with("type") && value.contains("noteref"))
+                                || (key == "role" && value == "doc-noteref")
+                        });
+                        if noteref && noteref_start.is_none() {
+                            noteref_start = Some(current.len());
+                        }
+                    }
                     n if BLOCK_TAGS.contains(&n) => flush(&mut current, &mut out),
                     _ => {}
                 }
@@ -171,6 +247,31 @@ fn paragraphs(xhtml: &str) -> Vec<String> {
                 let name = e.local_name().as_ref().to_ascii_lowercase();
                 match name.as_str() {
                     "script" | "style" | "head" | "rt" => skip_depth = skip_depth.saturating_sub(1),
+                    "a" => {
+                        if let Some(start) = noteref_start.take().filter(|&i| i <= current.len()) {
+                            current.truncate(start);
+                        }
+                    }
+                    "sup" => {
+                        if let Some(start) = sup_start.take().filter(|&i| i <= current.len()) {
+                            let marker = current[start..].trim();
+                            // A note reference: a link to a note, or a marker after
+                            // punctuation ("entropy,10"). A bare number right after
+                            // a letter is an exponent ("mc2") and stays.
+                            let after_word = current[..start]
+                                .chars()
+                                .next_back()
+                                .is_some_and(char::is_alphanumeric);
+                            let is_note = !marker.is_empty()
+                                && (sup_link || !after_word)
+                                && marker
+                                    .chars()
+                                    .all(|c| c.is_ascii_digit() || "[]()*†‡§, ".contains(c));
+                            if is_note {
+                                current.truncate(start);
+                            }
+                        }
+                    }
                     n if BLOCK_TAGS.contains(&n) => flush(&mut current, &mut out),
                     _ => {}
                 }
@@ -197,9 +298,7 @@ impl BookText {
     /// Reads the spine of an EPUB. Returns `None` for encrypted (DRM) books.
     pub fn read(path: &Path) -> Result<Option<Self>> {
         let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?).map_err(io_err)?;
-        if zip.by_name("META-INF/encryption.xml").is_ok()
-            || zip.by_name("META-INF/rights.xml").is_ok()
-        {
+        if is_drm(&mut zip) {
             return Ok(None);
         }
         let mut read = |name: &str| -> Result<String> {
@@ -476,8 +575,7 @@ pub fn markup_words(mount: &Path, bm: &KoboBookmark) -> Option<Vec<String>> {
     let book = volume_path(mount, &bm.volume_id)?;
     let entry = chapter_entry(&bm.content_id, &bm.volume_id)?;
     let mut zip = zip::ZipArchive::new(std::fs::File::open(book).ok()?).ok()?;
-    if zip.by_name("META-INF/encryption.xml").is_ok() || zip.by_name("META-INF/rights.xml").is_ok()
-    {
+    if is_drm(&mut zip) {
         return None;
     }
     let mut xhtml = String::new();
@@ -583,6 +681,64 @@ fn floor_char(s: &str, mut i: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn drops_superscript_footnote_markers() {
+        let xhtml = r#"<html><body><p>universalism and entropy,<sup><a href="n.html#10">10</a></sup> individuating man</p>
+            <p>E = mc<sup>2</sup> stays, and so does x<sup>n</sup>.</p>
+            <p>A claim<sup><a href="n.html#3">3</a></sup> and another.<sup>4</sup></p>
+            <p>and entropy,</span><span class="CharOverride-2"><a class="_idEndnoteLink" role="doc-noteref" epub:type="noteref" href="n.xhtml#endnote-010"><span><span class="koboSpan">10</span></span></a></span> individuating</p></body></html>"#;
+        let p = paragraphs(xhtml);
+        assert_eq!(p[0], "universalism and entropy, individuating man");
+        // Exponents stay: a bare number right after a letter isn't a note.
+        assert_eq!(p[1], "E = mc2 stays, and so does xn.");
+        assert_eq!(p[2], "A claim and another.");
+        // EPUB 3 marks note references explicitly, superscript or not.
+        assert_eq!(p[3], "and entropy, individuating");
+    }
+
+    #[test]
+    fn tells_font_obfuscation_from_drm() {
+        use std::io::Write;
+        let book = |files: &[(&str, &str)]| {
+            let mut buf = std::io::Cursor::new(Vec::new());
+            {
+                let mut w = zip::ZipWriter::new(&mut buf);
+                for (name, body) in files {
+                    w.start_file(*name, zip::write::SimpleFileOptions::default())
+                        .unwrap();
+                    w.write_all(body.as_bytes()).unwrap();
+                }
+                w.finish().unwrap();
+            }
+            zip::ZipArchive::new(std::io::Cursor::new(buf.into_inner())).unwrap()
+        };
+        let fonts = r#"<encryption><EncryptedData><EncryptionMethod Algorithm="http://www.idpf.org/2008/embedding"/>
+            <CipherData><CipherReference URI="OEBPS/font/Sabon.otf"/></CipherData></EncryptedData></encryption>"#;
+        let text = r#"<encryption><EncryptedData><CipherData><CipherReference URI="OEBPS/ch1.xhtml"/></CipherData></EncryptedData></encryption>"#;
+        assert!(!is_drm(&mut book(&[("mimetype", "application/epub+zip")])));
+        assert!(!is_drm(&mut book(&[("META-INF/encryption.xml", fonts)])));
+        assert!(is_drm(&mut book(&[("META-INF/encryption.xml", text)])));
+        assert!(is_drm(&mut book(&[("META-INF/rights.xml", "<rights/>")])));
+    }
+
+    #[test]
+    fn finds_moved_books_by_file_name() {
+        let mount = tempfile::tempdir().unwrap();
+        let moved = mount.path().join("Maxwell, Mike");
+        std::fs::create_dir_all(&moved).unwrap();
+        std::fs::write(moved.join("Handbook.kepub.epub"), b"epub").unwrap();
+        let old = "file:///mnt/onboard/books/Maxwell, Mike/Handbook.kepub.epub";
+        assert_eq!(
+            volume_path(mount.path(), old),
+            Some(moved.join("Handbook.kepub.epub"))
+        );
+        assert_eq!(
+            volume_path(mount.path(), "file:///mnt/onboard/books/Gone.epub"),
+            None
+        );
+        assert_eq!(volume_path(mount.path(), "0c2a1e7e-uuid"), None);
+    }
 
     #[test]
     fn finds_words_near_a_markup() {

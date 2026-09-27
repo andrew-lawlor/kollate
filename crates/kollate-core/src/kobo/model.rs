@@ -146,7 +146,7 @@ pub struct KoboWord {
 /// `DbVersion`s Kollate has been verified against on a real device. Others
 /// are read anyway (Kobo rarely changes the tables Kollate uses), but the
 /// app and CLI warn about them.
-pub const TESTED_DB_VERSIONS: &[i64] = &[176];
+pub const TESTED_DB_VERSIONS: &[i64] = &[174, 176];
 
 pub fn is_tested_db_version(version: i64) -> bool {
     TESTED_DB_VERSIONS.contains(&version)
