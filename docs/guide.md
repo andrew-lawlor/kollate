@@ -1,6 +1,6 @@
 # Kollate user guide
 
-For Kollate 0.1.10. Kollate brings everything you mark on a Kobo e-reader — highlights, notes, stylus markups and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
+For Kollate 0.2.0. Kollate brings everything you mark on a Kobo e-reader — highlights, notes, stylus markups and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
 
 **Contents**
 
@@ -35,7 +35,7 @@ Flatpak installs the GNOME runtime from Flathub if you don't have it. The Flatpa
 **Debian 13 or Ubuntu 24.04 and newer** (`.deb`):
 
 ```sh
-sudo apt install ./kollate_0.1.8-1_amd64.deb
+sudo apt install ./kollate_0.2.0-1_amd64.deb
 ```
 
 This also installs `kollate-cli`, the [command-line tool](#11-the-command-line).

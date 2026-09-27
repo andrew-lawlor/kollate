@@ -32,6 +32,16 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.2.0" date="2026-09-27">
+      <description>
+        <p>Kollate now works with black-and-white Kobos as well as colour ones: it's tested on a Kobo Clara 2E alongside the Libra Colour. Together with reading your handwriting (since 0.1.7), this makes 0.2.0.</p>
+        <ul>
+          <li>Books you've since moved or removed on the Kobo keep a proper title and author, instead of a file name</li>
+          <li>Context sentences for vocabulary now come from many more books: those with embedded fonts were wrongly treated as locked</li>
+          <li>Footnote numbers no longer end up in context sentences</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.9" date="2026-09-27">
       <description>
         <p>Preferences now says which handwriting model is in use when only one is installed, instead of showing a checkbox that did nothing. Kollate also has a user guide, linked from its project page.</p>
