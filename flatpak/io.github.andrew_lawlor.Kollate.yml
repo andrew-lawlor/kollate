@@ -4,12 +4,15 @@ runtime-version: '51'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
+  # libclang, for the llama.cpp bindings (handwriting transcription).
+  - org.freedesktop.Sdk.Extension.llvm22
 command: kollate
 finish-args:
   - --share=ipc
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
+  # --device=dri also lets handwriting transcription use the GPU (Vulkan).
   # Kobo e-readers mount here. Read-only: Kollate never writes to the device.
   - --filesystem=/media:ro
   - --filesystem=/run/media:ro
@@ -18,14 +21,29 @@ finish-args:
   - --filesystem=xdg-run/gvfsd
   # No network access. Obsidian vaults and export files go through the file chooser portal.
 build-options:
-  append-path: /usr/lib/sdk/rust-stable/bin
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm22/bin
 modules:
+  # SPIR-V headers for llama.cpp's Vulkan backend; build-only, not shipped.
+  - name: spirv-headers
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DSPIRV_HEADERS_ENABLE_TESTS=OFF
+    cleanup:
+      - '*'
+    sources:
+      - type: archive
+        url: https://github.com/KhronosGroup/SPIRV-Headers/archive/refs/tags/vulkan-sdk-1.4.357.0.tar.gz
+        sha256: 4d703067a7e06331ccb37bdfed3f9b7879cc61969a2689ae95c95db34a47ff07
+
   - name: kollate
     buildsystem: simple
     build-options:
       env:
         CARGO_HOME: /run/build/kollate/cargo
         CARGO_NET_OFFLINE: 'true'
+        LIBCLANG_PATH: /usr/lib/sdk/llvm22/lib
+        CMAKE_PREFIX_PATH: /app
+        CPLUS_INCLUDE_PATH: /app/include
     build-commands:
       - cargo --offline build --release --workspace
       - install -Dm755 target/release/kollate -t /app/bin/

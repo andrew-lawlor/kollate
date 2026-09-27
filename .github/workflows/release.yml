@@ -21,10 +21,11 @@ jobs:
       - name: Check the tag matches the version and release notes
         if: github.ref_type == 'tag'
         run: scripts/release-notes.py "$GITHUB_REF_NAME" > /dev/null
-      - name: Install GTK and libadwaita
+      - name: Install GTK, libadwaita, and llama.cpp's build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgtk-4-dev libadwaita-1-dev
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libadwaita-1-dev \
+            cmake libclang-dev glslc spirv-headers libvulkan-dev
       - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
         with:
           toolchain: stable
