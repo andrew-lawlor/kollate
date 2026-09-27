@@ -1,0 +1,11 @@
+[package]
+name = "kollate-transcribe"
+description = "Local handwriting transcription for Kollate, with llama.cpp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kollate-core = { path = "../kollate-core" }
+blake3.workspace = true
+llama-cpp-2 = { version = "=0.1.157", features = ["mtmd", "vulkan", "sampler", "common"] }

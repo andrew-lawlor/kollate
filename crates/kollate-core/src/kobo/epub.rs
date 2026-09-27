@@ -456,6 +456,16 @@ pub fn find_word_contexts(
     out
 }
 
+/// The book's words near every stylus markup in sideloaded books, keyed by
+/// bookmark ID, for [`Library::set_markup_contexts`](crate::Library::set_markup_contexts).
+pub fn markup_contexts(mount: &Path, snapshot: &KoboSnapshot) -> Vec<(String, Vec<String>)> {
+    snapshot
+        .bookmarks
+        .iter()
+        .filter_map(|bm| Some((bm.bookmark_id.clone(), markup_words(mount, bm)?)))
+        .collect()
+}
+
 /// Words of the book around a stylus markup's anchor, for resolving what it
 /// underlines or circles to the book's exact text (SPEC §8a). `None` for
 /// store (DRM) books, other kinds of bookmark, or anything unreadable.
