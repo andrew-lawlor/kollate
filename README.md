@@ -8,6 +8,12 @@
   Offline, read-only on your device, and free of duplicates.
 </p>
 
+<p align="center">
+  <a href="https://github.com/andrew-lawlor/kollate/releases/latest"><b>Download</b></a> ·
+  <a href="docs/guide.md"><b>User guide</b></a> ·
+  <a href="SPEC.md">Design notes</a>
+</p>
+
 ## What it does
 
 Plug in your Kobo and Kollate imports everything you've marked while reading:
@@ -119,6 +125,8 @@ cargo run --release -p kollate
 3. Work through the **Inbox**, browse by book or tag, and visit **Vocabulary**.
 4. Open **Export** (`Ctrl+E`), pick a folder in your Obsidian vault and/or export an Anki deck.
 5. Press **Eject** in the banner when you're done.
+
+The **[user guide](docs/guide.md)** covers everything in detail, with screenshots: triage, handwriting, vocabulary, exports, shortcuts and troubleshooting.
 
 ### Reading your handwriting
 
