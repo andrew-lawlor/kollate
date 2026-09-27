@@ -53,6 +53,7 @@ impl Window {
         group.add(&delete_policy);
 
         page.add(&group);
+        page.add(&self.handwriting_group(&dialog));
         for group in self.dictionaries_groups(&dialog) {
             page.add(&group);
         }

@@ -87,8 +87,16 @@ fn quote(text: &str) -> String {
 fn annotation_md(a: &Annotation, attachment: Option<&str>, out: &mut String) {
     let block_id = format!("^k{}", a.id);
     match (a.text(), attachment) {
-        (Some(text), _) => out.push_str(&format!("{} {block_id}\n", quote(text))),
-        (None, Some(file)) => out.push_str(&format!("![[{file}]] {block_id}\n")),
+        // A markup's ink, then the text it marks (as read).
+        (text, Some(file)) => {
+            out.push_str(&format!("![[{file}]] {block_id}\n"));
+            if let Some(text) = text {
+                out.push('\n');
+                out.push_str(&quote(text));
+                out.push('\n');
+            }
+        }
+        (Some(text), None) => out.push_str(&format!("{} {block_id}\n", quote(text))),
         (None, None) => out.push_str(&format!("> *(handwritten markup)* {block_id}\n")),
     }
     if let Some(note) = a.note() {
@@ -303,9 +311,12 @@ pub fn sync_obsidian(
             std::fs::copy(&src, &dest)?;
             stats.attachments_copied += 1;
         }
-        // Before 0.1.6 the page was exported without its ink, as a .jpg.
-        if ext != "jpg" {
-            let _ = std::fs::remove_file(dest.with_extension("jpg"));
+        // Earlier versions exported the page as .svg (0.1.6) or without ink
+        // as .jpg (before); drop whichever this replaces.
+        for old in ["jpg", "svg"] {
+            if ext != old {
+                let _ = std::fs::remove_file(dest.with_extension(old));
+            }
         }
         attachments.insert(a.id, file);
     }

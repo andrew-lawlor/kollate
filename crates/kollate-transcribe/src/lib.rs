@@ -39,6 +39,24 @@ const LATIN: &str = r"root ::= [\x20-\x7E -ɏ‐-‧\n]+";
 /// Longer than any margin note; stops a model that starts repeating itself.
 const MAX_TOKENS: usize = 160;
 
+/// Whether this computer's processor can run the models. llama.cpp is built
+/// for x86-64 processors from about 2013 on (AVX2, FMA, F16C, BMI2); on older
+/// ones it would crash, so it's never loaded there.
+pub fn supported() -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        std::arch::is_x86_feature_detected!("avx2")
+            && std::arch::is_x86_feature_detected!("fma")
+            && std::arch::is_x86_feature_detected!("f16c")
+            && std::arch::is_x86_feature_detected!("bmi2")
+            && std::arch::is_x86_feature_detected!("sse4.2")
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        true
+    }
+}
+
 /// llama.cpp's global state, set up once per process with its logging off.
 fn backend() -> Result<&'static LlamaBackend> {
     static BACKEND: OnceLock<LlamaBackend> = OnceLock::new();
@@ -62,6 +80,11 @@ impl Transcriber {
     /// Loads a model and its vision projector. With `gpu`, all layers go to
     /// the GPU if Vulkan finds one; otherwise everything runs on the CPU.
     pub fn load(model: &Path, vision: &Path, gpu: bool) -> Result<Self> {
+        if !supported() {
+            return Err(err(
+                "this computer’s processor is too old to read handwriting (it needs AVX2)",
+            ));
+        }
         let backend = backend()?;
         let params = LlamaModelParams::default().with_n_gpu_layers(if gpu { 999 } else { 0 });
         let model = LlamaModel::load_from_file(backend, model, &params).map_err(err)?;
@@ -116,7 +139,7 @@ impl Transcriber {
                 &[&bitmap],
             )
             .map_err(err)?;
-        let mut n_past = chunks
+        let start = chunks
             .eval_chunks(&self.vision, &ctx, 0, 0, 2048, true)
             .map_err(err)?;
 
@@ -127,7 +150,7 @@ impl Transcriber {
         let mut ctx = ctx;
         let mut batch = LlamaBatch::new(1, 1);
         let mut out = Vec::new();
-        for _ in 0..MAX_TOKENS {
+        for n_past in start..start + MAX_TOKENS as i32 {
             let token = sampler.sample(&ctx, -1);
             if self.model.is_eog_token(token) {
                 break;
@@ -140,7 +163,6 @@ impl Transcriber {
             );
             batch.clear();
             batch.add(token, n_past, &[0], true).map_err(err)?;
-            n_past += 1;
             ctx.decode(&mut batch).map_err(err)?;
         }
         Ok(String::from_utf8_lossy(&out).trim().to_owned())

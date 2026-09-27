@@ -112,9 +112,9 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
 
     let body = gtk::Box::new(gtk::Orientation::Vertical, 8);
     body.set_hexpand(true);
-    match (a.kind.as_str(), a.text()) {
-        (_, Some(text)) => body.append(&wrapped_label(text, &["quote"])),
-        ("markup", None) => match a.markup_view() {
+    if a.kind == "markup" {
+        // The ink first; what it marks and says (as read) below it.
+        match a.markup_view() {
             Some(path) => {
                 let picture = gtk::Picture::builder()
                     .file(&gtk::gio::File::for_path(&path))
@@ -144,8 +144,15 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
                 ));
                 body.append(&row);
             }
-        },
-        _ => body.append(&wrapped_label("(no text)", &["dim-label"])),
+        }
+        if let Some(text) = a.text() {
+            body.append(&wrapped_label(text, &["quote"]));
+        }
+    } else {
+        match a.text() {
+            Some(text) => body.append(&wrapped_label(text, &["quote"])),
+            None => body.append(&wrapped_label("(no text)", &["dim-label"])),
+        }
     }
 
     if let Some(note) = a.note() {
@@ -156,6 +163,20 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
         row.append(&icon);
         row.append(&wrapped_label(note, &["note"]));
         body.append(&row);
+    }
+
+    // Text read from handwriting is a guess until the user corrects it.
+    let machine_read = (a.user_text.is_none() && a.device_text.is_none() && a.ink_text.is_some())
+        || (a.user_note.is_none() && a.device_note.is_none() && a.ink_note.is_some());
+    if machine_read && let Some(source) = &a.ink_source {
+        let name = kollate_transcribe::catalog()
+            .iter()
+            .find(|m| m.id == source)
+            .map_or(source.as_str(), |m| m.name);
+        body.append(&wrapped_label(
+            &format!("Read from handwriting by {name}. Edit to correct it."),
+            &["caption", "dim-label"],
+        ));
     }
 
     // Details line: chapter · date, pills, then actions.

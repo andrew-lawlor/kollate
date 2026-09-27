@@ -49,12 +49,15 @@ impl Window {
                     _ => Ok(CopiedAssets::default()),
                 };
                 // Context sentences come from the books themselves.
-                let contexts = if path.is_dir() {
-                    find_word_contexts(&path, &snapshot, 5)
+                let (contexts, markup_words) = if path.is_dir() {
+                    (
+                        find_word_contexts(&path, &snapshot, 5),
+                        markup_contexts(&path, &snapshot),
+                    )
                 } else {
-                    Vec::new()
+                    (Vec::new(), Vec::new())
                 };
-                Ok((device, snapshot, assets, contexts))
+                Ok((device, snapshot, assets, contexts, markup_words))
             })
             .await;
             this.importing.set(false);
@@ -62,7 +65,7 @@ impl Window {
                 toast.dismiss();
             }
             let outcome = match read {
-                Ok(Ok((device, snapshot, assets, contexts))) => {
+                Ok(Ok((device, snapshot, assets, contexts, markup_words))) => {
                     let mut lib = this.lib.borrow_mut();
                     lib.import(&snapshot, &device, false)
                         .and_then(|stats| {
@@ -70,6 +73,7 @@ impl Window {
                                 lib.attach_assets(&device, assets)?;
                             }
                             lib.set_word_contexts(&device, &contexts)?;
+                            lib.set_markup_contexts(&device, &markup_words)?;
                             Ok((stats, assets.err(), device, snapshot.db_version))
                         })
                         .map_err(|e| e.to_string())
@@ -85,6 +89,7 @@ impl Window {
                     this.import_toast(&stats);
                     this.warn_if_untested(&device, db_version);
                     this.auto_sync_obsidian();
+                    this.transcribe_pending();
                     if let Some(err) = asset_error {
                         this.toast(&format!("Some images couldn’t be copied: {err}"));
                     }

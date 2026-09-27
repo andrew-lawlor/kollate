@@ -48,7 +48,7 @@ fn override_of(edited: String, device: Option<&str>) -> Option<String> {
 }
 
 pub fn present(parent: &impl IsA<gtk::Widget>, a: &Annotation, on_save: impl Fn(Edited) + 'static) {
-    let is_markup = a.kind == "markup" && a.device_text.is_none();
+    let is_markup = a.kind == "markup";
     let dialog = adw::Dialog::builder()
         .title(if is_markup {
             "Edit Markup"
@@ -69,11 +69,13 @@ pub fn present(parent: &impl IsA<gtk::Widget>, a: &Annotation, on_save: impl Fn(
         .build();
 
     let text = text_view(a.text().unwrap_or(""));
-    text.set_height_request(120);
-    if !is_markup {
-        body.append(&heading("Highlight"));
-        body.append(&text);
-    }
+    text.set_height_request(if is_markup { 80 } else { 120 });
+    body.append(&heading(if is_markup {
+        "Marked Text"
+    } else {
+        "Highlight"
+    }));
+    body.append(&text);
     let note = text_view(a.note().unwrap_or(""));
     note.set_height_request(90);
     let note_heading = heading("Note");
@@ -92,13 +94,26 @@ pub fn present(parent: &impl IsA<gtk::Widget>, a: &Annotation, on_save: impl Fn(
     tags_list.append(&tags);
     body.append(&tags_list);
 
-    let device_text = a.device_text.clone();
-    let device_note = a.device_note.clone();
-    if a.user_text.is_some() || a.user_note.is_some() {
-        let original = heading("On Your Kobo");
+    // The Kobo's version, or for a markup, what was read from the handwriting.
+    let device_text = a.original_text().map(str::to_owned);
+    let device_note = a.original_note().map(str::to_owned);
+    let transcribed = a.device_text.is_none() && a.device_note.is_none();
+    if (a.user_text.is_some() || a.user_note.is_some())
+        && (device_text.is_some() || device_note.is_some())
+    {
+        let original = heading(if transcribed {
+            "Read From Handwriting"
+        } else {
+            "On Your Kobo"
+        });
         original.set_margin_top(18);
         body.append(&original);
-        for (label, value) in [("Highlight", &device_text), ("Note", &device_note)] {
+        let text_label = if is_markup {
+            "Marked text"
+        } else {
+            "Highlight"
+        };
+        for (label, value) in [(text_label, &device_text), ("Note", &device_note)] {
             if let Some(v) = value {
                 body.append(
                     &gtk::Label::builder()
@@ -112,7 +127,11 @@ pub fn present(parent: &impl IsA<gtk::Widget>, a: &Annotation, on_save: impl Fn(
             }
         }
         let restore = gtk::Button::builder()
-            .label("Restore Kobo Version")
+            .label(if transcribed {
+                "Restore Transcription"
+            } else {
+                "Restore Kobo Version"
+            })
             .halign(gtk::Align::Start)
             .css_classes(["pill"])
             .margin_top(6)
@@ -171,11 +190,7 @@ pub fn present(parent: &impl IsA<gtk::Widget>, a: &Annotation, on_save: impl Fn(
         dialog,
         move |_| {
             on_save(Edited {
-                text: if is_markup {
-                    None
-                } else {
-                    override_of(buffer_text(&text), device_text.as_deref())
-                },
+                text: override_of(buffer_text(&text), device_text.as_deref()),
                 note: override_of(buffer_text(&note), device_note.as_deref()),
                 tags: tags
                     .text()

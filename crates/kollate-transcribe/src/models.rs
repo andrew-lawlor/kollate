@@ -145,7 +145,7 @@ mod tests {
         std::fs::write(src.join("random.gguf"), b"nope").unwrap();
         std::fs::write(src.join("readme.txt"), b"ignored").unwrap();
         let models = dir.join("models");
-        let added = add(&models, &[src.clone()]).unwrap();
+        let added = add(&models, std::slice::from_ref(&src)).unwrap();
         assert!(added.complete.is_empty() && added.waiting.is_empty());
         assert_eq!(added.unknown, vec![src.join("random.gguf")]);
         assert!(installed(&models).is_empty());

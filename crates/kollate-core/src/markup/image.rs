@@ -74,6 +74,54 @@ fn rotate(width: u32, height: u32, gray: &[u8], rotation: Rotation) -> RgbImage 
     RgbImage::from_gray(height, width, &turned)
 }
 
+/// A markup as one picture: the Kobo's page with the ink drawn on it, cut to
+/// `crop` (left, top, right, bottom in page pixels, inclusive), as a JPEG.
+///
+/// Drawn here rather than left to an SVG renderer: GNOME's newer image
+/// loaders (glycin) placed an embedded page differently from librsvg, which
+/// shifted the page under the ink.
+pub fn compose_page(svg: &str, page_jpeg: &[u8], crop: Option<[i32; 4]>) -> Result<Vec<u8>> {
+    let page = image::load_from_memory_with_format(page_jpeg, image::ImageFormat::Jpeg)
+        .map_err(err)?
+        .to_rgb8();
+    let (pw, ph) = page.dimensions();
+    let [left, top, right, bottom] = crop.unwrap_or([0, 0, pw as i32 - 1, ph as i32 - 1]);
+    let x0 = left.clamp(0, pw as i32 - 1) as u32;
+    let y0 = top.clamp(0, ph as i32 - 1) as u32;
+    let w = (right.clamp(0, pw as i32 - 1) as u32 + 1)
+        .saturating_sub(x0)
+        .max(1);
+    let h = (bottom.clamp(0, ph as i32 - 1) as u32 + 1)
+        .saturating_sub(y0)
+        .max(1);
+
+    let tree = resvg::usvg::Tree::from_str(svg, &resvg::usvg::Options::default()).map_err(err)?;
+    let scale = pw as f32 / tree.size().width();
+    let mut ink = resvg::tiny_skia::Pixmap::new(w, h).ok_or_else(|| err("empty page"))?;
+    let place = resvg::tiny_skia::Transform::from_scale(scale, scale)
+        .post_translate(-(x0 as f32), -(y0 as f32));
+    resvg::render(&tree, place, &mut ink.as_mut());
+
+    let mut out = image::RgbImage::new(w, h);
+    for (x, y, px) in out.enumerate_pixels_mut() {
+        let under = page.get_pixel(x0 + x, y0 + y).0;
+        // Premultiplied: colour is already scaled by coverage.
+        let over = ink.pixel(x, y).expect("in bounds");
+        let keep = 255 - over.alpha() as u16;
+        let mix = |p: u8, o: u8| ((p as u16 * keep) / 255 + o as u16).min(255) as u8;
+        px.0 = [
+            mix(under[0], over.red()),
+            mix(under[1], over.green()),
+            mix(under[2], over.blue()),
+        ];
+    }
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 90)
+        .encode_image(&out)
+        .map_err(err)?;
+    Ok(jpeg)
+}
+
 /// The Kobo's page image (which has no ink on it), decoded.
 pub struct Page {
     image: image::RgbImage,
@@ -207,6 +255,33 @@ mod tests {
         assert_eq!(img.data.len() as u32, img.width * img.height * 3);
         assert!(img.data.iter().any(|&v| v < 64));
         assert!(img.data.contains(&255));
+    }
+
+    #[test]
+    fn composes_the_ink_onto_the_page() {
+        // A white 100x80 page, and ink: a black square at (60, 50)-(70, 60).
+        let mut page = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut page, 95)
+            .encode_image(&image::RgbImage::from_pixel(
+                100,
+                80,
+                image::Rgb([255, 255, 255]),
+            ))
+            .unwrap();
+        let svg = "<svg width=\"100\" height=\"80\" viewBox=\"0 0 100 80\">\
+            <path d=\"M60,50 L70,50 L70,60 L60,60\"/></svg>";
+        let decode = |bytes: &[u8]| image::load_from_memory(bytes).unwrap().to_luma8();
+
+        let whole = decode(&compose_page(svg, &page, None).unwrap());
+        assert_eq!(whole.dimensions(), (100, 80));
+        assert!(whole.get_pixel(65, 55).0[0] < 40, "ink where it was drawn");
+        assert!(whole.get_pixel(20, 20).0[0] > 215, "page elsewhere");
+
+        // Cut to a band: the ink moves with the page, not on its own.
+        let band = decode(&compose_page(svg, &page, Some([0, 40, 99, 79])).unwrap());
+        assert_eq!(band.dimensions(), (100, 40));
+        assert!(band.get_pixel(65, 15).0[0] < 40);
+        assert!(band.get_pixel(65, 35).0[0] > 215);
     }
 
     #[test]

@@ -3,11 +3,11 @@
 use super::*;
 
 impl Window {
-    fn flag(&self, key: &str) -> bool {
+    pub(super) fn flag(&self, key: &str) -> bool {
         self.lib.borrow().setting(key).ok().flatten().as_deref() == Some("1")
     }
 
-    fn set_flag(&self, key: &str, on: bool) {
+    pub(super) fn set_flag(&self, key: &str, on: bool) {
         if let Err(err) = self
             .lib
             .borrow()

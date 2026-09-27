@@ -10,7 +10,7 @@ use gtk::{gdk, gio, glib};
 use kollate_core::dict::{self, Dictionary};
 use kollate_core::export::{self, ExportOptions};
 use kollate_core::kobo::assets::{CopiedAssets, copy_assets};
-use kollate_core::kobo::epub::find_word_contexts;
+use kollate_core::kobo::epub::{find_word_contexts, markup_contexts};
 use kollate_core::kobo::{
     DeviceInfo, KoboDb, find_kobo_db, find_mounted_kobos, is_kobo_mount, is_tested_db_version,
 };
@@ -28,6 +28,7 @@ mod device;
 mod exports;
 mod preferences;
 mod sidebar;
+mod transcribe;
 
 /// What the content pane shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -163,6 +164,8 @@ pub struct Window {
     monitor: gio::VolumeMonitor,
     kobo: RefCell<Option<Connected>>,
     importing: Cell<bool>,
+    /// Handwriting is being read in the background.
+    transcribing: Cell<bool>,
     selection_bar: gtk::ActionBar,
     selection_label: gtk::Label,
     selection_done: gtk::Button,
@@ -430,6 +433,7 @@ impl Window {
             monitor: gio::VolumeMonitor::get(),
             kobo: RefCell::default(),
             importing: Cell::new(false),
+            transcribing: Cell::new(false),
             selection_bar,
             selection_label,
             selection_done: clear_selection,
@@ -467,8 +471,10 @@ impl Window {
         this
     }
 
-    pub fn present(&self) {
+    pub fn present(self: &Rc<Self>) {
         self.win.present();
+        // Handwriting still waiting for the chosen model.
+        self.transcribe_pending();
     }
 
     fn toast(&self, title: &str) {
