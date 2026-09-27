@@ -114,16 +114,21 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
     body.set_hexpand(true);
     match (a.kind.as_str(), a.text()) {
         (_, Some(text)) => body.append(&wrapped_label(text, &["quote"])),
-        ("markup", None) => match a.markup_page() {
+        ("markup", None) => match a.markup_view() {
             Some(path) => {
                 let picture = gtk::Picture::builder()
                     .file(&gtk::gio::File::for_path(&path))
                     .content_fit(gtk::ContentFit::Contain)
                     .can_shrink(true)
-                    .height_request(320)
                     .halign(gtk::Align::Start)
                     .css_classes(["markup-image"])
                     .build();
+                // Sized for a typical card width (~680px) from the crop's
+                // shape, so handwriting stays readable; a whole page is capped.
+                let height = a.markup_crop.map_or(320, |c| {
+                    (680 * (c.bottom - c.top + 1) / (c.right - c.left + 1)).clamp(160, 320)
+                });
+                picture.set_height_request(height);
                 picture.set_tooltip_text(Some("Handwritten markup (page image from your Kobo)"));
                 picture.update_property(&[gtk::accessible::Property::Label(
                     "Handwritten markup page image",

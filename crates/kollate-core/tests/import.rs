@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use kollate_core::kobo::qvariant::MarkupGeometry;
 use kollate_core::kobo::{DeviceInfo, KoboDb, KoboSnapshot, KoboWord};
 use kollate_core::store::Status;
 use kollate_core::{ImportStats, Library};
@@ -250,11 +251,13 @@ fn attaches_copied_assets_and_stores_settings() {
     let book = &snap.books[0];
     let assets = CopiedAssets {
         covers: vec![(book.volume_id.clone(), "/lib/covers/x.jpg".into())],
-        markups: vec![(
-            markup.bookmark_id.clone(),
-            None,
-            Some("/lib/markups/m.jpg".into()),
-        )],
+        markups: vec![kollate_core::kobo::assets::CopiedMarkup {
+            bookmark_id: markup.bookmark_id.clone(),
+            svg: None,
+            jpg: Some("/lib/markups/m.jpg".into()),
+            // From the fixture's real ExtraAnnotationData.
+            crop: MarkupGeometry::parse(markup.extra_data.as_deref().unwrap()).crop(),
+        }],
     };
     lib.attach_assets(&device("A"), &assets).unwrap();
 
@@ -265,6 +268,9 @@ fn attaches_copied_assets_and_stores_settings() {
     let a = lib.annotation(id).unwrap().unwrap();
     assert_eq!(a.markup_svg, None);
     assert_eq!(a.markup_jpg, Some("/lib/markups/m.jpg".into()));
+    let crop = a.markup_crop.expect("crop from the real markup");
+    assert_eq!((crop.left, crop.right), (0, 1263));
+    assert!(crop.top < crop.bottom && crop.bottom <= 1679, "{crop:?}");
     let covered = lib
         .books()
         .unwrap()

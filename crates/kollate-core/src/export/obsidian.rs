@@ -290,7 +290,7 @@ pub fn sync_obsidian(
     // Markup page images go to attachments/.
     let mut attachments = HashMap::new();
     for a in books.iter().flat_map(|eb| &eb.annotations) {
-        let Some(src) = a.markup_page() else {
+        let Some(src) = a.markup_view() else {
             continue;
         };
         let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("jpg");

@@ -5,6 +5,7 @@ pub mod chapters;
 pub mod device;
 pub mod epub;
 pub mod model;
+pub mod qvariant;
 pub mod reader;
 
 pub use device::{

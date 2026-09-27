@@ -15,6 +15,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 
 use crate::Result;
+use crate::kobo::qvariant::Rect;
 
 pub struct Library {
     pub(crate) conn: Connection,
@@ -85,17 +86,34 @@ pub struct Annotation {
     /// [`Annotation::markup_page`].
     pub markup_svg: Option<PathBuf>,
     pub markup_jpg: Option<PathBuf>,
+    /// The part of the page worth showing. See [`Annotation::markup_view`].
+    #[serde(skip)]
+    pub markup_crop: Option<Rect>,
 }
 
 impl Annotation {
-    /// The image to show for a stylus markup: the page with the ink on it
-    /// (see [`markup_page`](crate::kobo::assets::markup_page)).
+    /// A stylus markup's whole page with the ink on it (see
+    /// [`markup_page`](crate::kobo::assets::markup_page)).
     pub fn markup_page(&self) -> Option<PathBuf> {
-        crate::kobo::assets::markup_page(self.markup_svg.as_deref(), self.markup_jpg.as_deref())
-            .unwrap_or_else(|err| {
-                eprintln!("markup {}: {err}", self.id);
-                self.markup_jpg.clone()
-            })
+        self.markup_image(None)
+    }
+
+    /// Like [`markup_page`](Self::markup_page), cut to the ink and the text
+    /// it marks when that's known.
+    pub fn markup_view(&self) -> Option<PathBuf> {
+        self.markup_image(self.markup_crop)
+    }
+
+    fn markup_image(&self, crop: Option<Rect>) -> Option<PathBuf> {
+        crate::kobo::assets::markup_page(
+            self.markup_svg.as_deref(),
+            self.markup_jpg.as_deref(),
+            crop,
+        )
+        .unwrap_or_else(|err| {
+            eprintln!("markup {}: {err}", self.id);
+            self.markup_jpg.clone()
+        })
     }
 
     /// The text to display: the user's correction, else the device text.
@@ -174,8 +192,22 @@ pub(crate) const ANNOTATION_SELECT: &str = "SELECT a.id, a.book_id, a.kind, a.de
      coalesce(b.user_author, b.author),
      (SELECT group_concat(name, char(31)) FROM (SELECT t.name FROM annotation_tag x JOIN tag t ON t.id = x.tag_id
       WHERE x.annotation_id = a.id ORDER BY t.name COLLATE NOCASE)),
-     a.markup_svg_path, a.markup_jpg_path
+     a.markup_svg_path, a.markup_jpg_path, a.markup_crop
      FROM annotation a JOIN book b ON b.id = a.book_id";
+
+/// A crop stored as "left,top,right,bottom".
+fn parse_rect(s: &str) -> Option<Rect> {
+    let n: Vec<i32> = s.split(',').filter_map(|n| n.trim().parse().ok()).collect();
+    match n[..] {
+        [left, top, right, bottom] => Some(Rect {
+            left,
+            top,
+            right,
+            bottom,
+        }),
+        _ => None,
+    }
+}
 
 pub(crate) fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotation> {
     Ok(Annotation {
@@ -201,6 +233,10 @@ pub(crate) fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotat
             .unwrap_or_default(),
         markup_svg: r.get::<_, Option<String>>(17)?.map(PathBuf::from),
         markup_jpg: r.get::<_, Option<String>>(18)?.map(PathBuf::from),
+        markup_crop: r
+            .get::<_, Option<String>>(19)?
+            .as_deref()
+            .and_then(parse_rect),
     })
 }
 
@@ -377,11 +413,14 @@ impl Library {
                 params![device.serial, volume_id, cover.to_string_lossy()],
             )?;
         }
-        for (bookmark_id, svg, jpg) in &assets.markups {
+        for m in &assets.markups {
+            let crop = m
+                .crop
+                .map(|c| format!("{},{},{},{}", c.left, c.top, c.right, c.bottom));
             self.conn.execute(
-                "UPDATE annotation SET markup_svg_path = ?2, markup_jpg_path = ?3
+                "UPDATE annotation SET markup_svg_path = ?2, markup_jpg_path = ?3, markup_crop = ?4
                  WHERE id = (SELECT annotation_id FROM annotation_source WHERE bookmark_id = ?1)",
-                params![bookmark_id, path(svg), path(jpg)],
+                params![m.bookmark_id, path(&m.svg), path(&m.jpg), crop],
             )?;
         }
         Ok(())

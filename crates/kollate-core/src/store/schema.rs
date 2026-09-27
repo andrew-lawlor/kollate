@@ -180,4 +180,8 @@ pub const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE annotation ADD COLUMN status_before_removal TEXT;
     "#,
+    // 6: the part of a markup's page worth showing ("left,top,right,bottom")
+    r#"
+    ALTER TABLE annotation ADD COLUMN markup_crop TEXT;
+    "#,
 ];
