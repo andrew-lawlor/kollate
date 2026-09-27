@@ -209,6 +209,33 @@ Schema versioning via `PRAGMA user_version` with forward-only migrations.
 
 **Lemmas and merging:** a rule-based English lemmatizer proposes candidates (`theophanies` → `theophany`, `debouched` → `debouch`, `stopped` → `stop`). The dictionary's headwords and irregular forms decide which one is right. Words sharing a lemma are merged into the earliest one: sightings, tags and every lookup key (`vocab_form`) move over, and the most advanced learning status wins. Because the old forms stay recorded, a re-import doesn't split them apart again.
 
+## 8a. Handwriting transcription (designed, not built yet)
+
+Turns stylus markups into text: what the reader wrote, and which printed words they underlined or circled. **Local only.** A cloud model was considered and rejected: sending pages of the reader's books and their handwriting to a server contradicts the offline promise. Evaluated 2026-09-26 on four real markups from a Libra Colour (8 handwritten notes, 3 marks); the harness and results are summarised below.
+
+**Pipeline.** Only step 4 uses a model to read handwriting; everything else is geometry or the book itself.
+1. **Split the ink** (no model). Each `<path>` in the markup SVG is one pen stroke, in writing order. A stroke at least 150 px wide and at most 0.12 as tall is an **underline** (consecutive ones over adjacent lines are one mark). A large stroke (≥100×60 px) is a **circle**; if other strokes' centres fall inside it, it encloses handwriting and belongs to that note, otherwise it marks printed text. Remaining strokes are grouped into **notes** when their boxes come within 0.8× the median letter height of each other; specks under 12 px are dropped. On the samples this found 8/8 notes and 3/3 marks, including a circled word and a two-line underline.
+2. **Upright sideways notes** (no model). A group more than 1.8× taller than wide is sideways; the pen's direction (first stroke's position vs last) says which way to rotate. Choosing by dictionary words instead picked wrong readings ("Havens", "Suzanne H").
+3. **Marked text** (small model + the book). Printed lines are found on the Kobo's page JPG, which has no ink, from the row profile of dark pixels (bands 8–70 px tall; illustrations are taller). An underline stroke marks the line whose bottom is nearest above its centre; a circle marks the lines whose middles it encloses. Each marked span is cropped and read, then **snapped to the book**: the best-matching run of words in the chapter XHTML around the markup's `StartContainerPath`/`EndContainerPath`. The stored text is always the book's, which fixes clipped words ("e testimony…") and restores typography (’). 3/3 exact with Qwen3-VL 2B, under a second each.
+4. **Read each note** (model). Each note is rendered alone (black ink on white, enclosing circle removed), rotated if needed, and transcribed with the prompt "Transcribe the handwritten text in this image exactly. Output only the text." Output is constrained by a GBNF grammar to Latin script (U+0020–007E, U+00A0–024F, U+2010–2027, newline), which stopped small models from answering in Cyrillic.
+5. **Store as guesses.** Transcriptions and marked text are device-derived data with the usual rule: the user's edits always win and survive re-transcription. Cards show the ink with the text beside it, clearly marked as transcribed.
+
+**Models.** Qwen3-VL (Apache 2.0) at three sizes, one prompt and code path for all:
+
+| Choice | Files (model + vision) | Handwriting | Per note, GPU / CPU |
+|---|---|---|---|
+| Small: Qwen3-VL 2B (Q8_0) | 2.7 GB | 81% | 0.2 s / 1.5 s |
+| **Recommended: Qwen3-VL 4B (Q4_K_M)** | 3.3 GB | 85% | 0.3 s / 2.1 s |
+| Best: Qwen3-VL 8B (Q4_K_M) | 6.2 GB | 86% | 0.4 s / 3.4 s |
+
+Handwriting is the mean character similarity to the reader's own reading of the notes; clear writing is exact with all three, and the messiest notes ("woa", "Yeah, swiping setting helps.") defeat every model. CPU times are a Ryzen 5 5600X; GPU is an RX 6750 XT via Vulkan. Also tried and not chosen: Qwen3-VL 4B at Q8_0 (86%, +1.8 GB); Gemma 3 12B (strong, but misread one note as a crude phrase); LFM2.5-VL 1.6B (79%; its own licence); Ministral 3 3B; and the OCR specialists Nanonets-OCR2 3B, PaddleOCR-VL 0.9B, LightOnOCR-2 1B and DeepSeek-OCR 3B (64–82%; trained for printed documents). Asking a model to do everything from the whole page works only at 8B and up; small models loop or invent marks, which is why the pipeline splits the job.
+
+**Getting a model (no network permission).** Preferences lists the three choices, the 4B marked recommended, each with a **Get** link that opens its download page in the browser, plus **Add Model…** to import the downloaded files (model and vision projector together, or a folder holding both). Known files are recognised by sha256, which confirms they're intact and names the choice. Models are stored in `<library dir>/models/` and can be removed. Later, each could ship as an optional Flatpak extension on Flathub, installable from GNOME Software, so the app itself still never touches the network. Transcription is off until a model is added.
+
+**Running it.** In-process via `llama-cpp-2` (features `mtmd`, `vulkan`, `sampler`, `common`), verified in a spike built in the GNOME 51 SDK and run in the GNOME 51 runtime with only `--device=dri`: same output as `llama-server`, same speed. Build requirements: `org.freedesktop.Sdk.Extension.llvm22` (libclang for bindgen), a `SPIRV-Headers` module in the Flatpak manifest (not in the GNOME SDK), and on Ubuntu 24.04 CI `cmake`, `libclang-dev`, `glslc`, `spirv-headers` and `libvulkan-dev`. Cost: about 40 MB of binary (llama.cpp plus Vulkan shaders) and about 2 minutes of build time. Transcription runs in the background after import, one note at a time, on the GPU when Vulkan finds one and the CPU otherwise. mtmd's logging must be silenced.
+
+**Open questions.** The evaluation is 8 notes and 3 marks in one person's handwriting: collect more samples (other hands, notebooks, other languages) before tuning further. Stylus notebooks (`.kobo/iink`, `Exported Notebooks`) are out of scope for now.
+
 ---
 
 ## 9. UI (libadwaita)
@@ -284,6 +311,7 @@ Later: user-editable Markdown templates (minijinja), and a "since last export" o
 - App ID `io.github.andrew_lawlor.Kollate`. License GPL-3.0-or-later. Maintainer Andrew Lawlor <andrew@lawlor.io>.
 - The .deb is packaged before the Flatpak.
 - Releases are built by GitHub Actions, not on a developer machine: a `v*` tag builds the .deb (on Ubuntu 24.04, the oldest supported platform) and the Flatpak (GNOME 51 container), attests their provenance, and creates a draft release. CI runs fmt, clippy, tests and a `cargo-sources.json` check on every push and pull request. The app's GTK/libadwaita feature flags (`v4_12`, `v1_5`) and its CSS (named colours, not CSS variables) match that minimum.
+- Handwriting transcription will be local only (Qwen3-VL via llama.cpp, in-process); a cloud model was rejected as contrary to the offline promise. Models are user-added files, never downloaded by the app (§8a).
 - Unknown Kobo database versions are imported with a warning rather than refused (§4); compatibility reports come through a GitHub issue form.
 
 ## 13. Verified on the device (2026-09-25, Libra Colour, firmware 4.45.23697)
