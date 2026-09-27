@@ -131,7 +131,7 @@ kollate/                     (cargo workspace)
 - After an import, a toast reads "Kobo Libra Colour: 7 new highlights, 2 new words · Review". Clicking it opens the **Inbox**.
 - Every import writes an `import_runs` row (device, time, counts: new, updated, unchanged, removed-on-device) for traceability.
 - Eject uses `gio::Mount::eject_with_operation` (or unmount when the mount can't eject). It's disabled while an import is running.
-- Book pages open with a header showing the cover, % read and last-read date. Markup cards show the page image, and "Open Page Image" opens it in the default viewer.
+- Book pages open with a header showing the cover, % read and last-read date. Markup cards show the page with the ink drawn on it, and "Open Page Image" opens that in the default viewer.
 
 ---
 
@@ -288,7 +288,8 @@ Later: user-editable Markdown templates (minijinja), and a "since last export" o
 
 ## 13. Verified on the device (2026-09-25, Libra Colour, firmware 4.45.23697)
 - `.kobo/version` = `N000000000000,4.9.77,4.45.23697,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390`, i.e. serial, ?, firmware, ?, ?, model ID (`…0390` = Libra Colour). The parser matches.
-- Markups: `.kobo/markups/<BookmarkID>.svg` holds **only the ink strokes** (Qt SVG, page-sized viewBox 1264×1680). `.jpg` is the rendered page with the ink on it. Import both; the UI shows the JPG.
+- Markups: `.kobo/markups/<BookmarkID>.svg` holds **only the ink strokes** (Qt SVG, page-sized viewBox 1264×1680). `.jpg` is the rendered page **without** the ink (corrected 2026-09-26 with real stylus notes; the earlier sample's SVG held a single stray dot, so this went unnoticed). Import both. `assets::markup_page` writes `<id>.page.svg` in the library, the ink SVG with the page JPG embedded underneath, and the card, "Open Page Image" and the Obsidian export all use it.
+- One markup holds all the ink from one visit to a page, so it can contain several separate notes. `Text`/`Annotation` stay empty: the Kobo doesn't transcribe handwriting in books. `ExtraAnnotationData` decodes fully (19 keys); the useful ones are `MarkupRect` (ink bounding box) and `RangeRect` (the text the markup is anchored to, in page pixels), plus `StartContainerPath`/`EndContainerPath` on the row.
 - Dictionaries: `.kobo/dict/dicthtml.zip` (English, **no `-en` suffix**) plus `dicthtml-en-zh-CN.zip` / `-zh-TW`. Inside: `words` / `prefix_exceptions` are marisa tries, and the `*.html` shards are **encrypted** (not gzip). **Decision: we don't use Kobo's dictionaries** (see §8).
 - `Exported Annotations/` and `Exported Notebooks/` exist (Kobo's own export feature) and are empty. Ignore them.
 - `driveinfo.calibre` is present, so the user manages books with calibre. Calibre may rename or re-send books, which the book fingerprint (§6) handles.

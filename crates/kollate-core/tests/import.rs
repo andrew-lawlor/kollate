@@ -262,10 +262,9 @@ fn attaches_copied_assets_and_stores_settings() {
         .annotation_id_for_bookmark(&markup.bookmark_id)
         .unwrap()
         .unwrap();
-    assert_eq!(
-        lib.annotation(id).unwrap().unwrap().markup_image,
-        Some("/lib/markups/m.jpg".into())
-    );
+    let a = lib.annotation(id).unwrap().unwrap();
+    assert_eq!(a.markup_svg, None);
+    assert_eq!(a.markup_jpg, Some("/lib/markups/m.jpg".into()));
     let covered = lib
         .books()
         .unwrap()

@@ -81,11 +81,23 @@ pub struct Annotation {
     pub book_title: String,
     pub book_author: Option<String>,
     pub tags: Vec<String>,
-    /// Copied page image of a stylus markup.
-    pub markup_image: Option<PathBuf>,
+    /// A stylus markup's copied ink (SVG) and page (JPG). See
+    /// [`Annotation::markup_page`].
+    pub markup_svg: Option<PathBuf>,
+    pub markup_jpg: Option<PathBuf>,
 }
 
 impl Annotation {
+    /// The image to show for a stylus markup: the page with the ink on it
+    /// (see [`markup_page`](crate::kobo::assets::markup_page)).
+    pub fn markup_page(&self) -> Option<PathBuf> {
+        crate::kobo::assets::markup_page(self.markup_svg.as_deref(), self.markup_jpg.as_deref())
+            .unwrap_or_else(|err| {
+                eprintln!("markup {}: {err}", self.id);
+                self.markup_jpg.clone()
+            })
+    }
+
     /// The text to display: the user's correction, else the device text.
     pub fn text(&self) -> Option<&str> {
         self.user_text.as_deref().or(self.device_text.as_deref())
@@ -162,7 +174,7 @@ pub(crate) const ANNOTATION_SELECT: &str = "SELECT a.id, a.book_id, a.kind, a.de
      coalesce(b.user_author, b.author),
      (SELECT group_concat(name, char(31)) FROM (SELECT t.name FROM annotation_tag x JOIN tag t ON t.id = x.tag_id
       WHERE x.annotation_id = a.id ORDER BY t.name COLLATE NOCASE)),
-     a.markup_jpg_path
+     a.markup_svg_path, a.markup_jpg_path
      FROM annotation a JOIN book b ON b.id = a.book_id";
 
 pub(crate) fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotation> {
@@ -187,7 +199,8 @@ pub(crate) fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotat
             .get::<_, Option<String>>(16)?
             .map(|s| s.split('\u{1f}').map(str::to_owned).collect())
             .unwrap_or_default(),
-        markup_image: r.get::<_, Option<String>>(17)?.map(PathBuf::from),
+        markup_svg: r.get::<_, Option<String>>(17)?.map(PathBuf::from),
+        markup_jpg: r.get::<_, Option<String>>(18)?.map(PathBuf::from),
     })
 }
 

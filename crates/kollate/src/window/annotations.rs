@@ -90,7 +90,7 @@ impl Window {
                 .annotation(id)
                 .ok()
                 .flatten()
-                .and_then(|a| a.markup_image)
+                .and_then(|a| a.markup_page())
             else {
                 return;
             };

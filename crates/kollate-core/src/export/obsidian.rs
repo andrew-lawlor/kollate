@@ -290,17 +290,22 @@ pub fn sync_obsidian(
     // Markup page images go to attachments/.
     let mut attachments = HashMap::new();
     for a in books.iter().flat_map(|eb| &eb.annotations) {
-        let Some(src) = a.markup_image.as_ref().filter(|p| p.is_file()) else {
+        let Some(src) = a.markup_page() else {
             continue;
         };
-        let file = format!("kollate-markup-{}.jpg", a.id);
+        let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("jpg");
+        let file = format!("kollate-markup-{}.{ext}", a.id);
         let dest = folder.join("attachments").join(&file);
         let same = std::fs::metadata(&dest).ok().map(|m| m.len())
-            == std::fs::metadata(src).ok().map(|m| m.len());
+            == std::fs::metadata(&src).ok().map(|m| m.len());
         if !same {
             std::fs::create_dir_all(dest.parent().expect("has parent"))?;
-            std::fs::copy(src, &dest)?;
+            std::fs::copy(&src, &dest)?;
             stats.attachments_copied += 1;
+        }
+        // Before 0.1.6 the page was exported without its ink, as a .jpg.
+        if ext != "jpg" {
+            let _ = std::fs::remove_file(dest.with_extension("jpg"));
         }
         attachments.insert(a.id, file);
     }

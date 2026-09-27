@@ -13,7 +13,7 @@
 Plug in your Kobo and Kollate imports everything you've marked while reading:
 
 - **Highlights and notes**, in all four Kobo colours, sorted into chapters in reading order.
-- **Handwritten markups** from stylus models (tested on the Libra Colour), shown as the page image the Kobo saved.
+- **Handwritten markups** from stylus models (tested on the Libra Colour), shown as the page with your ink on it.
 - **Vocabulary Builder words.** Kollate goes further than the Kobo here: it finds the sentence you looked each word up in, inside the book itself, and adds an offline dictionary definition.
 
 Then you curate:

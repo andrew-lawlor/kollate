@@ -38,7 +38,7 @@ fn menu(a: &Annotation) -> gio::Menu {
     main.append(Some("_Edit…"), Some("card.edit"));
     main.append(Some("_Copy Text"), Some("card.copy"));
     main.append(Some("Copy as _Markdown"), Some("card.copy-markdown"));
-    if a.markup_image.is_some() {
+    if a.markup_svg.is_some() || a.markup_jpg.is_some() {
         main.append(Some("_Open Page Image"), Some("card.open-image"));
     }
     menu.append_section(None, &main);
@@ -114,10 +114,10 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
     body.set_hexpand(true);
     match (a.kind.as_str(), a.text()) {
         (_, Some(text)) => body.append(&wrapped_label(text, &["quote"])),
-        ("markup", None) => match a.markup_image.as_ref().filter(|p| p.is_file()) {
+        ("markup", None) => match a.markup_page() {
             Some(path) => {
                 let picture = gtk::Picture::builder()
-                    .file(&gtk::gio::File::for_path(path))
+                    .file(&gtk::gio::File::for_path(&path))
                     .content_fit(gtk::ContentFit::Contain)
                     .can_shrink(true)
                     .height_request(320)
