@@ -32,6 +32,16 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.1.7" date="2026-09-27">
+      <description>
+        <p>Kollate can now read your stylus handwriting. Download one of three local models (recommended: Qwen3-VL 4B, 3.3 GB) with the links in Preferences and add it; after each import, Kollate reads your margin notes and takes the exact words you underlined or circled from the book. It all happens on your computer, never online, and every reading is a suggestion you can correct.</p>
+        <ul>
+          <li>Fixed: in the Flatpak, a markup's page could appear shifted under the ink</li>
+          <li>Handwritten notes appear in the Notes view and in search</li>
+          <li>Obsidian notes show a markup's ink along with its text</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.6" date="2026-09-26">
       <description>
         <p>Handwritten markups now show your ink. The Kobo saves the page and the ink as separate files, and Kollate was only showing the page. Markups are now shown zoomed in on the handwriting and the text it marks, so notes are readable at a glance; Open Page Image still shows the whole page.</p>

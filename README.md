@@ -14,6 +14,7 @@ Plug in your Kobo and Kollate imports everything you've marked while reading:
 
 - **Highlights and notes**, in all four Kobo colours, sorted into chapters in reading order.
 - **Handwritten markups** from stylus models (tested on the Libra Colour), shown as the page with your ink on it.
+- **Your handwriting as text** (optional). Kollate can read your stylus notes, and take the exact words you underlined or circled from the book, using a local model you download once. It runs on this computer, never online. Everything it reads is a suggestion you can correct.
 - **Vocabulary Builder words.** Kollate goes further than the Kobo here: it finds the sentence you looked each word up in, inside the book itself, and adds an offline dictionary definition.
 
 Then you curate:
@@ -52,7 +53,7 @@ And export:
 - **No duplicates, ever.** Highlights are matched by the Kobo's own IDs, and by content if the IDs change (a factory reset, a second device, or calibre re-sending a book). Re-importing the same Kobo changes nothing.
 - **Your library is the source of truth.** Highlights you delete on the Kobo stay in Kollate, flagged "deleted on Kobo" and gathered in a *Deleted on Kobo* view. If you prefer, they can go to Kollate's Trash instead (Preferences), and they come back if they reappear on the Kobo.
 - **Your edits always win.** Corrected text, notes, tags, stars and triage survive every re-import. If something you edited in Kollate later changes on the Kobo, your version stays and the Kobo's is kept alongside it, flagged for you to review.
-- **Fully offline.** Definitions come from a bundled copy of the English [Wiktionary](https://www.wiktionary.org/) (over 800,000 words, compiled by [reader.dict](https://www.reader-dict.com/)). For other languages, download a reader.dict dictionary in DictFile format and add it in Preferences. StarDict and [kaikki.org](https://kaikki.org) extracts work too.
+- **Fully offline.** Handwriting is read by a model on your computer, and Kollate never downloads it for you: you download it in your browser and add the file. Definitions come from a bundled copy of the English [Wiktionary](https://www.wiktionary.org/) (over 800,000 words, compiled by [reader.dict](https://www.reader-dict.com/)). For other languages, download a reader.dict dictionary in DictFile format and add it in Preferences. StarDict and [kaikki.org](https://kaikki.org) extracts work too.
 
 ## Install
 
@@ -96,7 +97,8 @@ These are the same scripts the release workflow runs. `build-flatpak.sh` needs `
 
 ```sh
 # Debian/Ubuntu build dependencies (plus Rust from https://rustup.rs)
-sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev
+sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev \
+    cmake libclang-dev glslc spirv-headers libvulkan-dev   # for llama.cpp (handwriting)
 
 ./scripts/fetch-dictionary.sh   # one-time: download (44 MB) and build the dictionary (~180 MB)
 cargo run --release -p kollate
@@ -109,6 +111,12 @@ cargo run --release -p kollate
 3. Work through the **Inbox**, browse by book or tag, and visit **Vocabulary**.
 4. Open **Export** (`Ctrl+E`), pick a folder in your Obsidian vault and/or export an Anki deck.
 5. Press **Eject** in the banner when you're done.
+
+### Reading your handwriting
+
+In *Preferences → Handwriting*, pick a model: **Qwen3-VL 4B** (3.3 GB, recommended), 2B (2.7 GB, fastest) or 8B (6.2 GB, most accurate). Download its two files with the links there, then add them with **+**. Kollate checks them and, after each import, reads your markups in the background: about half a second a note with a graphics card, or 2–4 seconds without. Marked text always comes from the book itself. It needs an x86-64 processor from about 2013 or later (with AVX2).
+
+From a terminal: `kollate-cli models` lists them with download links, `kollate-cli models add FILES…` adds them, and `kollate-cli transcribe` reads what's waiting.
 
 Your library lives in `~/.local/share/kollate/` (`~/.var/app/io.github.andrew_lawlor.Kollate/data/kollate/` for the Flatpak).
 
