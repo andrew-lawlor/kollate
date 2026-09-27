@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::catalog::{KnownModel, Role, catalog, identify};
+use crate::catalog::{KnownFile, KnownModel, Role, by_name, catalog, identify};
 use crate::{Result, Transcriber, err};
 
 /// A model with both of its files in place.
@@ -60,6 +60,9 @@ pub struct Added {
     pub waiting: Vec<(&'static KnownModel, Role)>,
     /// Files that aren't one of the offered models (or are damaged).
     pub unknown: Vec<PathBuf>,
+    /// Files named like a model file but smaller: still downloading (browsers
+    /// create the file before it's complete), or cut short. With its size.
+    pub incomplete: Vec<(PathBuf, &'static KnownFile, u64)>,
 }
 
 /// Copies model files into `models_dir` after checking them. Folders are
@@ -86,7 +89,12 @@ pub fn add(models_dir: &Path, paths: &[PathBuf]) -> Result<Added> {
     let mut touched = Vec::new();
     for path in files {
         let Some((model, file)) = identify(&path)? else {
-            added.unknown.push(path);
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let size = std::fs::metadata(&path).map_or(0, |m| m.len());
+            match by_name(name) {
+                Some((_, file)) if size < file.size => added.incomplete.push((path, file, size)),
+                _ => added.unknown.push(path),
+            }
             continue;
         };
         let dir = models_dir.join(model.id);
@@ -148,6 +156,19 @@ mod tests {
         let added = add(&models, std::slice::from_ref(&src)).unwrap();
         assert!(added.complete.is_empty() && added.waiting.is_empty());
         assert_eq!(added.unknown, vec![src.join("random.gguf")]);
+        assert!(added.incomplete.is_empty());
+
+        // A download still in progress: the right name, too small.
+        let partial = src.join("Qwen3VL-4B-Instruct-Q4_K_M.gguf");
+        std::fs::write(&partial, vec![0u8; 1000]).unwrap();
+        let added = add(&models, std::slice::from_ref(&partial)).unwrap();
+        assert!(added.unknown.is_empty());
+        assert_eq!(added.incomplete.len(), 1);
+        assert_eq!(
+            added.incomplete[0].1.name,
+            "Qwen3VL-4B-Instruct-Q4_K_M.gguf"
+        );
+        assert_eq!(added.incomplete[0].2, 1000);
         assert!(installed(&models).is_empty());
         assert!(choose(&installed(&models), Some("qwen3-vl-4b")).is_none());
         std::fs::remove_dir_all(dir).unwrap();

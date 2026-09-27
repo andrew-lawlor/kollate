@@ -18,7 +18,7 @@ use llama_cpp_2::mtmd::{
 };
 use llama_cpp_2::sampling::LlamaSampler;
 
-pub use catalog::{KnownFile, KnownModel, Role, catalog, identify};
+pub use catalog::{KnownFile, KnownModel, Role, by_name, catalog, identify};
 pub use models::{Added, Installed, add, choose, installed, remove};
 
 mod catalog;

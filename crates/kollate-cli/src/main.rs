@@ -339,6 +339,14 @@ fn models(library_path: &Path, action: Option<ModelsAction>) -> Result<()> {
             for (m, role) in added.waiting {
                 println!("{} still needs {}", m.name, m.file(role).name);
             }
+            for (f, file, size) in added.incomplete {
+                println!(
+                    "Not finished downloading ({:.1} of {:.1} GB): {}",
+                    size as f64 / 1e9,
+                    file.size as f64 / 1e9,
+                    f.display()
+                );
+            }
             for f in added.unknown {
                 println!("Not a known model file (or damaged): {}", f.display());
             }

@@ -118,6 +118,14 @@ pub fn catalog() -> &'static [KnownModel] {
     &MODELS
 }
 
+/// The known file with this name, whatever its content.
+pub fn by_name(name: &str) -> Option<(&'static KnownModel, &'static KnownFile)> {
+    MODELS
+        .iter()
+        .flat_map(|m| m.files.iter().map(move |f| (m, f)))
+        .find(|(_, f)| f.name == name)
+}
+
 /// Which known model and file `path` is, by size and then checksum.
 /// `None` for anything else, including a damaged or partial download.
 pub fn identify(path: &Path) -> std::io::Result<Option<(&'static KnownModel, &'static KnownFile)>> {

@@ -298,28 +298,49 @@ impl Window {
             }
             match added {
                 Ok(Ok(added)) => {
-                    let mut messages: Vec<String> = added
+                    let name = |p: &PathBuf| {
+                        p.file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default()
+                    };
+                    let mut news: Vec<String> = added
                         .complete
                         .iter()
                         .map(|m| format!("Added {}", m.name))
                         .collect();
-                    messages.extend(
+                    news.extend(
                         added.waiting.iter().map(|(m, role)| {
                             format!("{} also needs {}", m.name, m.file(*role).name)
                         }),
                     );
-                    messages.extend(added.unknown.iter().map(|p| {
-                        format!(
-                            "{} isn’t one of the offered models, or is incomplete",
-                            p.file_name()
-                                .map(|n| n.to_string_lossy())
-                                .unwrap_or_default()
-                        )
-                    }));
+                    let mut problems: Vec<String> = added
+                        .incomplete
+                        .iter()
+                        .map(|(p, file, size)| {
+                            format!(
+                                "{} hasn’t finished downloading ({:.1} of {:.1} GB). Add it again when it has.",
+                                name(p),
+                                *size as f64 / 1e9,
+                                file.size as f64 / 1e9
+                            )
+                        })
+                        .collect();
+                    problems.extend(
+                        added
+                            .unknown
+                            .iter()
+                            .map(|p| format!("{} isn’t one of the offered model files.", name(p))),
+                    );
                     prefs.close();
                     this.show_preferences();
-                    if let Some(message) = messages.first() {
-                        this.toast(message);
+                    if problems.is_empty() {
+                        if !news.is_empty() {
+                            this.toast(&news.join(" · "));
+                        }
+                    } else {
+                        // Every file's outcome, not just the first.
+                        news.extend(problems);
+                        this.error("Some Files Weren’t Added", news.join("\n\n"));
                     }
                     this.transcribe_pending();
                 }
