@@ -8,7 +8,7 @@ use rusqlite::params;
 use super::Library;
 use crate::Result;
 use crate::kobo::DeviceInfo;
-use crate::markup::{Reader, Transcription, transcribe};
+use crate::markup::{Context, Reader, Transcription, transcribe};
 
 /// A markup to transcribe: its copied ink and page, and the book's words
 /// around it when they were saved at import.
@@ -24,11 +24,21 @@ pub struct MarkupJob {
 
 impl MarkupJob {
     /// Reads the markup with `reader`. Runs anywhere (no database access), so
-    /// a slow model can work on a background thread.
-    pub fn run(&self, reader: &mut dyn Reader) -> Result<Transcription> {
+    /// a slow model can work on a background thread. `known_word` enables
+    /// correcting misread names (see [`Context::known_word`]).
+    pub fn run(
+        &self,
+        reader: &mut dyn Reader,
+        known_word: Option<&dyn Fn(&str) -> bool>,
+    ) -> Result<Transcription> {
         let svg = std::fs::read_to_string(&self.svg)?;
         let page = self.jpg.as_ref().and_then(|p| std::fs::read(p).ok());
-        transcribe(&svg, page.as_deref(), self.words.as_deref(), reader)
+        let context = Context {
+            page_jpeg: page.as_deref(),
+            book_words: self.words.as_deref(),
+            known_word,
+        };
+        transcribe(&svg, context, reader)
     }
 }
 

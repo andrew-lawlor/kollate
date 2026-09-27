@@ -64,7 +64,7 @@ fn transcribes_markups_and_keeps_the_users_edits() {
     let jobs = lib.pending_transcriptions("model-a").unwrap();
     assert_eq!(jobs.len(), 1);
     let t = jobs[0]
-        .run(&mut Scripted(vec!["Woah, this\nworks!", "Ravens"]))
+        .run(&mut Scripted(vec!["Woah, this\nworks!", "Ravens"]), None)
         .unwrap();
     assert_eq!(t.note.as_deref(), Some("Woah, this works!\nRavens"));
     lib.save_transcription(&jobs[0], &t, "model-a").unwrap();
@@ -91,7 +91,9 @@ fn transcribes_markups_and_keeps_the_users_edits() {
     lib.set_user_note(id, Some("Ravens, not havens")).unwrap();
     let jobs = lib.pending_transcriptions("model-b").unwrap();
     assert_eq!(jobs.len(), 1, "a different model reads it again");
-    let t = jobs[0].run(&mut Scripted(vec!["Whoa", "Havens"])).unwrap();
+    let t = jobs[0]
+        .run(&mut Scripted(vec!["Whoa", "Havens"]), None)
+        .unwrap();
     lib.save_transcription(&jobs[0], &t, "model-b").unwrap();
     let a = lib.annotation(id).unwrap().unwrap();
     assert_eq!(a.note(), Some("Ravens, not havens"));

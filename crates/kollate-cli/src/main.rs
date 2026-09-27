@@ -369,6 +369,12 @@ fn transcribe(library_path: &Path, model: Option<&str>, cpu: bool) -> Result<()>
         println!("Every markup is transcribed with {}.", chosen.model.name);
         return Ok(());
     }
+    // Dictionaries tell misread names apart from real words (SPEC §8a).
+    let dicts = kollate_core::dict::open_all(&kollate_core::dict::search_dirs(
+        lib.assets_dir().as_deref(),
+    ));
+    let known = |w: &str| dicts.iter().any(|d| d.lookup(w).ok().flatten().is_some());
+    let known: Option<&dyn Fn(&str) -> bool> = (!dicts.is_empty()).then_some(&known);
     let started = std::time::Instant::now();
     let mut reader = chosen.load(!cpu)?;
     println!(
@@ -378,7 +384,7 @@ fn transcribe(library_path: &Path, model: Option<&str>, cpu: bool) -> Result<()>
     );
     for job in &jobs {
         let t0 = std::time::Instant::now();
-        let t = job.run(&mut reader)?;
+        let t = job.run(&mut reader, known)?;
         lib.save_transcription(job, &t, chosen.model.id)?;
         println!(
             "#{} ({:.1}s)",

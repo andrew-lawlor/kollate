@@ -30,13 +30,23 @@ pub struct Transcription {
     pub note: Option<String>,
 }
 
-/// Transcribes one markup. `page_jpeg` is the Kobo's page image (needed for
-/// marks), and `book_words` the book's text around the markup's anchor (the
-/// marked text is snapped to it; without it the model's reading is kept).
+/// What helps read a markup besides its ink.
+#[derive(Default, Clone, Copy)]
+pub struct Context<'a> {
+    /// The Kobo's page image, needed to find what marks cover.
+    pub page_jpeg: Option<&'a [u8]>,
+    /// The book's words around the markup: marked text is snapped to them,
+    /// and misread names in notes corrected against them.
+    pub book_words: Option<&'a [String]>,
+    /// Whether a (lowercase) word is in a dictionary. Name correction only
+    /// touches words it doesn't know; without it, notes are left as read.
+    pub known_word: Option<&'a dyn Fn(&str) -> bool>,
+}
+
+/// Transcribes one markup.
 pub fn transcribe(
     svg: &str,
-    page_jpeg: Option<&[u8]>,
-    book_words: Option<&[String]>,
+    context: Context<'_>,
     reader: &mut dyn Reader,
 ) -> Result<Transcription> {
     let strokes = segment::strokes(svg);
@@ -51,13 +61,17 @@ pub fn transcribe(
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ");
+        let text = match (context.book_words, context.known_word) {
+            (Some(words), Some(known)) => snap::correct_names(&text, words, known),
+            _ => text,
+        };
         if !text.is_empty() {
             notes.push(text);
         }
     }
 
     let mut marked = Vec::new();
-    if let (Some(jpeg), false) = (page_jpeg, segments.marks.is_empty()) {
+    if let (Some(jpeg), false) = (context.page_jpeg, segments.marks.is_empty()) {
         let page = Page::from_jpeg(jpeg)?;
         for mark in &segments.marks {
             let mut reading = Vec::new();
@@ -71,7 +85,8 @@ pub fn transcribe(
                 );
             }
             let reading = reading.join(" ");
-            let text = book_words
+            let text = context
+                .book_words
                 .and_then(|words| snap(&reading, words))
                 .unwrap_or_else(|| snap::tidy(&reading));
             if !text.is_empty() {
@@ -120,7 +135,7 @@ mod tests {
             print: vec![],
             seen: vec![],
         };
-        let t = transcribe(svg, None, None, &mut reader).unwrap();
+        let t = transcribe(svg, Context::default(), &mut reader).unwrap();
         // Two notes; the second read as nothing and is dropped.
         assert_eq!(reader.seen, vec![(96, 72), (96, 72)]);
         assert_eq!(

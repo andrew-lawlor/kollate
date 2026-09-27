@@ -54,6 +54,53 @@ pub fn snap(reading: &str, words: &[String]) -> Option<String> {
     (score >= 0.7).then(|| tidy(&window.join(" ")))
 }
 
+/// Corrects misread names in handwriting against the names printed nearby:
+/// "Who is Pokmarchus?" beside a page that mentions Polemarchus becomes "Who
+/// is Polemarchus?". Only words `known` doesn't recognise (not in any
+/// dictionary) are corrected, only to names, both of five letters or more and
+/// close: "Athena" stays "Athena" even beside "Athens". A name is a word the
+/// book capitalises mid-sentence, or anywhere if it's not a dictionary word
+/// (so "Polemarchus" opening a paragraph counts, and "Moderns" doesn't).
+pub fn correct_names(note: &str, words: &[String], known: &dyn Fn(&str) -> bool) -> String {
+    let mut names: Vec<&str> = Vec::new();
+    for pair in words.windows(2) {
+        let (before, word) = (
+            &pair[0],
+            pair[1].trim_matches(|c: char| !c.is_alphanumeric()),
+        );
+        let mid_sentence = !before.ends_with(['.', '!', '?', ':', '“', '"']);
+        if (mid_sentence || !known(&word.to_lowercase()))
+            && word.chars().count() >= 5
+            && word.chars().next().is_some_and(char::is_uppercase)
+            && word.chars().all(char::is_alphabetic)
+            && !names.contains(&word)
+        {
+            names.push(word);
+        }
+    }
+    note.split(' ')
+        .map(|token| {
+            let start = token.find(char::is_alphanumeric).unwrap_or(token.len());
+            let end = token.rfind(char::is_alphanumeric).map_or(start, |i| i + 1);
+            let word = &token[start..end];
+            if word.chars().count() < 5 || names.contains(&word) || known(&word.to_lowercase()) {
+                return token.to_owned();
+            }
+            let best = names
+                .iter()
+                .map(|n| (similarity(&word.to_lowercase(), &n.to_lowercase()), n))
+                .max_by(|a, b| a.0.total_cmp(&b.0));
+            match best {
+                Some((score, name)) if score >= 0.75 => {
+                    format!("{}{name}{}", &token[..start], &token[end..])
+                }
+                _ => token.to_owned(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Drops the comma or dash a mark stops short of.
 pub fn tidy(text: &str) -> String {
     text.trim()
@@ -90,6 +137,23 @@ mod tests {
         );
         assert_eq!(snap("something else entirely", &book), None);
         assert_eq!(snap("", &book), None);
+    }
+
+    #[test]
+    fn corrects_misread_names_only() {
+        let book = words(
+            "procession. Polemarchus said: It looks to me, Socrates, as if you two are starting \
+             off for Athens. Moderns would say otherwise. Glaucon agreed.",
+        );
+        let dictionary = |w: &str| ["athena", "moderns", "socrates", "again"].contains(&w);
+        let fix = |note| correct_names(note, &book, &dictionary);
+        assert_eq!(fix("who is Pokmarchus?"), "who is Polemarchus?");
+        assert_eq!(fix("Socrates, again"), "Socrates, again");
+        // A real word stays, even beside a similar name.
+        assert_eq!(fix("Athena, not Athenz"), "Athena, not Athens");
+        // "Moderns" starts a sentence in the book, so it isn't a name.
+        assert_eq!(fix("Jarring for Modernz"), "Jarring for Modernz");
+        assert_eq!(correct_names("Pokmarchus", &[], &dictionary), "Pokmarchus");
     }
 
     #[test]
