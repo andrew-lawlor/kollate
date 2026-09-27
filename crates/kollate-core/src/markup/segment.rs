@@ -169,7 +169,9 @@ pub fn segment(strokes: &[Stroke]) -> Segments {
         }
     }
 
-    // Join strokes that come within about a letter's height of each other.
+    // Join strokes that come within about a letter's height of each other
+    // vertically (lines of one note), or twice that sideways (the space
+    // between words, which some hands and fonts make wide).
     let mut heights: Vec<f32> = writing
         .iter()
         .filter(|(_, circle)| !circle)
@@ -177,7 +179,7 @@ pub fn segment(strokes: &[Stroke]) -> Segments {
         .collect();
     heights.sort_by(f32::total_cmp);
     let letter = heights.get(heights.len() / 2).copied().unwrap_or(40.0);
-    let reach = 0.8 * letter;
+    let (reach_x, reach_y) = (1.6 * letter, 0.8 * letter);
     let mut group: Vec<usize> = (0..writing.len()).collect();
     fn root(group: &mut [usize], mut i: usize) -> usize {
         while group[i] != i {
@@ -190,7 +192,7 @@ pub fn segment(strokes: &[Stroke]) -> Segments {
         for b in a + 1..writing.len() {
             let (sa, sb) = (&strokes[writing[a].0].bounds, &strokes[writing[b].0].bounds);
             let (gx, gy) = sa.gap(sb);
-            let near = gx < reach && gy < reach;
+            let near = gx < reach_x && gy < reach_y;
             let circled = (writing[a].1 && sa.contains(sb.centre()))
                 || (writing[b].1 && sb.contains(sa.centre()));
             if near || circled {
@@ -318,6 +320,21 @@ mod tests {
         // The circle around the writing isn't part of the note's ink.
         assert_eq!(s.notes[1].strokes, vec![9, 10, 11]);
         assert!(s.notes.iter().all(|n| n.rotation == Rotation::None));
+    }
+
+    #[test]
+    fn keeps_widely_spaced_words_in_one_note() {
+        // Two words 45 apart (more than a letter's height, as some hands
+        // write), and a second line under them: one note. A word far off is
+        // another note.
+        let mut paths = word(100.0, 100.0, 4);
+        paths.extend(word(100.0 + 4.0 * 34.0 + 45.0, 100.0, 3));
+        paths.extend(word(110.0, 170.0, 5));
+        paths.extend(word(700.0, 100.0, 3));
+        let s = segment(&strokes(&svg(paths)));
+        assert_eq!(s.notes.len(), 2);
+        assert_eq!(s.notes[0].strokes.len(), 12);
+        assert_eq!(s.notes[1].strokes.len(), 3);
     }
 
     #[test]
