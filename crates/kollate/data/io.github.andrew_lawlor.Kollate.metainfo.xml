@@ -32,6 +32,11 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.1.8" date="2026-09-27">
+      <description>
+        <p>Handwritten notes with wide gaps between words are now read as one note, in the right order. They could be split into pieces and read out of order before.</p>
+      </description>
+    </release>
     <release version="0.1.7" date="2026-09-27">
       <description>
         <p>Kollate can now read your stylus handwriting. Download one of three local models (recommended: Qwen3-VL 4B, 3.3 GB) with the links in Preferences and add it; after each import, Kollate reads your margin notes and takes the exact words you underlined or circled from the book. It all happens on your computer, never online, and every reading is a suggestion you can correct.</p>
