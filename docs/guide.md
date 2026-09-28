@@ -46,7 +46,7 @@ This also installs `kollate-cli`, the [command-line tool](#11-the-command-line).
 
 Start Kollate and connect your Kobo with its USB cable. When the Kobo asks, choose **Connect**. Kollate notices it and a banner appears:
 
-![Kollate with a banner saying "Your Kobo Libra Colour is connected" and an Eject button](guide/connected.png)
+![Kollate with a banner saying "Your Kobo Libra Colour is connected" and, with Ask first chosen, an Import button](guide/connected.png)
 
 By default Kollate imports straight away. You can change this under **Preferences → When a Kobo Is Connected**:
 
@@ -135,7 +135,7 @@ The **Books** page shows every book with highlights or looked-up words, sorted b
 
 The search field at the top of every page (**Ctrl+F**) filters what's shown as you type. In highlight views it searches the text, notes (including handwriting Kollate has read), chapters, book titles, authors and tags; on the Books page, titles and authors; in Vocabulary, words, definitions and sentences. **Escape** clears it.
 
-![Searching All Highlights for "cave" finds a markup whose handwritten note was read as text](guide/search.png)
+![Searching All Highlights for "fate" finds a markup whose handwritten note was read as text](guide/search.png)
 
 ### Copying
 
@@ -210,7 +210,7 @@ Mark each word **New**, **Learning**, **Known** or **Ignored**. Open a word to p
 
 ![The word dialog for choosing the context sentence and editing the definition](screenshots/word.png)
 
-Words that share a dictionary form ("theophanies", "theophany") are merged into one.
+Words that share a dictionary form ("leviathans", "leviathan") are merged into one.
 
 ### Other languages
 

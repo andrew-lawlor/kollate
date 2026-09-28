@@ -45,7 +45,7 @@ And export:
 </p>
 <p align="center">
   <b>Your handwriting, as text:</b> the ink as you wrote it, the exact words you underlined, and your note as Kollate read it.<br>
-  <sub>The handwriting here is staged (a handwriting font on a public-domain page); the text below it is Kollate's real reading.</sub>
+  <sub>The handwriting here is staged (a handwriting font on a page of the book); the text below it is Kollate's real reading.</sub>
 </p>
 
 | | |
@@ -60,6 +60,8 @@ And export:
 <p align="center">
   <img src="docs/screenshots/export.png" width="70%" alt="Export dialog with Obsidian, Anki and file options">
 </p>
+
+<p align="center"><sub>Every book, cover and quote in these screenshots comes from <a href="https://standardebooks.org">Standard Ebooks</a>, whose carefully produced editions are free and in the public domain.</sub></p>
 
 ## Your Kobo stays untouched, and nothing goes online
 
@@ -176,5 +178,7 @@ cargo clippy --all-targets
 Kollate is free software under the **GNU General Public License v3.0 or later**; see [LICENSE](LICENSE).
 
 Definitions come from **[Wiktionary](https://www.wiktionary.org/)** © Wiktionary contributors, compiled by [reader.dict](https://www.reader-dict.com/), under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The bundled dictionary is distributed under the same licence; see [THIRD-PARTY.md](crates/kollate/data/THIRD-PARTY.md). Kollate isn't affiliated with reader.dict or the Wikimedia Foundation.
+
+The books in the screenshots are **[Standard Ebooks](https://standardebooks.org)** editions, dedicated to the public domain ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)). Thanks to its volunteers for their work.
 
 Kollate isn't affiliated with or endorsed by Rakuten Kobo. "Kobo" is a trademark of Rakuten Kobo Inc.

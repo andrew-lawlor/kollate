@@ -16,7 +16,7 @@ I built it with Claude Code, alongside the rest of the app: it imports everythin
 
 🧪 **Verify, don't trust.** Testing on my real device caught bugs no test data would have, like a page that slid out from under its ink. Releases come from a CI/CD pipeline in GitHub Actions with signed build provenance, so nobody has to take my word for what's in them.
 
-⚖️ **Respecting boundaries.** Kobo's dictionaries are encrypted, so Kollate ships the openly licensed English Wiktionary instead, properly credited, down to the arcane words of Platonic philosophy like *hierophant* and *daimon*.
+⚖️ **Respecting boundaries.** Kobo's dictionaries are encrypted, so Kollate ships the openly licensed English Wiktionary instead, properly credited, down to the arcane words of Platonic philosophy like *hierophant* and *daimon*. And every book in the screenshots is a free, public-domain edition from Standard Ebooks, a volunteer project well worth supporting.
 
 🗂️ **Data hygiene.** Before open-sourcing, I scrubbed my personal reading data from the tests and the project history.
 
@@ -35,3 +35,5 @@ github.com/andrew-lawlor/kollate
 3. `3-vocabulary.png`: Every word, in the sentence you met it (Wiktionary definitions)
 4. `4-inbox.png`: Triage new highlights in seconds
 5. `5-books.png`: Your library, by cover
+
+All books, covers and quotes in the images are Standard Ebooks editions (standardebooks.org), in the public domain.
