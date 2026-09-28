@@ -14,11 +14,15 @@
   <a href="SPEC.md">Design notes</a>
 </p>
 
+<p align="center">
+  <sub>The books pictured are from <a href="https://standardebooks.org"><b>Standard Ebooks</b></a>: free, carefully produced public-domain ebooks, with a Kobo edition of every one.</sub>
+</p>
+
 ## What it does
 
 Plug in your Kobo and Kollate imports everything you've marked while reading:
 
-- **Your handwriting as text** (optional). Kollate can read your stylus notes, and take the exact words you underlined or circled from the book, using a local model you download once. It runs on this computer, never online. Everything it reads is a suggestion you can correct.
+- **Your handwriting as text** (optional). Kollate can read your stylus notes, and take the exact words you underlined or circled from the book, using a local model you download once. It runs on your own computer, never online. Everything it reads is a suggestion you can correct.
 - **Highlights and notes**, in all four Kobo colours, sorted into chapters in reading order.
 - **Handwritten markups** from stylus models (tested on the Libra Colour), shown as the page with your ink on it.
 - **Vocabulary Builder words.** Kollate goes further than the Kobo here: it finds the sentence you looked each word up in, inside the book itself, and adds an offline dictionary definition.
@@ -60,8 +64,6 @@ And export:
 <p align="center">
   <img src="docs/screenshots/export.png" width="70%" alt="Export dialog with Obsidian, Anki and file options">
 </p>
-
-<p align="center"><sub>Every book, cover and quote in these screenshots comes from <a href="https://standardebooks.org">Standard Ebooks</a>, whose carefully produced editions are free and in the public domain.</sub></p>
 
 ## Your Kobo stays untouched, and nothing goes online
 

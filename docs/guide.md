@@ -56,6 +56,8 @@ By default Kollate imports straight away. You can change this under **Preference
 
 When you're done, press **Eject** in the banner, then unplug. You can also eject at any time during use: Kollate reads a copy of the Kobo's database, never the original, and holds nothing open on the device.
 
+**Looking for something to read?** [Standard Ebooks](https://standardebooks.org) makes free, carefully produced editions of public-domain classics, with a Kobo edition (kepub) of each. Every book in this guide's screenshots is one of theirs.
+
 ### What gets imported
 
 | From your Kobo | In Kollate |
