@@ -11,10 +11,11 @@
   <description>
     <p>
       Plug in your Kobo e-reader and Kollate brings in your highlights, notes,
-      handwritten markups and Vocabulary Builder words, without ever changing
+      handwritten markups, notebooks and Vocabulary Builder words, without ever changing
       anything on the device and without duplicates.
     </p>
     <ul>
+      <li>Read your handwritten notes and notebooks as text, with a model on your computer</li>
       <li>Triage new highlights in an inbox, star, tag, edit and archive them</li>
       <li>See the sentence each vocabulary word appeared in, with an offline definition</li>
       <li>Sync notes to an Obsidian vault and export Anki decks, JSON, CSV or Readwise CSV</li>
@@ -32,6 +33,16 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.3.0" date="2026-09-29">
+      <description>
+        <p>Kollate now imports the notebooks on a stylus Kobo, Basic and Advanced alike, and reads their handwriting on your computer. The Kobo itself only converts Advanced notebooks, and only when you ask.</p>
+        <ul>
+          <li>Each notebook appears as a book, and its pages in a new Notebooks view: your ink redrawn, with its writing as searchable, editable text</li>
+          <li>Drawings are left out of the text; pages you write more on or erase are read again at the next import</li>
+          <li>Qwen3-VL 2B is now the recommended handwriting model: it reads real notes as well as the 4B, and is smaller and faster</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.1" date="2026-09-29">
       <description>
         <p>Kollate now recognises the Kobo Clara Colour by name, and is tested on it with Kobo Store books alongside sideloaded ones.</p>
