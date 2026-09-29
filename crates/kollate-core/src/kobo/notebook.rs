@@ -6,9 +6,11 @@
 //! `page.bdom`, which Kollate doesn't read: it reads the strokes itself.
 //!
 //! BINK isn't documented; this reader was worked out from a Libra Colour
-//! (firmware 4.45, iink 2.0.6, `format-version` 4.0). After a header, a
-//! `ff ff ff ff 00` marker and a `u32`, strokes follow back to back, with
-//! runs of `ff` bytes between some of them. All numbers are little-endian.
+//! (firmware 4.45, iink 2.0.6, `format-version` 4.0). A header declares one
+//! or two stroke formats; then strokes follow back to back, with runs of
+//! `ff` bytes between some of them. All numbers are little-endian. The pen
+//! field is `0x0c49` whatever the pen, brush or colour (those are in a style
+//! table after the strokes), so the first stroke is found by it.
 //!
 //! - plain stroke: `u32 0`, `u64` time, `u32` pen, `u32 n`, then `n` × (`f32`
 //!   x, `f32` y) in millimetres, `n` × `u32` pressure and `n` × `u32` time.
@@ -276,14 +278,19 @@ fn plausible((x, y): (f32, f32)) -> bool {
 
 /// The pen strokes in a BINK file, in millimetres (see the module docs).
 fn strokes(b: &[u8]) -> Vec<Vec<(f32, f32)>> {
+    const PEN: u16 = 0x0c49;
     let mut out = Vec::new();
-    let Some(start) = b
-        .windows(5)
-        .position(|w| w == [0xff, 0xff, 0xff, 0xff, 0x00])
-    else {
+    let first = (8..b.len()).find(|&p| {
+        let pen = match u32_at(b, p) {
+            Some(0) => u32_at(b, p + 12).map(|v| v == u32::from(PEN)),
+            Some(0x8000_0000) => b.get(p + 22..p + 24).map(|v| v == PEN.to_le_bytes()),
+            _ => None,
+        };
+        pen == Some(true) && stroke_at(b, p).is_some()
+    });
+    let Some(mut p) = first else {
         return out;
     };
-    let mut p = start + 9;
     while p < b.len() {
         if b[p] == 0xff {
             p += 1;
@@ -400,6 +407,20 @@ mod tests {
         // Other data after the strokes.
         b.extend([1, 0, 0, 0, 3, 0, 0, 0]);
         b
+    }
+
+    #[test]
+    fn finds_strokes_without_a_second_format() {
+        // A page whose header declares one format: no `ff ff ff ff` in it.
+        let b = bink();
+        let marker = b
+            .windows(5)
+            .position(|w| w == [0xff, 0xff, 0xff, 0xff, 0x00])
+            .unwrap();
+        let mut one = b[..marker].to_vec();
+        one.extend([0x00, 0x25, 0, 0, 0]);
+        one.extend(&b[marker + 9..]);
+        assert_eq!(strokes(&one).len(), 2);
     }
 
     #[test]

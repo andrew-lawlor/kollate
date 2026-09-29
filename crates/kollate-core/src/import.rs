@@ -351,20 +351,29 @@ impl Importer<'_> {
         bm: &KoboBookmark,
         fingerprint: Option<&str>,
     ) -> Result<()> {
-        let (old, user_text, user_note, removed): (DeviceFields, Option<String>, Option<String>, Option<String>) =
-            self.tx.query_row(
-                "SELECT kind, device_text, device_note, color, user_text, user_note, removed_on_device_at
-                 FROM annotation WHERE id = ?1",
-                [id],
-                |r| {
-                    Ok((
-                        DeviceFields { kind: r.get(0)?, text: r.get(1)?, note: r.get(2)?, color: r.get(3)? },
-                        r.get(4)?,
-                        r.get(5)?,
-                        r.get(6)?,
-                    ))
-                },
-            )?;
+        // Device fields, the user's text and note, when removed, when modified.
+        type Row = (
+            DeviceFields,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<DateTime<Utc>>,
+        );
+        let (old, user_text, user_note, removed, old_modified): Row = self.tx.query_row(
+            "SELECT kind, device_text, device_note, color, user_text, user_note, removed_on_device_at,
+                    device_modified_at
+             FROM annotation WHERE id = ?1",
+            [id],
+            |r| {
+                Ok((
+                    DeviceFields { kind: r.get(0)?, text: r.get(1)?, note: r.get(2)?, color: r.get(3)? },
+                    r.get(4)?,
+                    r.get(5)?,
+                    r.get(6)?,
+                    r.get(7)?,
+                ))
+            },
+        )?;
         let new = DeviceFields {
             kind: kind.to_owned(),
             text: bm.text.clone(),
@@ -375,7 +384,10 @@ impl Importer<'_> {
         if removed.is_some() {
             self.stats.annotations_restored += 1;
         }
-        if old == new {
+        // A notebook page's ink isn't compared here (it's re-read when it
+        // changes); its modification time says it was written on.
+        let page_written = kind == "page" && old_modified != bm.modified;
+        if old == new && !page_written {
             self.stats.annotations_unchanged += 1;
         } else {
             self.stats.annotations_updated += 1;
@@ -430,7 +442,7 @@ impl Importer<'_> {
                 fingerprint,
                 conflict,
                 self.now,
-                old != new || removed.is_some(),
+                old != new || page_written || removed.is_some(),
                 bm.reading_order_key().1,
             ],
         )?;
