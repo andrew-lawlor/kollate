@@ -32,6 +32,11 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.2.1" date="2026-09-29">
+      <description>
+        <p>Kollate now recognises the Kobo Clara Colour by name, and is tested on it with Kobo Store books alongside sideloaded ones.</p>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-09-27">
       <description>
         <p>Kollate now works with black-and-white Kobos as well as colour ones: it's tested on a Kobo Clara 2E alongside the Libra Colour. Together with reading your handwriting (since 0.1.7), this makes 0.2.0.</p>
