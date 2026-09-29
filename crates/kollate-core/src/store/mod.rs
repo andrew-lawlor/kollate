@@ -283,15 +283,28 @@ impl Library {
     }
 
     fn init(conn: Connection, dir: Option<PathBuf>) -> Result<Self> {
-        conn.pragma_update(None, "foreign_keys", true)?;
         conn.pragma_update(None, "journal_mode", "wal")?;
+        // Foreign keys are off while migrating, as SQLite advises for
+        // rebuilding a table: dropping the old one would otherwise cascade.
+        conn.pragma_update(None, "foreign_keys", false)?;
         let version: usize = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
         for (i, sql) in schema::MIGRATIONS.iter().enumerate().skip(version) {
             let tx = conn.unchecked_transaction()?;
             tx.execute_batch(sql)?;
+            let broken: Option<String> = tx
+                .query_row("PRAGMA foreign_key_check", [], |r| r.get(0))
+                .optional()?;
+            if let Some(table) = broken {
+                return Err(std::io::Error::other(format!(
+                    "library upgrade {} left broken references in {table}",
+                    i + 1
+                ))
+                .into());
+            }
             tx.pragma_update(None, "user_version", i + 1)?;
             tx.commit()?;
         }
+        conn.pragma_update(None, "foreign_keys", true)?;
         let lib = Self { conn, dir };
         lib.backfill_position_keys()?;
         Ok(lib)

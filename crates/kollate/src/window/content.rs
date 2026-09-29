@@ -30,7 +30,9 @@ impl Window {
         if nav == Nav::Books && self.books_shown.get() > 0 {
             parts.push(plural(self.books_shown.get(), "book", "books"));
         }
-        if annotations > 0 {
+        if annotations > 0 && nav == Nav::Annotations(View::Notebooks) {
+            parts.push(plural(annotations, "page", "pages"));
+        } else if annotations > 0 {
             parts.push(plural(annotations, "highlight", "highlights"));
         }
         if words > 0 {

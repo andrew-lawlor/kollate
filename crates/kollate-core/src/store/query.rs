@@ -17,6 +17,8 @@ pub enum View {
     All,
     Notes,
     Markups,
+    /// Pages of Kobo notebooks.
+    Notebooks,
     /// Starred items that aren't trashed.
     Starred,
     Archive,
@@ -48,6 +50,7 @@ pub struct SidebarCounts {
     pub all: i64,
     pub notes: i64,
     pub markups: i64,
+    pub notebooks: i64,
     pub starred: i64,
     pub archive: i64,
     pub trash: i64,
@@ -152,6 +155,7 @@ impl Library {
                 "{ACTIVE} AND nullif(coalesce(a.user_note, a.device_note, a.ink_note), '') IS NOT NULL"
             )),
             View::Markups => conditions.push(format!("{ACTIVE} AND a.kind = 'markup'")),
+            View::Notebooks => conditions.push(format!("{ACTIVE} AND a.kind = 'page'")),
             View::Starred => conditions.push("a.starred AND a.status != 'trashed'".into()),
             View::Archive => conditions.push("a.status = 'archived'".into()),
             View::Trash => conditions.push("a.status = 'trashed'".into()),
@@ -229,6 +233,7 @@ impl Library {
                         count(*) FILTER (WHERE {ACTIVE}),
                         count(*) FILTER (WHERE {ACTIVE} AND nullif(coalesce(a.user_note, a.device_note, a.ink_note), '') IS NOT NULL),
                         count(*) FILTER (WHERE {ACTIVE} AND a.kind = 'markup'),
+                        count(*) FILTER (WHERE {ACTIVE} AND a.kind = 'page'),
                         count(*) FILTER (WHERE a.starred AND a.status != 'trashed'),
                         count(*) FILTER (WHERE a.status = 'archived'),
                         count(*) FILTER (WHERE a.status = 'trashed'),
@@ -243,11 +248,12 @@ impl Library {
                     all: r.get(1)?,
                     notes: r.get(2)?,
                     markups: r.get(3)?,
-                    starred: r.get(4)?,
-                    archive: r.get(5)?,
-                    trash: r.get(6)?,
-                    removed_on_device: r.get(7)?,
-                    vocab: r.get(8)?,
+                    notebooks: r.get(4)?,
+                    starred: r.get(5)?,
+                    archive: r.get(6)?,
+                    trash: r.get(7)?,
+                    removed_on_device: r.get(8)?,
+                    vocab: r.get(9)?,
                 })
             },
         )?)

@@ -65,6 +65,7 @@ When you're done, press **Eject** in the banner, then unplug. You can also eject
 | Highlights, in all four colours | Highlights, sorted into chapters in reading order |
 | Notes you typed on a highlight | The highlight's note |
 | Stylus markups (stylus models; tested on the Libra Colour) | The page with your ink on it, and optionally [your handwriting as text](#6-read-your-handwriting) |
+| Notebooks, Basic and Advanced (stylus models) | A book per notebook, each page redrawn from your ink, and optionally [its writing as text](#notebooks) |
 | Vocabulary Builder words | [Vocabulary](#7-vocabulary), with the sentence you looked each word up in and a definition |
 | Book covers, titles, authors, progress | The [Books](#books) page |
 
@@ -119,6 +120,7 @@ The sidebar has these views:
 | **All Highlights** | Everything except Archive and Trash |
 | **Notes** | Highlights with a note, including handwritten notes Kollate has read |
 | **Markups** | Your stylus markups |
+| **Notebooks** | Pages of your Kobo notebooks (appears once you have some) |
 | **Starred** | Starred highlights |
 | **Books** | Your library by cover |
 | **Vocabulary** | Words from Vocabulary Builder |
@@ -171,6 +173,12 @@ For each markup, Kollate:
 4. **Corrects misread names** against the book: a note that comes back as "Who is Pokmarchus?" beside a page about Polemarchus becomes "Who is Polemarchus?". Only words no dictionary knows are corrected, so real words are never changed.
 
 The marked text becomes the markup's text and your handwriting its note, so both are searchable, appear in the **Notes** view, and are exported like any other highlight. Until you edit them, the card says **Read from handwriting by …**, so you know it's the model's reading.
+
+### Notebooks
+
+Pages of your Kobo notebooks are read the same way, whole: Kollate finds the lines of writing on the page, reads them one by one, and leaves drawings out (shapes, arrows, doodles; a short label beside them is still read). This works for **Basic** notebooks too, which the Kobo can't turn into text, and needs no **Convert** on the Kobo for Advanced ones.
+
+Each notebook appears as a book, with the Kobo's picture of it as its cover, and its pages in the **Notebooks** view. A page's text is its highlight text: search it, edit it with **E**, star, tag and export it like anything else. Pages you add or write more on are read again at the next import; your corrections stay. If a notebook comes from a newer Kobo that stores notebooks differently, Kollate leaves it out and keeps what it already has.
 
 ### Set it up
 

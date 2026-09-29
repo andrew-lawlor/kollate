@@ -374,3 +374,93 @@ fn auto_trash_policy_trashes_and_restores() {
         Status::Trashed
     );
 }
+
+/// A snapshot with one notebook and one page, as `add_notebook_pages` makes it.
+fn with_notebook(mut snap: KoboSnapshot) -> KoboSnapshot {
+    use kollate_core::kobo::{AnnotationKind, KoboBook, KoboBookmark, Position};
+    let volume = "file:///mnt/onboard/My Notebooks/Ideas.nebo".to_owned();
+    let book = KoboBook {
+        volume_id: volume.clone(),
+        title: "Ideas".into(),
+        author: None,
+        publisher: None,
+        isbn: None,
+        language: None,
+        series: None,
+        series_number: None,
+        image_id: None,
+        percent_read: None,
+        last_read: None,
+    };
+    let at = Position {
+        container_path: "abcdefgh".into(),
+        child_index: 0,
+        offset: 0,
+    };
+    snap.notebooks.push(book.clone());
+    snap.books.push(book);
+    snap.bookmarks.push(KoboBookmark {
+        bookmark_id: format!("{volume}#abcdefgh"),
+        volume_id: volume.clone(),
+        content_id: volume,
+        kind: AnnotationKind::Page,
+        text: None,
+        note: None,
+        color: 0,
+        start: at.clone(),
+        end: at,
+        chapter_progress: 0.0,
+        chapter_title: Some("Page 1".into()),
+        spine_index: Some(0),
+        created: None,
+        modified: None,
+        extra_data: None,
+    });
+    snap.notebooks_read = true;
+    snap
+}
+
+#[test]
+fn notebook_pages_stay_unless_their_notebook_was_read() {
+    let mut lib = Library::open_in_memory().unwrap();
+    let full = with_notebook(fixture());
+    assert_eq!(
+        lib.import(&full, &device("A"), false)
+            .unwrap()
+            .annotations_new,
+        53
+    );
+
+    // From the database alone, the notebook files weren't read: the page stays.
+    let mut db_only = fixture();
+    db_only.notebooks = full.notebooks.clone();
+    assert_eq!(
+        lib.import(&db_only, &device("A"), false)
+            .unwrap()
+            .annotations_removed,
+        0
+    );
+
+    // Nor when its file couldn't be read.
+    let mut unreadable = db_only.clone();
+    unreadable.notebooks_read = true;
+    unreadable
+        .unread_notebooks
+        .push((full.notebooks[0].volume_id.clone(), "unknown format".into()));
+    assert_eq!(
+        lib.import(&unreadable, &device("A"), false)
+            .unwrap()
+            .annotations_removed,
+        0
+    );
+
+    // Read, and the page is gone: it was deleted on the Kobo.
+    let mut gone = db_only;
+    gone.notebooks_read = true;
+    assert_eq!(
+        lib.import(&gone, &device("A"), false)
+            .unwrap()
+            .annotations_removed,
+        1
+    );
+}

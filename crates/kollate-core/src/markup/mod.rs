@@ -102,6 +102,33 @@ pub fn transcribe(
     })
 }
 
+/// Reads a notebook page: its writing line by line, one line per line of
+/// text. Drawings are left out: a piece of one that reaches the model (an
+/// eye, an arrowhead, a box) reads as a stray character or a runaway repeat,
+/// and is dropped.
+pub fn read_page(svg: &str, reader: &mut dyn Reader) -> Result<Option<String>> {
+    let strokes = segment::strokes(svg);
+    let mut lines = Vec::new();
+    for line in segment::lines(&strokes) {
+        let img = image::render_note(svg, &strokes, &line, 16)?;
+        let text = reader
+            .handwriting(&img)?
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let letters = text.chars().filter(|c| c.is_alphabetic()).count();
+        let distinct: std::collections::HashSet<char> = text.chars().collect();
+        let runaway = text.chars().count() > 12 && distinct.len() < 4;
+        if line.strokes.len() <= 2 && (letters < 2 || runaway) {
+            continue;
+        }
+        if !text.is_empty() {
+            lines.push(text);
+        }
+    }
+    Ok((!lines.is_empty()).then(|| lines.join("\n")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,6 +148,35 @@ mod tests {
         fn print(&mut self, _: &RgbImage) -> Result<String> {
             Ok(self.print.remove(0).to_owned())
         }
+    }
+
+    #[test]
+    fn reads_a_page_line_by_line_without_drawings() {
+        let rect = |l: f32, t: f32, r: f32, b: f32| {
+            format!("<path d=\"M{l},{t} L{r},{t} L{r},{b} L{l},{b}\"/>")
+        };
+        let mut paths = String::new();
+        for (y, n) in [(100.0, 6), (300.0, 4)] {
+            for i in 0..n {
+                let x = 100.0 + i as f32 * 34.0;
+                paths += &rect(x, y, x + 30.0, y + 40.0);
+            }
+        }
+        // An eye of a drawn face: one small stroke on its own.
+        paths += &rect(700.0, 700.0, 730.0, 730.0);
+        let svg = format!(
+            "<svg width=\"1264\" height=\"1680\" viewBox=\"0 0 1264 1680\"><g>{paths}</g></svg>"
+        );
+        let mut reader = Scripted {
+            handwriting: vec!["This is  my", "page", "0"],
+            print: vec![],
+            seen: vec![],
+        };
+        assert_eq!(
+            read_page(&svg, &mut reader).unwrap().as_deref(),
+            Some("This is my\npage")
+        );
+        assert_eq!(reader.seen.len(), 3);
     }
 
     #[test]

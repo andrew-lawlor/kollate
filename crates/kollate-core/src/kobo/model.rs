@@ -9,6 +9,9 @@ pub enum AnnotationKind {
     Highlight,
     Note,
     Markup,
+    /// A page of a notebook (see [`notebook`](super::notebook)); not a
+    /// `Bookmark` row, but imported like one.
+    Page,
     Dogear,
     Other(String),
 }
@@ -161,6 +164,19 @@ pub struct KoboSnapshot {
     pub words: Vec<KoboWord>,
     /// Bookmarks the device marks as hidden (not included above).
     pub hidden_count: usize,
+    /// Notebooks listed in the database (`My Notebooks/*.nebo`). Their pages
+    /// are read from the files by [`add_notebook_pages`](super::notebook::add_notebook_pages),
+    /// which adds each notebook to `books` and its pages to `bookmarks`.
+    pub notebooks: Vec<KoboBook>,
+    /// Whether notebook pages were read. Without the files (an import from a
+    /// database alone), pages already in the library are left as they are.
+    pub notebooks_read: bool,
+    /// Notebooks whose file couldn't be read: (volume ID, why). Their pages
+    /// are left as they are, too.
+    pub unread_notebooks: Vec<(String, String)>,
+    /// Each notebook page's ink, keyed by its bookmark ID.
+    #[serde(skip)]
+    pub notebook_ink: std::collections::HashMap<String, super::notebook::NotebookPage>,
 }
 
 #[cfg(test)]

@@ -39,7 +39,7 @@ pub enum Nav {
     Books,
 }
 
-const TOP_LEVEL: [(Nav, &str, &str); 10] = [
+const TOP_LEVEL: [(Nav, &str, &str); 11] = [
     (
         Nav::Annotations(View::Inbox),
         "mail-unread-symbolic",
@@ -59,6 +59,11 @@ const TOP_LEVEL: [(Nav, &str, &str); 10] = [
         Nav::Annotations(View::Markups),
         "input-tablet-symbolic",
         "Markups",
+    ),
+    (
+        Nav::Annotations(View::Notebooks),
+        "accessories-text-editor-symbolic",
+        "Notebooks",
     ),
     (
         Nav::Annotations(View::Starred),

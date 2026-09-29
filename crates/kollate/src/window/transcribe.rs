@@ -36,16 +36,12 @@ impl Window {
         self.transcribing.set(true);
         let gpu = !self.flag(CPU_ONLY);
         let dictionary_dirs = dict::search_dirs(self.lib.borrow().assets_dir().as_deref());
-        let total = jobs.len();
-        self.toast(&format!(
-            "Reading handwriting in {}…",
-            plural(total, "markup", "markups")
-        ));
+        self.toast(&format!("Reading the handwriting in {}…", what(&jobs)));
         let this = self.clone();
         glib::spawn_future_local(async move {
             // The model loads once, on the worker, and is handed back each time.
             let mut worker: Option<(Transcriber, Vec<Dictionary>)> = None;
-            let (mut done, mut failed) = (0, 0);
+            let (mut done, mut failed) = (Vec::new(), 0);
             for job in jobs {
                 let (to_load, dirs) = (model.clone(), dictionary_dirs.clone());
                 let taken = worker.take();
@@ -70,7 +66,7 @@ impl Window {
                                 .borrow()
                                 .save_transcription(&job, &t, model.model.id)
                         }) {
-                            Ok(()) => done += 1,
+                            Ok(()) => done.push(job),
                             Err(_) => failed += 1,
                         }
                     }
@@ -87,11 +83,8 @@ impl Window {
             this.transcribing.set(false);
             this.reload();
             this.update_counts();
-            if done > 0 {
-                let mut message = format!(
-                    "Read the handwriting in {}",
-                    plural(done, "markup", "markups")
-                );
+            if !done.is_empty() {
+                let mut message = format!("Read the handwriting in {}", what(&done));
                 if failed > 0 {
                     message.push_str(&format!(" ({failed} couldn’t be read)"));
                 }
@@ -355,5 +348,20 @@ impl Window {
                 Err(_) => this.error("Couldn’t Add Model", "The copy stopped unexpectedly."),
             }
         });
+    }
+}
+
+/// "2 markups", "1 notebook page", or "2 markups and 1 notebook page".
+fn what(jobs: &[kollate_core::store::MarkupJob]) -> String {
+    let pages = jobs.iter().filter(|j| j.page).count();
+    let markups = jobs.len() - pages;
+    match (markups, pages) {
+        (m, 0) => plural(m, "markup", "markups"),
+        (0, p) => plural(p, "notebook page", "notebook pages"),
+        (m, p) => format!(
+            "{} and {}",
+            plural(m, "markup", "markups"),
+            plural(p, "notebook page", "notebook pages")
+        ),
     }
 }

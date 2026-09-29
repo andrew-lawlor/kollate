@@ -102,13 +102,45 @@ impl KoboDb {
             .chain(words.iter().filter_map(|w| w.volume_id.as_deref()))
             .collect();
         let books = self.books(&volume_ids)?;
+        let notebooks = self.notebooks()?;
         Ok(KoboSnapshot {
             db_version,
             books,
             bookmarks,
             words,
             hidden_count,
+            notebooks,
+            ..Default::default()
         })
+    }
+
+    /// Notebooks (stylus models), listed like books with a MyScript type.
+    fn notebooks(&self) -> Result<Vec<KoboBook>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT ContentID, Title, ImageId, DateLastRead FROM content
+             WHERE ContentType = 6 AND MimeType LIKE 'application/vnd.myscript.nebo%'",
+        )?;
+        let notebooks = stmt
+            .query_map([], |r| {
+                Ok(KoboBook {
+                    volume_id: text(r, 0)?.unwrap_or_default(),
+                    title: clean_opt(text(r, 1)?.as_deref()).unwrap_or_else(|| "Notebook".into()),
+                    author: None,
+                    publisher: None,
+                    isbn: None,
+                    language: None,
+                    series: None,
+                    series_number: None,
+                    image_id: clean_opt(text(r, 2)?.as_deref()),
+                    percent_read: None,
+                    last_read: parse_kobo_date(text(r, 3)?.as_deref()),
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(notebooks
+            .into_iter()
+            .filter(|b| b.volume_id.starts_with("file://"))
+            .collect())
     }
 
     fn books(&self, volume_ids: &BTreeSet<&str>) -> Result<Vec<KoboBook>> {

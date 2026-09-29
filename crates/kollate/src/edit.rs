@@ -49,8 +49,11 @@ fn override_of(edited: String, device: Option<&str>) -> Option<String> {
 
 pub fn present(parent: &impl IsA<gtk::Widget>, a: &Annotation, on_save: impl Fn(Edited) + 'static) {
     let is_markup = a.kind == "markup";
+    let is_page = a.kind == "page";
     let dialog = adw::Dialog::builder()
-        .title(if is_markup {
+        .title(if is_page {
+            "Edit Page"
+        } else if is_markup {
             "Edit Markup"
         } else {
             "Edit Highlight"
@@ -69,8 +72,16 @@ pub fn present(parent: &impl IsA<gtk::Widget>, a: &Annotation, on_save: impl Fn(
         .build();
 
     let text = text_view(a.text().unwrap_or(""));
-    text.set_height_request(if is_markup { 80 } else { 120 });
-    body.append(&heading(if is_markup {
+    text.set_height_request(if is_page {
+        200
+    } else if is_markup {
+        80
+    } else {
+        120
+    });
+    body.append(&heading(if is_page {
+        "Text"
+    } else if is_markup {
         "Marked Text"
     } else {
         "Highlight"

@@ -25,6 +25,7 @@ Plug in your Kobo and Kollate imports everything you've marked while reading:
 - **Your handwriting as text** (optional). Kollate can read your stylus notes, and take the exact words you underlined or circled from the book, using a local model you download once. It runs on your own computer, never online. Everything it reads is a suggestion you can correct.
 - **Highlights and notes**, in all four Kobo colours, sorted into chapters in reading order.
 - **Handwritten markups** from stylus models (tested on the Libra Colour), shown as the page with your ink on it.
+- **Notebooks** from stylus models, Basic and Advanced alike: every page redrawn from your pen strokes, with its writing as text. The Kobo itself only converts Advanced notebooks, and only when you ask.
 - **Vocabulary Builder words.** Kollate goes further than the Kobo here: it finds the sentence you looked each word up in, inside the book itself, and adds an offline dictionary definition.
 
 Then you curate:
@@ -134,7 +135,7 @@ The **[user guide](docs/guide.md)** covers everything in detail, with screenshot
 
 ### Reading your handwriting
 
-In *Preferences → Handwriting*, pick a model: **Qwen3-VL 4B** (3.3 GB, recommended), 2B (2.7 GB, fastest) or 8B (6.2 GB, most accurate). Download its two files with the links there, then add them with **+**. Kollate checks them and, after each import, reads your markups in the background: about half a second a note with a graphics card, or 2–4 seconds without. Marked text always comes from the book itself. It needs an x86-64 processor from about 2013 or later (with AVX2).
+In *Preferences → Handwriting*, pick a model: **Qwen3-VL 4B** (3.3 GB, recommended), 2B (2.7 GB, fastest) or 8B (6.2 GB, most accurate). Download its two files with the links there, then add them with **+**. Kollate checks them and, after each import, reads your markups and notebook pages in the background: about half a second a note with a graphics card, or 2–4 seconds without. Marked text always comes from the book itself. It needs an x86-64 processor from about 2013 or later (with AVX2).
 
 From a terminal: `kollate-cli models` lists them with download links, `kollate-cli models add FILES…` adds them, and `kollate-cli transcribe` reads what's waiting.
 

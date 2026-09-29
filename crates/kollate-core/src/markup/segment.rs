@@ -241,6 +241,100 @@ pub fn segment(strokes: &[Stroke]) -> Segments {
     Segments { notes, marks }
 }
 
+/// A notebook page's writing as lines, in reading order, each split where a
+/// gap wider than six letters separates two pieces (labels side by side).
+/// Strokes much taller or longer than a letter are drawings, left out; so is
+/// anything drawn apart from the writing, which comes back as its own short
+/// piece (see [`read_page`](super::read_page)).
+pub fn lines(strokes: &[Stroke]) -> Vec<Note> {
+    let mut heights: Vec<f32> = strokes
+        .iter()
+        .map(|s| s.bounds.height())
+        .filter(|&h| h > 8.0)
+        .collect();
+    heights.sort_by(f32::total_cmp);
+    let h = heights.get(heights.len() / 2).copied().unwrap_or(40.0);
+    let text: Vec<usize> = (0..strokes.len())
+        .filter(|&i| {
+            let b = strokes[i].bounds;
+            b.height() <= 2.5 * h && b.width() <= 6.0 * h
+        })
+        .collect();
+
+    // Lines, in two passes. First the letter-sized strokes, leaving out dots,
+    // apostrophes and tall ascenders and descenders, which reach towards the
+    // neighbouring lines: in order of height, a jump of most of a letter
+    // between centres starts the next line. Then the other strokes join the
+    // line nearest them, if it's within a letter.
+    let centre = |i: usize| (strokes[i].bounds.top + strokes[i].bounds.bottom) / 2.0;
+    let (mut core, rest): (Vec<usize>, Vec<usize>) = text
+        .into_iter()
+        .partition(|&i| (0.5 * h..=1.5 * h).contains(&strokes[i].bounds.height()));
+    core.sort_by(|&a, &b| centre(a).total_cmp(&centre(b)));
+    let mut rows: Vec<(Bounds, Vec<usize>)> = Vec::new();
+    let mut last = f32::MIN;
+    for i in core {
+        let b = strokes[i].bounds;
+        match rows.last_mut() {
+            Some((r, v)) if centre(i) - last < 0.8 * h => {
+                *r = Bounds::union([*r, b]).expect("two boxes");
+                v.push(i);
+            }
+            _ => rows.push((b, vec![i])),
+        }
+        last = centre(i);
+    }
+    for i in rest {
+        let (c, b) = (centre(i), strokes[i].bounds);
+        let distance = |r: &Bounds| (r.top - c).max(c - r.bottom).max(0.0);
+        match rows
+            .iter_mut()
+            .min_by(|x, y| distance(&x.0).total_cmp(&distance(&y.0)))
+        {
+            Some((r, v)) if distance(r) < h => {
+                *r = Bounds::union([*r, b]).expect("two boxes");
+                v.push(i);
+            }
+            _ => rows.push((b, vec![i])),
+        }
+    }
+
+    let mut out = Vec::new();
+    for (_, mut row) in rows {
+        row.sort_by(|&a, &b| strokes[a].bounds.left.total_cmp(&strokes[b].bounds.left));
+        let mut piece: Vec<usize> = Vec::new();
+        let mut right = f32::MIN;
+        for i in row {
+            let b = strokes[i].bounds;
+            if !piece.is_empty() && b.left - right > 6.0 * h {
+                out.push(std::mem::take(&mut piece));
+            }
+            right = right.max(b.right);
+            piece.push(i);
+        }
+        out.push(piece);
+    }
+    let mut notes: Vec<Note> = out
+        .into_iter()
+        .map(|mut v| {
+            let bounds = Bounds::union(v.iter().map(|&i| strokes[i].bounds)).expect("not empty");
+            v.sort_unstable();
+            Note {
+                strokes: v,
+                bounds,
+                rotation: Rotation::None,
+            }
+        })
+        .collect();
+    notes.sort_by(|a, b| {
+        (a.bounds.top / h)
+            .round()
+            .total_cmp(&(b.bounds.top / h).round())
+            .then(a.bounds.left.total_cmp(&b.bounds.left))
+    });
+    notes
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,6 +368,31 @@ mod tests {
             "<svg width=\"1264\" height=\"1680\" viewBox=\"0 0 1264 1680\">\n<g fill=\"#000000\">\n{}\n</g></svg>",
             paths.join("\n")
         )
+    }
+
+    #[test]
+    fn splits_a_notebook_page_into_lines() {
+        let mut paths = Vec::new();
+        // Second line first: lines come back in reading order, not writing order.
+        paths.extend(word(100.0, 300.0, 5));
+        // First line: two words, with an apostrophe above and a tall "b"
+        // reaching up from the line (neither may start a line of its own).
+        paths.extend(word(100.0, 100.0, 4));
+        paths.push(rect(260.0, 80.0, 266.0, 92.0));
+        paths.extend(word(300.0, 100.0, 3));
+        paths.push(rect(410.0, 60.0, 440.0, 140.0));
+        // A label far to the right of the second line: a piece of its own.
+        paths.extend(word(900.0, 300.0, 2));
+        // A drawing: a big box and a long arrow.
+        paths.push(rect(200.0, 600.0, 600.0, 900.0));
+        paths.push(rect(100.0, 1000.0, 900.0, 1010.0));
+        let s = strokes(&svg(paths));
+        let lines = lines(&s);
+        let sizes: Vec<_> = lines
+            .iter()
+            .map(|n| (n.bounds.top as i32, n.bounds.left as i32, n.strokes.len()))
+            .collect();
+        assert_eq!(sizes, [(60, 100, 9), (300, 100, 5), (300, 900, 2)]);
     }
 
     #[test]

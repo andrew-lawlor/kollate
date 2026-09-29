@@ -112,7 +112,7 @@ fn annotation_md(a: &Annotation, attachment: Option<&str>, out: &mut String) {
                 .to_string(),
         );
     }
-    if a.kind == "markup" || a.color != 0 {
+    if a.kind != "page" && (a.kind == "markup" || a.color != 0) {
         meta.push(color_name(a.color).to_owned());
     }
     if a.starred {
@@ -172,8 +172,15 @@ fn book_note(eb: &ExportBook, attachments: &HashMap<i64, String>) -> String {
     if let Some(n) = &b.series_number {
         out.push_str(&format!("series_number: {}\n", yaml_string(n)));
     }
-    out.push_str("tags: [book, kobo]\n");
-    out.push_str(&format!("highlights: {}\n", eb.annotations.len()));
+    // A Kobo notebook holds pages, not highlights.
+    let notebook = !eb.annotations.is_empty() && eb.annotations.iter().all(|a| a.kind == "page");
+    if notebook {
+        out.push_str("tags: [notebook, kobo]\n");
+        out.push_str(&format!("pages: {}\n", eb.annotations.len()));
+    } else {
+        out.push_str("tags: [book, kobo]\n");
+        out.push_str(&format!("highlights: {}\n", eb.annotations.len()));
+    }
     out.push_str(&format!("kollate_id: {}\n", b.id));
     out.push_str("---\n\n");
     out.push_str(&format!("# {}\n\n", b.title));

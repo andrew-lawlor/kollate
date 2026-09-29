@@ -102,6 +102,33 @@ pub struct CopiedMarkup {
     pub crop: Option<Rect>,
 }
 
+/// Writes `data` to `dest` unless it already holds exactly that.
+fn write_if_changed(dest: &Path, data: &[u8]) -> Result<()> {
+    if std::fs::read(dest).is_ok_and(|old| old == data) {
+        return Ok(());
+    }
+    if let Some(dir) = dest.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = dest.with_extension("part");
+    std::fs::write(&tmp, data)?;
+    std::fs::rename(&tmp, dest)?;
+    Ok(())
+}
+
+/// A blank page, for notebook ink to be drawn on like a markup's.
+fn blank_page(width: u32, height: u32) -> Result<Vec<u8>> {
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new(&mut out)
+        .encode_image(&image::RgbImage::from_pixel(
+            width,
+            height,
+            image::Rgb([255, 255, 255]),
+        ))
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(out)
+}
+
 /// Copies `src` to `dest` unless an identical-size copy is already there.
 fn copy_if_changed(src: &Path, dest: &Path) -> Result<()> {
     let same = match (std::fs::metadata(src), std::fs::metadata(dest)) {
@@ -120,8 +147,10 @@ fn copy_if_changed(src: &Path, dest: &Path) -> Result<()> {
 }
 
 /// Copies covers of the snapshot's books and all markup images into
-/// `assets_dir` (`covers/` and `markups/`). Safe to re-run: unchanged files
-/// are skipped, so an interrupted copy resumes on the next connect.
+/// `assets_dir` (`covers/` and `markups/`), and writes each notebook page's
+/// ink and a blank page to draw it on (`notebooks/`), cropped to the ink.
+/// Safe to re-run: unchanged files are skipped, so an interrupted copy
+/// resumes on the next connect.
 pub fn copy_assets(
     mount: &Path,
     snapshot: &KoboSnapshot,
@@ -140,6 +169,35 @@ pub fn copy_assets(
         let dest = assets_dir.join("covers").join(format!("{name}.jpg"));
         copy_if_changed(&src, &dest)?;
         out.covers.push((book.volume_id.clone(), dest));
+    }
+    for (bookmark_id, page) in &snapshot.notebook_ink {
+        let name = blake3::hash(bookmark_id.as_bytes()).to_hex()[..24].to_owned();
+        let base = assets_dir.join("notebooks").join(name);
+        // A page that scrolls grows taller: its blank page is named by size.
+        let svg = base.with_extension("svg");
+        let jpg = base.with_file_name(format!(
+            "{}-{}x{}.jpg",
+            base.file_name().unwrap_or_default().to_string_lossy(),
+            page.width,
+            page.height
+        ));
+        write_if_changed(&svg, page.svg().as_bytes())?;
+        if !jpg.is_file() {
+            write_if_changed(&jpg, &blank_page(page.width, page.height)?)?;
+        }
+        out.markups.push(CopiedMarkup {
+            bookmark_id: bookmark_id.clone(),
+            svg: Some(svg),
+            jpg: Some(jpg),
+            crop: page
+                .ink_bounds(40.0)
+                .map(|[left, top, right, bottom]| Rect {
+                    left: left as i32,
+                    top: top as i32,
+                    right: right as i32,
+                    bottom: bottom as i32,
+                }),
+        });
     }
     for bm in &snapshot.bookmarks {
         let (svg, jpg) = markup_paths(mount, &bm.bookmark_id);

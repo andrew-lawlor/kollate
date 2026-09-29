@@ -108,12 +108,17 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
     });
     bar.set_margin_bottom(6);
     bar.set_tooltip_text(Some(color_name(a.color)));
-    root.append(&bar);
+    // Notebook pages have no highlight colour.
+    if a.kind != "page" {
+        root.append(&bar);
+    }
 
     let body = gtk::Box::new(gtk::Orientation::Vertical, 8);
     body.set_hexpand(true);
-    if a.kind == "markup" {
-        // The ink first; what it marks and says (as read) below it.
+    let page = a.kind == "page";
+    if a.kind == "markup" || page {
+        // The ink first; what it marks and says (as read) below it. For a
+        // notebook page, what it says.
         match a.markup_view() {
             Some(path) => {
                 let picture = gtk::Picture::builder()
@@ -124,22 +129,41 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
                     .css_classes(["markup-image"])
                     .build();
                 // Sized for a typical card width (~680px) from the crop's
-                // shape, so handwriting stays readable; a whole page is capped.
-                let height = a.markup_crop.map_or(320, |c| {
-                    (680 * (c.bottom - c.top + 1) / (c.right - c.left + 1)).clamp(160, 320)
+                // shape, so handwriting stays readable; a whole page is capped
+                // (higher for a notebook page, which is all handwriting).
+                let cap = if page { 720 } else { 320 };
+                let height = a.markup_crop.map_or(cap, |c| {
+                    (680 * (c.bottom - c.top + 1) / (c.right - c.left + 1)).clamp(160, cap)
                 });
                 picture.set_height_request(height);
-                picture.set_tooltip_text(Some("Handwritten markup (page image from your Kobo)"));
-                picture.update_property(&[gtk::accessible::Property::Label(
-                    "Handwritten markup page image",
-                )]);
+                let (tooltip, label) = if page {
+                    (
+                        "Notebook page (redrawn from your Kobo’s ink)",
+                        "Notebook page image",
+                    )
+                } else {
+                    (
+                        "Handwritten markup (page image from your Kobo)",
+                        "Handwritten markup page image",
+                    )
+                };
+                picture.set_tooltip_text(Some(tooltip));
+                picture.update_property(&[gtk::accessible::Property::Label(label)]);
                 body.append(&picture);
             }
             None => {
                 let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-                row.append(&gtk::Image::from_icon_name("input-tablet-symbolic"));
+                row.append(&gtk::Image::from_icon_name(if page {
+                    "accessories-text-editor-symbolic"
+                } else {
+                    "input-tablet-symbolic"
+                }));
                 row.append(&wrapped_label(
-                    "Handwritten markup. The page image is copied when the Kobo is connected.",
+                    if page {
+                        "Notebook page. Its ink is copied when the Kobo is connected."
+                    } else {
+                        "Handwritten markup. The page image is copied when the Kobo is connected."
+                    },
                     &["dim-label"],
                 ));
                 body.append(&row);

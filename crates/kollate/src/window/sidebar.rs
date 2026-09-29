@@ -156,6 +156,7 @@ impl Window {
             (Nav::Annotations(View::All), c.all),
             (Nav::Annotations(View::Notes), c.notes),
             (Nav::Annotations(View::Markups), c.markups),
+            (Nav::Annotations(View::Notebooks), c.notebooks),
             (Nav::Annotations(View::Starred), c.starred),
             (Nav::Annotations(View::Archive), c.archive),
             (Nav::Annotations(View::Trash), c.trash),
@@ -172,10 +173,13 @@ impl Window {
         for (nav, label) in self.count_labels.borrow().iter() {
             let n = counts.get(nav).copied().unwrap_or(0);
             label.set_label(&if n > 0 { n.to_string() } else { String::new() });
-            // "Deleted on Kobo" only shows up when there's something in it
-            // (or while you're looking at it).
-            if *nav == Nav::Annotations(View::RemovedOnDevice)
-                && let Some(row) = label.ancestor(gtk::ListBoxRow::static_type())
+            // "Deleted on Kobo" and "Notebooks" (only stylus Kobos have
+            // them) show up when there's something in them (or while you're
+            // looking at them).
+            if matches!(
+                *nav,
+                Nav::Annotations(View::RemovedOnDevice | View::Notebooks)
+            ) && let Some(row) = label.ancestor(gtk::ListBoxRow::static_type())
             {
                 row.set_visible(n > 0 || self.current.get() == *nav);
             }

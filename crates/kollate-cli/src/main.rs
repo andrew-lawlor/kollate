@@ -253,8 +253,7 @@ const ISSUES_URL: &str = "https://github.com/andrew-lawlor/kollate/issues";
 
 fn import(path: &Path, library_path: &Path, dry_run: bool) -> Result<()> {
     let device = DeviceInfo::identify(path)?;
-    let snapshot = KoboDb::open_copy(&find_kobo_db(path)?)?.snapshot()?;
-    warn_if_untested(&snapshot);
+    let snapshot = read_kobo(path)?;
     let mut lib = Library::open(library_path)?;
     let s = lib.import(&snapshot, &device, dry_run)?;
     // From a mounted Kobo, also what the app copies: covers, markup images,
@@ -400,7 +399,8 @@ fn transcribe(library_path: &Path, model: Option<&str>, cpu: bool) -> Result<()>
             t0.elapsed().as_secs_f32()
         );
         if let Some(text) = &t.text {
-            println!("  marks: {}", text.replace('\n', "\n         "));
+            let label = if job.page { "  page: " } else { "  marks:" };
+            println!("{label} {}", text.replace('\n', "\n         "));
         }
         if let Some(note) = &t.note {
             println!("  notes: {}", note.replace('\n', "\n         "));
@@ -432,9 +432,21 @@ fn library(library_path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn inspect(path: PathBuf, json: bool) -> Result<()> {
-    let snapshot = KoboDb::open_copy(&find_kobo_db(&path)?)?.snapshot()?;
+/// Reads a Kobo: its database and, when mounted, its notebooks.
+fn read_kobo(path: &Path) -> Result<KoboSnapshot> {
+    let mut snapshot = KoboDb::open_copy(&find_kobo_db(path)?)?.snapshot()?;
     warn_if_untested(&snapshot);
+    if path.is_dir() {
+        kollate_core::kobo::notebook::add_notebook_pages(path, &mut snapshot);
+        for (volume_id, why) in &snapshot.unread_notebooks {
+            eprintln!("warning: couldn't read notebook {volume_id}: {why}");
+        }
+    }
+    Ok(snapshot)
+}
+
+fn inspect(path: PathBuf, json: bool) -> Result<()> {
+    let snapshot = read_kobo(&path)?;
     if json {
         println!("{}", serde_json::to_string_pretty(&snapshot)?);
         return Ok(());
@@ -474,6 +486,13 @@ fn inspect(path: PathBuf, json: bool) -> Result<()> {
             }
             let body = match b.kind {
                 AnnotationKind::Markup => "[stylus markup]".to_owned(),
+                AnnotationKind::Page => format!(
+                    "[notebook page, {} strokes]",
+                    snapshot
+                        .notebook_ink
+                        .get(&b.bookmark_id)
+                        .map_or(0, |p| p.strokes.len())
+                ),
                 _ => b.text.clone().unwrap_or_default().replace('\n', " / "),
             };
             println!(

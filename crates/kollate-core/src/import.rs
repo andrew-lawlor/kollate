@@ -118,6 +118,7 @@ fn kind_str(kind: &AnnotationKind) -> Option<&'static str> {
         AnnotationKind::Highlight => Some("highlight"),
         AnnotationKind::Note => Some("note"),
         AnnotationKind::Markup => Some("markup"),
+        AnnotationKind::Page => Some("page"),
         AnnotationKind::Dogear | AnnotationKind::Other(_) => None,
     }
 }
@@ -161,7 +162,12 @@ impl Importer<'_> {
                 None => self.stats.annotations_skipped += 1,
             }
         }
-        self.flag_removed(&seen)?;
+        // Pages of notebooks that weren't read this time aren't gone.
+        let mut unread: Vec<&str> = s.unread_notebooks.iter().map(|(v, _)| v.as_str()).collect();
+        if !s.notebooks_read {
+            unread.extend(s.notebooks.iter().map(|b| b.volume_id.as_str()));
+        }
+        self.flag_removed(&seen, !s.notebooks_read, &unread)?;
 
         for w in &s.words {
             let book = w.volume_id.as_deref().and_then(|v| books.get(v));
@@ -243,7 +249,7 @@ impl Importer<'_> {
             return Ok(None);
         };
         let fingerprint = match (&bm.kind, bm.text.as_deref()) {
-            (AnnotationKind::Markup, _) => Some(markup_fingerprint(
+            (AnnotationKind::Markup | AnnotationKind::Page, _) => Some(markup_fingerprint(
                 &book.fingerprint,
                 (&bm.start.container_path, bm.start.offset),
                 (&bm.end.container_path, bm.end.offset),
@@ -431,10 +437,17 @@ impl Importer<'_> {
         Ok(())
     }
 
-    /// Flags annotations previously seen on this device that are gone now.
     /// Flags annotations previously seen on this device that are gone now,
     /// and moves them to Trash if the user chose that.
-    fn flag_removed(&mut self, seen: &HashSet<i64>) -> Result<()> {
+    ///
+    /// Notebook pages aren't flagged when notebooks weren't read at all
+    /// (`skip_pages`), nor those of the `unread` notebooks (by volume ID).
+    fn flag_removed(
+        &mut self,
+        seen: &HashSet<i64>,
+        skip_pages: bool,
+        unread: &[&str],
+    ) -> Result<()> {
         let policy: Option<String> = self
             .tx
             .query_row(
@@ -445,14 +458,24 @@ impl Importer<'_> {
             .optional()?;
         let trash = DeviceDeletePolicy::parse(policy.as_deref()) == DeviceDeletePolicy::Trash;
         let mut stmt = self.tx.prepare(
-            "SELECT DISTINCT a.id FROM annotation_source s JOIN annotation a ON a.id = s.annotation_id
+            "SELECT DISTINCT a.id, a.kind, a.content_id FROM annotation_source s JOIN annotation a ON a.id = s.annotation_id
              WHERE s.device_id = ?1 AND a.removed_on_device_at IS NULL",
         )?;
         let gone: Vec<i64> = stmt
-            .query_map([self.device_id], |r| r.get(0))?
+            .query_map([self.device_id], |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            })?
             .collect::<rusqlite::Result<Vec<_>>>()?
             .into_iter()
-            .filter(|id| !seen.contains(id))
+            .filter(|(id, kind, content)| {
+                !seen.contains(id)
+                    && !(kind == "page" && (skip_pages || unread.contains(&content.as_str())))
+            })
+            .map(|(id, _, _)| id)
             .collect();
         for id in &gone {
             self.tx.execute(

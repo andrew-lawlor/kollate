@@ -1,5 +1,6 @@
 //! Handwriting transcription state (SPEC §8a): the book's words near each
-//! markup, and which markups still need reading by the current model.
+//! markup, and which markups and notebook pages still need reading by the
+//! current model.
 
 use std::path::PathBuf;
 
@@ -8,13 +9,15 @@ use rusqlite::params;
 use super::Library;
 use crate::Result;
 use crate::kobo::DeviceInfo;
-use crate::markup::{Context, Reader, Transcription, transcribe};
+use crate::markup::{Context, Reader, Transcription, read_page, transcribe};
 
-/// A markup to transcribe: its copied ink and page, and the book's words
-/// around it when they were saved at import.
+/// A markup or notebook page to transcribe: its copied ink and page, and
+/// the book's words around it when they were saved at import.
 #[derive(Debug, Clone)]
 pub struct MarkupJob {
     pub annotation_id: i64,
+    /// A notebook page: all its writing is read, as the page's text.
+    pub page: bool,
     pub svg: PathBuf,
     pub jpg: Option<PathBuf>,
     pub words: Option<Vec<String>>,
@@ -32,6 +35,12 @@ impl MarkupJob {
         known_word: Option<&dyn Fn(&str) -> bool>,
     ) -> Result<Transcription> {
         let svg = std::fs::read_to_string(&self.svg)?;
+        if self.page {
+            return Ok(Transcription {
+                text: read_page(&svg, reader)?,
+                note: None,
+            });
+        }
         let page = self.jpg.as_ref().and_then(|p| std::fs::read(p).ok());
         let context = Context {
             page_jpeg: page.as_deref(),
@@ -63,23 +72,33 @@ impl Library {
         Ok(updated)
     }
 
-    /// Markups whose transcription is missing or out of date for `source`
-    /// (the model in use): new ink, a page or book text that arrived since,
-    /// or a different model. Trashed markups are skipped.
+    /// Markups and notebook pages whose transcription is missing or out of
+    /// date for `source` (the model in use): new ink, a page or book text
+    /// that arrived since, or a different model. Trashed ones are skipped.
     pub fn pending_transcriptions(&self, source: &str) -> Result<Vec<MarkupJob>> {
-        // (id, ink SVG, page JPG, book words, hash of the saved transcription)
-        type Row = (i64, String, Option<String>, Option<String>, Option<String>);
+        // (id, is a page, ink SVG, page JPG, book words, hash of the saved transcription)
+        type Row = (
+            i64,
+            bool,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        );
         let rows: Vec<Row> = self
             .conn
             .prepare(
-                "SELECT id, markup_svg_path, markup_jpg_path, markup_context, ink_hash FROM annotation
-                 WHERE kind = 'markup' AND markup_svg_path IS NOT NULL AND status != 'trashed'
+                "SELECT id, kind = 'page', markup_svg_path, markup_jpg_path, markup_context, ink_hash
+                 FROM annotation
+                 WHERE kind IN ('markup', 'page') AND markup_svg_path IS NOT NULL AND status != 'trashed'
                  ORDER BY created_at",
             )?
-            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?
+            .query_map([], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+            })?
             .collect::<rusqlite::Result<_>>()?;
         let mut jobs = Vec::new();
-        for (annotation_id, svg, jpg, context, done) in rows {
+        for (annotation_id, page, svg, jpg, context, done) in rows {
             let svg = PathBuf::from(svg);
             let Ok(ink) = std::fs::read(&svg) else {
                 continue;
@@ -93,6 +112,7 @@ impl Library {
             if done.as_deref() != Some(hash.as_str()) {
                 jobs.push(MarkupJob {
                     annotation_id,
+                    page,
                     svg,
                     jpg,
                     words: context.and_then(|c| serde_json::from_str(&c).ok()),
