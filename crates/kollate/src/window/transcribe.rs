@@ -42,6 +42,9 @@ impl Window {
             // The model loads once, on the worker, and is handed back each time.
             let mut worker: Option<(Transcriber, Vec<Dictionary>)> = None;
             let (mut done, mut failed, mut words) = (Vec::new(), 0, 0);
+            // Why the last reading failed, so a run where nothing worked
+            // says so instead of ending in silence.
+            let mut last_error: Option<String> = None;
             for job in jobs {
                 let (to_load, dirs) = (model.clone(), dictionary_dirs.clone());
                 let taken = worker.take();
@@ -70,7 +73,14 @@ impl Window {
                                 words += added;
                                 done.push(job);
                             }
-                            Err(_) => failed += 1,
+                            Err(err) => {
+                                eprintln!(
+                                    "kollate: couldn’t read markup {}: {err}",
+                                    job.annotation_id
+                                );
+                                last_error = Some(err.to_string());
+                                failed += 1;
+                            }
                         }
                     }
                     Ok(Err(err)) => {
@@ -78,6 +88,15 @@ impl Window {
                         break;
                     }
                     Err(_) => {
+                        // The worker thread stopped (it panicked): often the
+                        // graphics card running out of memory.
+                        eprintln!("kollate: the handwriting reader stopped unexpectedly");
+                        last_error = Some(
+                            "The reader stopped unexpectedly. If another program is using the \
+                             graphics card, close it and try again, or turn off Use Graphics \
+                             Card in Preferences."
+                                .to_owned(),
+                        );
                         failed += 1;
                         break;
                     }
@@ -102,6 +121,8 @@ impl Window {
                     message.push_str(&format!(" ({failed} couldn’t be read)"));
                 }
                 this.toast(&message);
+            } else if let Some(err) = last_error {
+                this.error("Couldn’t Read Your Handwriting", err);
             }
         });
     }
