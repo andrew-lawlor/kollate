@@ -178,6 +178,8 @@ The marked text becomes the markup's text and your handwriting its note, so both
 
 Pages of your Kobo notebooks are read the same way, whole: Kollate finds the lines of writing on the page, reads them one by one, and leaves drawings out (shapes, arrows, doodles; a short label beside them is still read). This works for **Basic** notebooks too, which the Kobo can't turn into text, and needs no **Convert** on the Kobo for Advanced ones.
 
+![A notebook page of reading notes and a drawing of the way from Troy to Ithaca, redrawn from the Kobo's ink, with its writing read as text below it](guide/notebooks.png)
+
 Each notebook appears as a book, with the Kobo's picture of it as its cover, and its pages in the **Notebooks** view. A page's text is its highlight text: search it, edit it with **E**, star, tag and export it like anything else. Pages you add or write more on are read again at the next import; your corrections stay. If a notebook comes from a newer Kobo that stores notebooks differently, Kollate leaves it out and keeps what it already has.
 
 ### Set it up

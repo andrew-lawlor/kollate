@@ -105,17 +105,25 @@ pub fn transcribe(
 /// Reads a notebook page: its writing line by line, one line per line of
 /// text. Drawings are left out: a piece of one that reaches the model (an
 /// eye, an arrowhead, a box) reads as a stray character or a runaway repeat,
-/// and is dropped.
+/// and is dropped; an arrowhead touching a label is trimmed off it.
 pub fn read_page(svg: &str, reader: &mut dyn Reader) -> Result<Option<String>> {
     let strokes = segment::strokes(svg);
     let mut lines = Vec::new();
     for line in segment::lines(&strokes) {
         let img = image::render_note(svg, &strokes, &line, 16)?;
-        let text = reader
+        let mut words: Vec<String> = reader
             .handwriting(&img)?
             .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
+            .map(str::to_owned)
+            .collect();
+        let arrow = |w: &String| w.chars().all(|c| "<>-–—→←=".contains(c));
+        while words.first().is_some_and(arrow) {
+            words.remove(0);
+        }
+        while words.last().is_some_and(arrow) {
+            words.pop();
+        }
+        let text = words.join(" ");
         let letters = text.chars().filter(|c| c.is_alphabetic()).count();
         let distinct: std::collections::HashSet<char> = text.chars().collect();
         let runaway = text.chars().count() > 12 && distinct.len() < 4;
@@ -168,7 +176,7 @@ mod tests {
             "<svg width=\"1264\" height=\"1680\" viewBox=\"0 0 1264 1680\"><g>{paths}</g></svg>"
         );
         let mut reader = Scripted {
-            handwriting: vec!["This is  my", "page", "0"],
+            handwriting: vec!["This is  my", "-> page <", "0"],
             print: vec![],
             seen: vec![],
         };

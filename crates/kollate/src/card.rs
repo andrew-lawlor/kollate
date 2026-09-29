@@ -131,7 +131,7 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
                 // Sized for a typical card width (~680px) from the crop's
                 // shape, so handwriting stays readable; a whole page is capped
                 // (higher for a notebook page, which is all handwriting).
-                let cap = if page { 720 } else { 320 };
+                let cap = if page { 560 } else { 320 };
                 let height = a.markup_crop.map_or(cap, |c| {
                     (680 * (c.bottom - c.top + 1) / (c.right - c.left + 1)).clamp(160, cap)
                 });
