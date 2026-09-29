@@ -46,32 +46,10 @@ impl KnownModel {
 
 const MODELS: [KnownModel; 3] = [
     KnownModel {
-        id: "qwen3-vl-4b",
-        name: "Qwen3-VL 4B",
-        summary: "Nearly the best at half the size. About 2 seconds a note without a graphics card.",
-        recommended: true,
-        files: [
-            KnownFile {
-                role: Role::Model,
-                name: "Qwen3VL-4B-Instruct-Q4_K_M.gguf",
-                url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/1cd86afb9a95c410a6038ab3b40d8b578c892266/Qwen3VL-4B-Instruct-Q4_K_M.gguf?download=true",
-                size: 2_497_281_664,
-                blake3: "ca9ee88799c3c37eeb647faeeb1152814784af11bc0ed29e775fe1ae81523047",
-            },
-            KnownFile {
-                role: Role::Vision,
-                name: "mmproj-Qwen3VL-4B-Instruct-F16.gguf",
-                url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/1cd86afb9a95c410a6038ab3b40d8b578c892266/mmproj-Qwen3VL-4B-Instruct-F16.gguf?download=true",
-                size: 836_180_256,
-                blake3: "411e2c9f1a788322017b32f9e2a3f372bb8446cc6b4153e6ffe3ed1f19e0a2b0",
-            },
-        ],
-    },
-    KnownModel {
         id: "qwen3-vl-2b",
         name: "Qwen3-VL 2B",
-        summary: "The smallest and fastest. Good on clear handwriting.",
-        recommended: false,
+        summary: "Small and fast, and reads clear handwriting very well. About 1.5 seconds a note without a graphics card.",
+        recommended: true,
         files: [
             KnownFile {
                 role: Role::Model,
@@ -86,6 +64,28 @@ const MODELS: [KnownModel; 3] = [
                 url: "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/mmproj-Qwen3VL-2B-Instruct-F16.gguf?download=true",
                 size: 819_394_848,
                 blake3: "2a0cc2f06da1c977fd29973bb8b7d161e2c1475a21ca5e2da784cb9ada693ee1",
+            },
+        ],
+    },
+    KnownModel {
+        id: "qwen3-vl-4b",
+        name: "Qwen3-VL 4B",
+        summary: "A little more accurate on hurried handwriting. About 2 seconds a note without a graphics card.",
+        recommended: false,
+        files: [
+            KnownFile {
+                role: Role::Model,
+                name: "Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+                url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/1cd86afb9a95c410a6038ab3b40d8b578c892266/Qwen3VL-4B-Instruct-Q4_K_M.gguf?download=true",
+                size: 2_497_281_664,
+                blake3: "ca9ee88799c3c37eeb647faeeb1152814784af11bc0ed29e775fe1ae81523047",
+            },
+            KnownFile {
+                role: Role::Vision,
+                name: "mmproj-Qwen3VL-4B-Instruct-F16.gguf",
+                url: "https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/resolve/1cd86afb9a95c410a6038ab3b40d8b578c892266/mmproj-Qwen3VL-4B-Instruct-F16.gguf?download=true",
+                size: 836_180_256,
+                blake3: "411e2c9f1a788322017b32f9e2a3f372bb8446cc6b4153e6ffe3ed1f19e0a2b0",
             },
         ],
     },
@@ -162,7 +162,7 @@ mod tests {
                 assert_eq!(f.blake3.len(), 64);
             }
         }
-        assert_eq!(catalog()[0].size(), 3_333_461_920);
+        assert_eq!(catalog()[0].size(), 2_653_822_272);
     }
 
     #[test]

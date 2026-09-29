@@ -135,7 +135,7 @@ The **[user guide](docs/guide.md)** covers everything in detail, with screenshot
 
 ### Reading your handwriting
 
-In *Preferences → Handwriting*, pick a model: **Qwen3-VL 4B** (3.3 GB, recommended), 2B (2.7 GB, fastest) or 8B (6.2 GB, most accurate). Download its two files with the links there, then add them with **+**. Kollate checks them and, after each import, reads your markups and notebook pages in the background: about half a second a note with a graphics card, or 2–4 seconds without. Marked text always comes from the book itself. It needs an x86-64 processor from about 2013 or later (with AVX2).
+In *Preferences → Handwriting*, pick a model: **Qwen3-VL 2B** (2.7 GB, recommended), 4B (3.3 GB, a little more accurate on hurried writing) or 8B (6.2 GB, most accurate). Download its two files with the links there, then add them with **+**. Kollate checks them and, after each import, reads your markups and notebook pages in the background: about half a second a note with a graphics card, or 2–4 seconds without. Marked text always comes from the book itself. It needs an x86-64 processor from about 2013 or later (with AVX2).
 
 From a terminal: `kollate-cli models` lists them with download links, `kollate-cli models add FILES…` adds them, and `kollate-cli transcribe` reads what's waiting.
 

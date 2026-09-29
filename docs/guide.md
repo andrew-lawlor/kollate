@@ -186,8 +186,8 @@ Each notebook appears as a book, with the Kobo's picture of it as its cover, and
 
    | Model | Download | Good for |
    |---|---|---|
-   | **Qwen3-VL 4B** (recommended) | 3.3 GB | Nearly the best accuracy, at half the size |
-   | Qwen3-VL 2B | 2.7 GB | The smallest and fastest; very good on clear handwriting |
+   | **Qwen3-VL 2B** (recommended) | 2.7 GB | Small and fast; reads clear handwriting very well |
+   | Qwen3-VL 4B | 3.3 GB | A little more accurate on hurried handwriting |
    | Qwen3-VL 8B | 6.2 GB | The most accurate; best with a graphics card |
 
 2. When both files have **finished** downloading, press **+** in the Handwriting group and select both. (Browsers create the file before it's complete; if you pick it too early, Kollate says it hasn't finished downloading.)
