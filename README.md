@@ -3,7 +3,8 @@
 </p>
 
 <p align="center">
-  Collect and curate the highlights, notes, handwriting and vocabulary from your Kobo e-reader.<br>
+  Collect the highlights, notes, handwriting and vocabulary from your Kobo e-reader,<br>
+  and curate them as you read: a star, a tag or a circled word in the margin does the filing.<br>
   A native Linux app, built with GTK 4 and libadwaita. Designed for GNOME, and works on any desktop.<br>
   Offline, read-only on your device, and free of duplicates.
 </p>
@@ -28,14 +29,28 @@ Plug in your Kobo and Kollate imports everything you've marked while reading:
 - **Notebooks** from stylus models, Basic and Advanced alike: every page redrawn from your pen strokes, with its writing as text. The Kobo itself only converts Advanced notebooks, and only when you ask.
 - **Vocabulary Builder words.** Kollate goes further than the Kobo here: it finds the sentence you looked each word up in, inside the book itself, and adds an offline dictionary definition.
 
-Then you curate:
+## Curate with the pen
+
+Most tools make you curate afterwards, at a desk. With Kollate you can do it while you read, the way readers always have: with a mark in the margin. Kollate reads the mark when it reads your handwriting, and does the filing.
+
+| In the margin | In Kollate |
+|---|---|
+| `*` (or a drawn star), or `NB` | Starred |
+| `?` | Tagged `question`: a list of passages to look into |
+| `#leadership` | Tagged `leadership` |
+| A circled word | Added to Vocabulary, with the book's sentence and a definition |
+| A circled word, with a note beside it | …and the note becomes your **gloss** on the word |
+
+Write the mark beside what you underlined, and the card shows that passage. On a Kobo without a stylus, type the same marks as a highlight's note. Marks take effect once: unstar or untag something in Kollate and it stays that way. None of it goes online; the reading is done by a small model on your own computer.
+
+It's an old habit made new. The asterisk began as the *asteriskos*, "little star", that Alexandria's librarians put beside lines of Homer; *nota bene* and *quaere* filled medieval margins; a *gloss* was a hard word's meaning written beside it, and glossaries grew from them. The [user guide](docs/guide.md#mark-it-in-the-margin) has the details.
+
+## In the app
 
 - An **Inbox** of new highlights you can triage from the keyboard: `K` keep, `A` archive, `S` star (starring also keeps), `E` edit, `Delete` trash.
 - **Bulk actions:** select several highlights (Ctrl- or Shift-click, Shift+↑/↓, Ctrl+A) and keep, archive, star or trash them together, or **Keep All** in the Inbox. Every action can be undone. Press **Ctrl+?** to see all keyboard shortcuts.
 - A **Books** page of covers, sorted by most recently read (or title, or author), with your five latest books always one click away in the sidebar.
 - **Star, tag, archive** and **search** everything: the search field at the top of every page filters highlights, books or words.
-- **Curate while you read,** with a mark in the margin: `*` or `NB` stars, `?` flags a question, `#word` tags. Handwritten on stylus models, or typed as a highlight's note on any Kobo.
-- **Circle a word to learn it:** it goes to Vocabulary with its sentence and a definition, and a note written beside it becomes your gloss.
 - **Fix typos or rewrite notes.** Kollate keeps the Kobo's original and can restore it.
 - **Pick the right context sentence** and edit definitions for each word, and track words as *New*, *Learning*, *Known* or *Ignored*.
 
