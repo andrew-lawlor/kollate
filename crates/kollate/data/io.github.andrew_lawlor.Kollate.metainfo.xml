@@ -16,6 +16,7 @@
     </p>
     <ul>
       <li>Read your handwritten notes and notebooks as text, with a model on your computer</li>
+      <li>Star, tag and add words to your vocabulary with marks in the margin as you read</li>
       <li>Triage new highlights in an inbox, star, tag, edit and archive them</li>
       <li>See the sentence each vocabulary word appeared in, with an offline definition</li>
       <li>Sync notes to an Obsidian vault and export Anki decks, JSON, CSV or Readwise CSV</li>
@@ -33,6 +34,16 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.4.0" date="2026-09-29">
+      <description>
+        <p>Curate while you read, with a mark in the margin, as readers have for two thousand years. Kollate reads the mark along with your handwriting and does the filing.</p>
+        <ul>
+          <li>A star or NB stars a passage, a question mark tags it as a question, and #word tags it; type the same marks as a highlight's note on any Kobo</li>
+          <li>Circle a word to learn it: it goes to Vocabulary with the book's sentence and a definition, and a note written beside it becomes your gloss</li>
+          <li>Small circles around a word are no longer mistaken for handwriting; your markups are read once more after updating</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-09-29">
       <description>
         <p>Kollate now imports the notebooks on a stylus Kobo, Basic and Advanced alike, and reads their handwriting on your computer. The Kobo itself only converts Advanced notebooks, and only when you ask.</p>

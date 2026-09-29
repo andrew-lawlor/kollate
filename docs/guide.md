@@ -1,6 +1,6 @@
 # Kollate user guide
 
-For Kollate 0.3.0. Kollate brings everything you mark on a Kobo e-reader — highlights, notes, stylus markups, notebooks and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
+For Kollate 0.4.0. Kollate brings everything you mark on a Kobo e-reader — highlights, notes, stylus markups, notebooks and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
 
 **Contents**
 
@@ -35,7 +35,7 @@ Flatpak installs the GNOME runtime from Flathub if you don't have it. The Flatpa
 **Debian 13 or Ubuntu 24.04 and newer** (`.deb`):
 
 ```sh
-sudo apt install ./kollate_0.3.0-1_amd64.deb
+sudo apt install ./kollate_0.4.0-1_amd64.deb
 ```
 
 This also installs `kollate-cli`, the [command-line tool](#11-the-command-line).
@@ -218,6 +218,8 @@ You can triage while you read, with the pen: write a mark beside a passage you'v
 | `?` | Tags it `question`: a list of passages to look into |
 | `#word` | Tags it, e.g. `#leadership` |
 
+![A passage from Moby-Dick underlined with a question mark in the margin, shown under the question tag](screenshots/pen-question.png)
+
 `*`, `NB` and `?` count on their own: a note like "why?" stays a note. `#word` counts anywhere in a note, and is taken out of it; a tag one letter off one you have (`#leadershp`) joins it. Each mark takes effect once: if you unstar or untag something in Kollate, it stays that way when the page is read again.
 
 Two things to know. The Kobo keeps everything you mark on a page in one visit as one markup, so a mark applies to all of it. And a star drawn next to an ordinary highlight doesn't attach to it; there, type the mark as the highlight's note instead. Typed notes work on any Kobo, with or without a stylus: type `#leadership`, `NB` or `?` as a highlight's note.
@@ -225,6 +227,8 @@ Two things to know. The Kobo keeps everything you mark on a page in one visit as
 ### Circle a word to learn it
 
 Circle a single word on the page and it goes to [Vocabulary](#7-vocabulary), with the book's sentence around it and a definition, like a word you looked up. Write a few words beside it and they become **your gloss** on the word, shown with its definition and on its Anki card. To stop circled words being added, turn off **Circled Words Go to Vocabulary** in Preferences → Handwriting.
+
+![The word "daemon" in Vocabulary: its definition, the gloss written beside it on the page, and the sentence it was circled in](screenshots/pen-gloss.png)
 
 > **Old habits.** None of this is new. Around 150 BC, Aristarchus, head of the Library at Alexandria, edited Homer with signs in the margin, among them the *asteriskos*, "little star", where our asterisk comes from. Medieval readers wrote *nota bene* beside what mattered, and *quaere*, "inquire", beside what they doubted. A hard word got a *gloss*, its meaning written above it or in the margin; collected, glosses became the first glossaries. Readers from Erasmus to Locke kept commonplace books, copying passages under headings, as tags do. And scriptoria *collated* their copies against the original, which is where Kollate's name comes from.
 
@@ -283,7 +287,7 @@ Choose a folder in your vault and press **Sync**. Kollate writes one note per bo
 |---|---|
 | When a Kobo Is Connected | Import automatically · Ask first · Do nothing |
 | When a Highlight Is Deleted on the Kobo | Keep it, marked as deleted · Move it to Trash |
-| Handwriting | Download, add, choose and remove models; Use Graphics Card |
+| Handwriting | Download, add, choose and remove models; Use Graphics Card; Circled Words Go to Vocabulary |
 | Dictionaries | Add or remove dictionaries, by language |
 | Library | Where your library is (see [Your data](#12-your-data)) |
 

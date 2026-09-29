@@ -41,6 +41,11 @@ Most tools make you curate afterwards, at a desk. With Kollate you can do it whi
 | A circled word | Added to Vocabulary, with the book's sentence and a definition |
 | A circled word, with a note beside it | …and the note becomes your **gloss** on the word |
 
+| | |
+|---|---|
+| ![A passage from Moby-Dick underlined, with a question mark written in the margin, tagged "question" in Kollate](docs/screenshots/pen-question.png) | ![The word "daemon", circled on a page of Frankenstein, in Vocabulary with its definition, the gloss written beside it, and the sentence it was circled in](docs/screenshots/pen-gloss.png) |
+| **A `?` in the margin:** the passage lands under `question` | **A circled word:** in Vocabulary, with your gloss and its sentence |
+
 Write the mark beside what you underlined, and the card shows that passage. On a Kobo without a stylus, type the same marks as a highlight's note. Marks take effect once: unstar or untag something in Kollate and it stays that way. None of it goes online; the reading is done by a small model on your own computer.
 
 It's an old habit made new. The asterisk began as the *asteriskos*, "little star", that Alexandria's librarians put beside lines of Homer; *nota bene* and *quaere* filled medieval margins; a *gloss* was a hard word's meaning written beside it, and glossaries grew from them. The [user guide](docs/guide.md#mark-it-in-the-margin) has the details.
@@ -107,7 +112,7 @@ The bundle uses the GNOME 51 runtime from Flathub, and Flatpak installs it autom
 ### Debian / Ubuntu (.deb)
 
 ```sh
-sudo apt install ./kollate_0.3.0-1_amd64.deb
+sudo apt install ./kollate_0.4.0-1_amd64.deb
 ```
 
 The package includes the app, the `kollate-cli` tool and the English Wiktionary dictionary. It needs GTK ≥ 4.12 and libadwaita ≥ 1.5, which Debian 13 and Ubuntu 24.04 or newer provide.
