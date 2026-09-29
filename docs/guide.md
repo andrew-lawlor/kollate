@@ -207,7 +207,26 @@ Clear handwriting is usually read exactly. Hurried scrawls, and very short or un
 
 If you install more than one model, Preferences lets you choose which to use. Choosing another reads your markups again with it; your corrections are kept.
 
-Kobo notebooks (the separate notebook app on stylus models) aren't read yet.
+### Mark it in the margin
+
+You can triage while you read, with the pen: write a mark beside a passage you've underlined or circled, and Kollate acts on it when it reads the page.
+
+| Write | Kollate |
+|---|---|
+| `*` or a drawn star | Stars it (and keeps it, as starring in the Inbox does) |
+| `NB` | Stars it |
+| `?` | Tags it `question`: a list of passages to look into |
+| `#word` | Tags it, e.g. `#leadership` |
+
+`*`, `NB` and `?` count on their own: a note like "why?" stays a note. `#word` counts anywhere in a note, and is taken out of it; a tag one letter off one you have (`#leadershp`) joins it. Each mark takes effect once: if you unstar or untag something in Kollate, it stays that way when the page is read again.
+
+Two things to know. The Kobo keeps everything you mark on a page in one visit as one markup, so a mark applies to all of it. And a star drawn next to an ordinary highlight doesn't attach to it; there, type the mark as the highlight's note instead. Typed notes work on any Kobo, with or without a stylus: type `#leadership`, `NB` or `?` as a highlight's note.
+
+### Circle a word to learn it
+
+Circle a single word on the page and it goes to [Vocabulary](#7-vocabulary), with the book's sentence around it and a definition, like a word you looked up. Write a few words beside it and they become **your gloss** on the word, shown with its definition and on its Anki card. To stop circled words being added, turn off **Circled Words Go to Vocabulary** in Preferences → Handwriting.
+
+> **Old habits.** None of this is new. Around 150 BC, Aristarchus, head of the Library at Alexandria, edited Homer with signs in the margin, among them the *asteriskos*, "little star", where our asterisk comes from. Medieval readers wrote *nota bene* beside what mattered, and *quaere*, "inquire", beside what they doubted. A hard word got a *gloss*, its meaning written above it or in the margin; collected, glosses became the first glossaries. Readers from Erasmus to Locke kept commonplace books, copying passages under headings, as tags do. And scriptoria *collated* their copies against the original, which is where Kollate's name comes from.
 
 ## 7. Vocabulary
 
@@ -215,6 +234,8 @@ Every word you looked up in the Kobo's dictionary appears in **Vocabulary**, wit
 
 - **The sentence you met it in**, found inside the book (sideloaded, DRM-free books; the Kobo doesn't record this itself).
 - **A definition** from Kollate's offline English Wiktionary.
+
+Words you [circled on the page](#circle-a-word-to-learn-it) appear here too, marked **Circled in** their book in the word's dialog, with your gloss if you wrote one.
 
 ![Vocabulary words with definitions and the sentence each was found in](screenshots/vocabulary.png)
 

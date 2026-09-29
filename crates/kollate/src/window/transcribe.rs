@@ -41,7 +41,7 @@ impl Window {
         glib::spawn_future_local(async move {
             // The model loads once, on the worker, and is handed back each time.
             let mut worker: Option<(Transcriber, Vec<Dictionary>)> = None;
-            let (mut done, mut failed) = (Vec::new(), 0);
+            let (mut done, mut failed, mut words) = (Vec::new(), 0, 0);
             for job in jobs {
                 let (to_load, dirs) = (model.clone(), dictionary_dirs.clone());
                 let taken = worker.take();
@@ -66,7 +66,10 @@ impl Window {
                                 .borrow()
                                 .save_transcription(&job, &t, model.model.id)
                         }) {
-                            Ok(()) => done.push(job),
+                            Ok(added) => {
+                                words += added;
+                                done.push(job);
+                            }
                             Err(_) => failed += 1,
                         }
                     }
@@ -81,10 +84,20 @@ impl Window {
                 }
             }
             this.transcribing.set(false);
+            // Circled words just added to Vocabulary need definitions.
+            if words > 0 {
+                this.enrich_vocab();
+            }
             this.reload();
             this.update_counts();
             if !done.is_empty() {
                 let mut message = format!("Read the handwriting in {}", what(&done));
+                if words > 0 {
+                    message.push_str(&format!(
+                        ", and added {} to Vocabulary",
+                        plural(words, "circled word", "circled words")
+                    ));
+                }
                 if failed > 0 {
                     message.push_str(&format!(" ({failed} couldn’t be read)"));
                 }
@@ -255,6 +268,21 @@ impl Window {
             }
         });
         group.add(&gpu);
+
+        // On unless turned off (SPEC §8c).
+        let setting = kollate_core::store::GLOSSES_SETTING;
+        let glosses = adw::SwitchRow::builder()
+            .title("Circled Words Go to Vocabulary")
+            .subtitle("A single word you circle on a page is added with its sentence. A note written beside it becomes your gloss.")
+            .active(self.lib.borrow().setting(setting).ok().flatten().as_deref() != Some("0"))
+            .build();
+        let weak = Rc::downgrade(self);
+        glosses.connect_active_notify(move |row| {
+            if let Some(this) = weak.upgrade() {
+                this.set_flag(setting, row.is_active());
+            }
+        });
+        group.add(&glosses);
         group
     }
 

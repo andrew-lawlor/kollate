@@ -315,6 +315,7 @@ mod tests {
 
         let under = |l: f32, t: f32, r: f32| Stroke {
             xml: String::new(),
+            points: vec![],
             bounds: Bounds {
                 left: l,
                 top: t,
@@ -335,6 +336,7 @@ mod tests {
 
         let circle = vec![Stroke {
             xml: String::new(),
+            points: vec![],
             bounds: Bounds {
                 left: 50.0,
                 top: 80.0,

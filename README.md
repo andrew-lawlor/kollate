@@ -34,6 +34,8 @@ Then you curate:
 - **Bulk actions:** select several highlights (Ctrl- or Shift-click, Shift+↑/↓, Ctrl+A) and keep, archive, star or trash them together, or **Keep All** in the Inbox. Every action can be undone. Press **Ctrl+?** to see all keyboard shortcuts.
 - A **Books** page of covers, sorted by most recently read (or title, or author), with your five latest books always one click away in the sidebar.
 - **Star, tag, archive** and **search** everything: the search field at the top of every page filters highlights, books or words.
+- **Curate while you read,** with a mark in the margin: `*` or `NB` stars, `?` flags a question, `#word` tags. Handwritten on stylus models, or typed as a highlight's note on any Kobo.
+- **Circle a word to learn it:** it goes to Vocabulary with its sentence and a definition, and a note written beside it becomes your gloss.
 - **Fix typos or rewrite notes.** Kollate keeps the Kobo's original and can restore it.
 - **Pick the right context sentence** and edit definitions for each word, and track words as *New*, *Learning*, *Known* or *Ignored*.
 

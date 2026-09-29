@@ -343,7 +343,16 @@ pub fn export_anki(
             let fields = [
                 html(word),
                 html(&lemma),
-                html(v.vocab.definition.as_deref().unwrap_or("")),
+                // The reader's gloss goes with the definition, so the note
+                // type (and cards already studied) stay the same.
+                match &v.vocab.gloss {
+                    Some(gloss) => format!(
+                        "{}<div class=gloss><i>Your gloss:</i> {}</div>",
+                        html(v.vocab.definition.as_deref().unwrap_or("")),
+                        html(gloss)
+                    ),
+                    None => html(v.vocab.definition.as_deref().unwrap_or("")),
+                },
                 context,
                 blank.clone(),
                 html(&eb.book.title),

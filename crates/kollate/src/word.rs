@@ -14,6 +14,8 @@ use crate::card::format_date;
 pub struct WordEdit {
     /// `Some` when the definition text was changed.
     pub definition: Option<String>,
+    /// `Some` when the reader's own note (gloss) was changed; empty clears it.
+    pub gloss: Option<String>,
     /// (sighting ID, chosen context) for sightings whose choice changed.
     pub contexts: Vec<(i64, Option<String>)>,
 }
@@ -125,13 +127,44 @@ pub fn present(
         }
     ));
 
+    // The reader's own note: a gloss written beside the circled word, or
+    // anything they want to remember about it.
+    let gloss_heading = heading("Your Gloss");
+    gloss_heading.set_margin_top(18);
+    body.append(&gloss_heading);
+    let gloss = gtk::TextView::builder()
+        .wrap_mode(gtk::WrapMode::WordChar)
+        .top_margin(10)
+        .bottom_margin(10)
+        .left_margin(12)
+        .right_margin(12)
+        .height_request(60)
+        .css_classes(["card"])
+        .build();
+    gloss.update_property(&[gtk::accessible::Property::Label("Your gloss")]);
+    let gloss_before = v.gloss.clone().unwrap_or_default();
+    gloss.buffer().set_text(&gloss_before);
+    body.append(&gloss);
+    body.append(
+        &gtk::Label::builder()
+            .label("Your own note on the word. Circle a word on your Kobo and write beside it, and it’s filled in for you.")
+            .wrap(true)
+            .xalign(0.0)
+            .css_classes(["caption", "dim-label"])
+            .build(),
+    );
+
     // Contexts, one section per lookup
     let lemma = v.lemma.clone().unwrap_or_default();
     let mut choices: Vec<ContextChoice> = Vec::new();
     for s in &detail.sightings {
         let mut title = String::from("Context");
         if let Some(book) = &s.book_title {
-            title = format!("In {book}");
+            title = if s.circled {
+                format!("Circled in {book}")
+            } else {
+                format!("In {book}")
+            };
         }
         if let Some(date) = s.looked_up_at {
             title.push_str(&format!(" · {}", format_date(date)));
@@ -245,6 +278,11 @@ pub fn present(
                 .text(&buf.start_iter(), &buf.end_iter(), false)
                 .trim()
                 .to_owned();
+            let gbuf = gloss.buffer();
+            let gloss_text = gbuf
+                .text(&gbuf.start_iter(), &gbuf.end_iter(), false)
+                .trim()
+                .to_owned();
             let contexts = choices
                 .iter()
                 .filter_map(|c| {
@@ -258,6 +296,7 @@ pub fn present(
                 .collect();
             on_save(WordEdit {
                 definition: (text != original).then_some(text),
+                gloss: (gloss_text != gloss_before).then_some(gloss_text),
                 contexts,
             });
             dialog.close();

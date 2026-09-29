@@ -253,7 +253,7 @@ Stylus Kobos keep notebooks as `My Notebooks/<name>.nebo`, listed in `content` a
 
 **Reading.** `markup::read_page`: strokes more than 2.5 letters tall or 6 long are drawing and left out. Letter-sized strokes are grouped into lines by the height of their centres (a jump of 0.8 letter starts a new line); dots, apostrophes, ascenders and descenders then join the nearest line within a letter. Lines split at gaps over 6 letters (labels side by side). Each line is read like a note; a piece of a drawing that still gets through (an eye, an arrowhead, a box) reads as a stray character or a runaway repeat and is dropped when it has at most two strokes. The page's text is stored as `ink_text`, one line per line of writing. On the two sample pages (13 lines, 2 diagrams), Qwen3-VL 2B read 11 lines exactly, about 2 s per page on the GPU.
 
-## 8c. Pen marks and glosses (planned for 0.4)
+## 8c. Pen marks and glosses (0.4)
 
 Two ways to curate while reading, with the stylus, instead of afterwards at the desk. Both build on §8a: the note text and the circled word are already read; what's new is acting on them. Both follow reading habits far older than e-readers (see *Precedents*), which the guide explains; the UI keeps plain words.
 
@@ -265,18 +265,20 @@ Two ways to curate while reading, with the stylus, instead of afterwards at the 
 |---|---|---|
 | `*` (a drawn star, as the model reads it) | Star | Aristarchus's *asteriskos*, "little star", beside lines of Homer (Alexandria, 2nd c. BC) |
 | `NB`, `N.B.` | Star | *nota bene*, medieval and later |
-| `?` alone, or `Q` | Tag `question` | *quaere*, early modern readers' query |
+| `?` alone | Tag `question` | *quaere*, early modern readers' query |
 | `#word` | Tag `word` | commonplace-book headings (Erasmus; Locke's indexing method, 1706) |
 
-**Parsing** (`markup::marks`, no model beyond §8a's reading). A mark counts only as a *whole token* standing apart: `#word` anywhere in a note (letters, digits, `-`, `_`); `*`, `NB`/`N.B.`, `?`, `Q` only as a note, or a line, of their own. So "Is this true?" is a note, not a question tag. A drawn star: the model's grammar (§8a) is Latin script, so a star comes back as `*` or `x`; `*` is accepted, and a star is also recognised from the ink: one closed stroke, about as wide as tall, turning sharply five times (checked on samples before relying on it). Tag names are lower-cased; a `#word` that isn't an existing tag but is within 0.8 similarity of one (≥ 5 letters) takes that tag's name, so a misread `#leadershp` joins `leadership`.
+**Parsing** (`markup::marks`). A mark counts only as a *whole token* standing apart: `#word` anywhere in a note (starting with a letter; then letters, digits, `-`, `_`); `*`, `NB` (also `N B`, `N.B.`, `nb`) and `?` only as a note, or a line, of their own. So "Is this true?" is a note, not a question tag, and "see #1" isn't a tag.
 
-**The note.** Marks are taken out of the note text shown and exported (`#leadership` becomes the tag, not words); a note that was only marks leaves no note, so it doesn't count in the Notes view. The reading as the model gave it stays in `ink_note` for the edit dialog's "Read From Handwriting".
+**Shapes** (`markup::shape`). Three things the model misreads are known from the ink instead, on real samples (2026-09-29, Libra Colour): a loop around a word or two (one stroke, a speck aside, at least 1.5× wider than tall, enclosing over 30% of its box once gaps of 4 px are closed) is a circle mark, not a note (the model "read" empty loops as `123456789`; circles by size, §8a, need 100×60 px, too big for a short word); a star drawn as an outline in one to three strokes (five far points in its radial profile) is `*` (read as `5`); and a hook with a dot or dash below it is `?` (one of two read as `3`). Asterisk-style stars are read as `*` by the model. `Q` was dropped: handwritten, it read as `9` and `a`. Tag names are lower-cased; a `#word` that isn't an existing tag but is within 0.8 similarity of one (four letters or more, so one letter off) takes that tag's name, so a misread `#leadershp` or a typed `#bsed` joins the existing tag.
+
+**The note.** Marks are taken out of a handwritten note (and a page's text) before it's stored in `ink_note` (`ink_text`), so `#leadership` becomes the tag, not words; a note that was only marks leaves no note, so it doesn't count in the Notes view.
 
 **Where to write them.** Beside what they're about: underline or circle the passage and write the mark in the margin, so the card shows the passage. A mark applies to its whole markup, and the Kobo keeps all the ink from one visit to a page as one markup; so with two passages underlined on a page, a `?` beside one tags both (the card shows which it sits beside). On a notebook page, a mark on its own line applies to the page.
 
 **Applied once.** A mark takes effect the first time it's read, and is remembered (`annotation.pen_marks`, JSON of what was applied). A later reading (another model, or the ink read again) applies only marks not applied before, so a star or tag the user removed in Kollate stays removed. A pen star stars *and keeps* the highlight, as starring in the Inbox does.
 
-**Typed notes too.** The same rules (`#word`, `NB`, and `*`, `?` or `Q` as the whole note) apply to notes typed on the Kobo's keyboard, bringing this to every Kobo, not just stylus models: `#leadership` typed on a highlight on a Clara becomes a tag, and a note of just `?` a question. Typed marks are applied once and taken out of the note shown, like handwritten ones; the Kobo's note is kept as it is.
+**Typed notes too.** The same rules (`#word`, and `*`, `NB` or `?` as the whole note) apply to notes typed on the Kobo's keyboard, bringing this to every Kobo, not just stylus models: `#leadership` typed on a highlight on a Clara becomes a tag, and a note of just `?` a question. Typed marks are applied once, like handwritten ones; the typed note is the Kobo's and is shown as it is.
 
 ### Glosses: circle a word to learn it
 
@@ -284,18 +286,18 @@ A medieval reader who met a hard word wrote its meaning above it or in the margi
 
 - **Which marks.** A circle mark (§8a) whose marked text, snapped to the book, is one word (letters, with inner `-` or `'`: "knight-errant", "o'er"). Underlines stay highlights: an underline means "this passage". A markup can have several circled words; each is a gloss.
 - **The word.** Merged by lemma with existing words (§8), so circling "leviathans" joins "leviathan". Language from the book's. The definition comes from the dictionaries as for any word.
-- **The sentence.** The book's sentence containing the word at that spot. The word is only known after reading, which may happen once the Kobo is unplugged, so import saves the sentences around each markup with its words (`markup_context` becomes `{words, sentences}`; old rows keep working as a word list).
-- **Your gloss.** If the markup also has a handwritten note (after marks are taken out), it becomes the word's own note (`vocab.user_note`), shown on the word as "Your gloss" and in the Anki card's back. The markup keeps its note too. An existing user note on the word is never replaced.
+- **The sentence.** The book's sentence containing the word at that spot, from the words around the markup that import already saves (`markup_context`, §8a): they keep their punctuation, so joined they split into sentences, and the one nearest the middle (the markup) is taken. So markups imported before 0.4 get glosses too.
+- **Your gloss.** If exactly one word was circled and the markup has a handwritten note (after marks are taken out), the note becomes the word's own note (`vocab.user_note`), shown as "Your gloss" in the word's row and dialog (editable), in the Anki card's back (with the definition, so the note type is unchanged) and in Obsidian. With several words circled, which one a note is about can't be told. The markup keeps its note too, and an existing user note on the word is never replaced.
 - **Once, and linked.** The sighting records its markup (`vocab_sighting.annotation_id`, unique), so a re-read doesn't duplicate it, and a sighting's source reads "Circled on the Kobo" rather than "Looked up". Trashing the markup leaves the word; deleting the word leaves the markup.
 - **Setting.** Preferences → Handwriting: **Circled Words Go to Vocabulary** (on by default).
 
 ### Data model (migration 9)
 
-`annotation.pen_marks TEXT` (JSON: `{"star": true, "tags": ["leadership"]}`), `vocab_sighting.annotation_id INTEGER REFERENCES annotation(id) ON DELETE SET NULL` with a unique index, and `markup_context` stored as `{words, sentences}`. No change to import identity: marks and glosses are derived from the reading, after import.
+`annotation.pen_marks TEXT` (JSON: `{"star": true, "tags": ["leadership"]}`) and `vocab_sighting.annotation_id INTEGER REFERENCES annotation(id) ON DELETE SET NULL`, unique with the word. No change to import identity: marks and glosses are derived from the reading, after import. The transcription hash (§8a) includes a reading version, bumped to 2, so every markup is read once more after upgrading: loops that were read as notes become circles, and marks already written are applied.
 
-### Before building: samples
+### Samples (2026-09-29)
 
-The rules above are guesses until tested on real ink. On the Libra: a few notes of each mark (`*` and a drawn star, `NB`, `?`, `Q`, three `#tags`, one misspelt), marks inside ordinary notes ("why?"), and five circled single words, two with a gloss written beside them and one hyphenated. Measure how the 2B reads each mark, then fix the rules.
+Fourteen markups on a Libra Colour: asterisk stars (including one alone), an outlined star, `NB`, two `?`, two `Q`, "why?", `#based`, `#justice`, and three circled words with and without glosses; plus typed notes `#based`, `#bsed` and `?`. With the shape checks, every mark was applied as intended, `Q` aside, and all circled words went to Vocabulary with the right sentence and gloss.
 
 ### Precedents (for the guide's "Old habits" note)
 

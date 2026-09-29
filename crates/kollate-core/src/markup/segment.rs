@@ -22,18 +22,18 @@ impl Bounds {
         self.bottom - self.top
     }
 
-    fn centre(&self) -> (f32, f32) {
+    pub(crate) fn centre(&self) -> (f32, f32) {
         (
             (self.left + self.right) / 2.0,
             (self.top + self.bottom) / 2.0,
         )
     }
 
-    fn contains(&self, (x, y): (f32, f32)) -> bool {
+    pub(crate) fn contains(&self, (x, y): (f32, f32)) -> bool {
         (self.left..=self.right).contains(&x) && (self.top..=self.bottom).contains(&y)
     }
 
-    fn union(boxes: impl IntoIterator<Item = Bounds>) -> Option<Bounds> {
+    pub(crate) fn union(boxes: impl IntoIterator<Item = Bounds>) -> Option<Bounds> {
         boxes.into_iter().reduce(|a, b| Bounds {
             left: a.left.min(b.left),
             top: a.top.min(b.top),
@@ -56,6 +56,8 @@ impl Bounds {
 pub struct Stroke {
     pub xml: String,
     pub bounds: Bounds,
+    /// The points of its outline (for telling shapes apart).
+    pub points: Vec<(f32, f32)>,
 }
 
 /// The strokes of a Kobo markup SVG, in writing order.
@@ -76,16 +78,23 @@ pub fn strokes(svg: &str) -> Vec<Stroke> {
             .split(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-'))
             .filter_map(|n| n.parse().ok())
             .collect();
-        let points = numbers.as_chunks::<2>().0.iter().map(|&[x, y]| Bounds {
+        let points: Vec<(f32, f32)> = numbers
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&[x, y]| (x, y))
+            .collect();
+        let boxes = points.iter().map(|&(x, y)| Bounds {
             left: x,
             top: y,
             right: x,
             bottom: y,
         });
-        if let Some(bounds) = Bounds::union(points) {
+        if let Some(bounds) = Bounds::union(boxes) {
             out.push(Stroke {
                 xml: xml.to_owned(),
                 bounds,
+                points,
             });
         }
     }

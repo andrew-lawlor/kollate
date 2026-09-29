@@ -363,7 +363,7 @@ fn models(library_path: &Path, action: Option<ModelsAction>) -> Result<()> {
 }
 
 fn transcribe(library_path: &Path, model: Option<&str>, cpu: bool) -> Result<()> {
-    let lib = Library::open(library_path)?;
+    let mut lib = Library::open(library_path)?;
     let preferred = model
         .map(str::to_owned)
         .or(lib.setting("transcribe_model")?);
@@ -389,10 +389,12 @@ fn transcribe(library_path: &Path, model: Option<&str>, cpu: bool) -> Result<()>
         chosen.model.name,
         started.elapsed().as_secs_f32()
     );
+    let mut glossed = 0;
     for job in &jobs {
         let t0 = std::time::Instant::now();
         let t = job.run(&mut reader, known)?;
-        lib.save_transcription(job, &t, chosen.model.id)?;
+        let circled = lib.save_transcription(job, &t, chosen.model.id)?;
+        glossed += circled;
         println!(
             "#{} ({:.1}s)",
             job.annotation_id,
@@ -405,6 +407,10 @@ fn transcribe(library_path: &Path, model: Option<&str>, cpu: bool) -> Result<()>
         if let Some(note) = &t.note {
             println!("  notes: {}", note.replace('\n', "\n         "));
         }
+    }
+    if glossed > 0 {
+        lib.enrich_definitions(&dicts)?;
+        println!("Added {glossed} circled word(s) to Vocabulary");
     }
     Ok(())
 }

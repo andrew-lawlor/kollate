@@ -284,6 +284,13 @@ impl Window {
             }
             None => text.append(&label("No definition yet", &["dim-label"])),
         }
+        if let Some(gloss) = &v.gloss {
+            let g = label(&glib::markup_escape_text(gloss), &["note"]);
+            g.set_lines(2);
+            g.set_ellipsize(gtk::pango::EllipsizeMode::End);
+            g.set_tooltip_text(Some("Your gloss"));
+            text.append(&g);
+        }
         if let Some(context) = &v.context {
             let words = [v.word.as_str(), v.lemma.as_deref().unwrap_or("")];
             let ctx = label(
@@ -368,6 +375,9 @@ impl Window {
                 let lib = this.lib.borrow();
                 if let Some(def) = &edit.definition {
                     lib.set_vocab_definition(id, Some(def))?;
+                }
+                if let Some(gloss) = &edit.gloss {
+                    lib.set_vocab_gloss(id, Some(gloss))?;
                 }
                 for (sighting, context) in &edit.contexts {
                     lib.set_sighting_context(*sighting, context.as_deref())?;

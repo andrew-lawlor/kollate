@@ -241,4 +241,12 @@ pub const MIGRATIONS: &[&str] = &[
     CREATE INDEX annotation_book ON annotation(book_id);
     CREATE INDEX annotation_reading_order ON annotation(book_id, spine_index, position_key);
     "#,
+    // 9: pen marks and glosses (SPEC §8c): the marks already applied to an
+    // annotation, and the markup a circled word came from
+    r#"
+    ALTER TABLE annotation ADD COLUMN pen_marks TEXT;
+    ALTER TABLE vocab_sighting ADD COLUMN annotation_id INTEGER REFERENCES annotation(id) ON DELETE SET NULL;
+    CREATE UNIQUE INDEX vocab_sighting_markup ON vocab_sighting(annotation_id, vocab_id)
+        WHERE annotation_id IS NOT NULL;
+    "#,
 ];

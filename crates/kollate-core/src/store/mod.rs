@@ -2,11 +2,14 @@
 //! Nothing here ever touches the device.
 
 mod markup;
+mod pen;
 mod query;
 mod schema;
 mod vocab;
 
 pub use markup::MarkupJob;
+pub use pen::GLOSSES_SETTING;
+pub(crate) use pen::apply_pen_marks;
 pub use query::{AnnotationFilter, DeviceDeletePolicy, SidebarCounts, Tag, View, VocabStatus};
 pub use vocab::{Sighting, Vocab, VocabDetail};
 
@@ -475,6 +478,18 @@ impl Library {
             params![key, value],
         )?;
         Ok(())
+    }
+
+    /// The annotation a Kobo bookmark (or notebook page) was imported as.
+    pub fn annotation_for_bookmark(&self, bookmark_id: &str) -> Result<Option<i64>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT annotation_id FROM annotation_source WHERE bookmark_id = ?1",
+                [bookmark_id],
+                |r| r.get(0),
+            )
+            .optional()?)
     }
 
     pub fn annotation(&self, id: i64) -> Result<Option<Annotation>> {

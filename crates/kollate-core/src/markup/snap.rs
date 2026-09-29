@@ -12,7 +12,7 @@ fn norm(s: &str) -> String {
 }
 
 /// 1 for identical strings, falling towards 0 with each edit.
-fn similarity(a: &str, b: &str) -> f32 {
+pub(crate) fn similarity(a: &str, b: &str) -> f32 {
     let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
     if a.is_empty() && b.is_empty() {
         return 1.0;

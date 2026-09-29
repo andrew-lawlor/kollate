@@ -9,7 +9,9 @@ use rusqlite::params;
 use super::Library;
 use crate::Result;
 use crate::kobo::DeviceInfo;
+use crate::markup::marks::take_marks;
 use crate::markup::{Context, Reader, Transcription, read_page, transcribe};
+use crate::store::apply_pen_marks;
 
 /// A markup or notebook page to transcribe: its copied ink and page, and
 /// the book's words around it when they were saved at import.
@@ -38,7 +40,7 @@ impl MarkupJob {
         if self.page {
             return Ok(Transcription {
                 text: read_page(&svg, reader)?,
-                note: None,
+                ..Default::default()
             });
         }
         let page = self.jpg.as_ref().and_then(|p| std::fs::read(p).ok());
@@ -105,6 +107,9 @@ impl Library {
             };
             let jpg = jpg.map(PathBuf::from).filter(|p| p.is_file());
             let mut h = blake3::Hasher::new();
+            // Bumped when reading changes in a way worth reading again for
+            // (2: loops, stars and question marks known by shape, 0.4).
+            h.update(b"reading 2");
             h.update(&ink);
             h.update(&[u8::from(jpg.is_some()), u8::from(context.is_some())]);
             h.update(source.as_bytes());
@@ -124,18 +129,28 @@ impl Library {
     }
 
     /// Stores a transcription. The user's own text and note are untouched,
-    /// and still shown in its place.
+    /// and still shown in its place. Pen marks (SPEC §8c) are taken out of
+    /// the note (or a page's text) and applied once; circled words go to
+    /// Vocabulary. Returns how many words were added there.
     pub fn save_transcription(
         &self,
         job: &MarkupJob,
         t: &Transcription,
         source: &str,
-    ) -> Result<()> {
+    ) -> Result<usize> {
+        let (text, note, marks) = if job.page {
+            let (text, marks) = t.text.as_deref().map(take_marks).unwrap_or_default();
+            (text, None, marks)
+        } else {
+            let (note, marks) = t.note.as_deref().map(take_marks).unwrap_or_default();
+            (t.text.clone(), note, marks)
+        };
         self.conn.execute(
             "UPDATE annotation SET ink_text = ?2, ink_note = ?3, ink_source = ?4, ink_hash = ?5
              WHERE id = ?1",
-            params![job.annotation_id, t.text, t.note, source, job.hash],
+            params![job.annotation_id, text, note, source, job.hash],
         )?;
-        Ok(())
+        apply_pen_marks(&self.conn, job.annotation_id, &marks)?;
+        self.add_glosses(job.annotation_id, &t.circled, note.as_deref())
     }
 }

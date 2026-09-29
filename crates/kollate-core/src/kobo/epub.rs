@@ -388,6 +388,27 @@ impl BookText {
     }
 }
 
+/// The sentence around a circled `word` in the book's words near its
+/// markup (as saved at import, see [`markup_words`]): of the sentences that
+/// contain it, the one nearest the middle, where the markup is.
+pub fn sentence_near(words: &[String], word: &str) -> Option<String> {
+    let text = words.join(" ");
+    let middle = text.len() / 2;
+    let mut offset = 0;
+    let mut best: Option<(usize, &str)> = None;
+    for sentence in sentences(&text) {
+        let at = text[offset..].find(sentence).map_or(offset, |i| offset + i);
+        offset = at + sentence.len();
+        if contains_word(sentence, word) {
+            let distance = (at + sentence.len() / 2).abs_diff(middle);
+            if best.is_none_or(|(d, _)| distance < d) {
+                best = Some((distance, sentence));
+            }
+        }
+    }
+    best.map(|(_, s)| trim_around(&strip_note_refs(s), word))
+}
+
 /// Splits a paragraph after `.`, `!`, `?` or `…` (plus closing quotes)
 /// when followed by whitespace.
 fn sentences(paragraph: &str) -> Vec<&str> {
@@ -681,6 +702,20 @@ fn floor_char(s: &str, mut i: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_the_sentence_around_a_circled_word() {
+        let words: Vec<String> =
+            "The city fell. Like Nehemiah, let us build. Nehemiah was a governor. The end."
+                .split(' ')
+                .map(str::to_owned)
+                .collect();
+        assert_eq!(
+            sentence_near(&words, "Nehemiah").as_deref(),
+            Some("Like Nehemiah, let us build.")
+        );
+        assert_eq!(sentence_near(&words, "Babel"), None);
+    }
 
     #[test]
     fn drops_superscript_footnote_markers() {

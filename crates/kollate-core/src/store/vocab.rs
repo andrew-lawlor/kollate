@@ -29,6 +29,9 @@ pub struct Vocab {
     pub context: Option<String>,
     /// Titles of the books the word was looked up in.
     pub books: Vec<String>,
+    /// The reader's own note on the word: a gloss written beside it when
+    /// it was circled (SPEC §8c), or typed in Kollate.
+    pub gloss: Option<String>,
 }
 
 /// One lookup of a word in a book.
@@ -43,6 +46,8 @@ pub struct Sighting {
     pub context: Option<String>,
     /// Sentences from the book that contain the word, best guess first.
     pub candidates: Vec<String>,
+    /// Circled on a page with the stylus, rather than looked up.
+    pub circled: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -56,7 +61,8 @@ const VOCAB_SELECT: &str = "SELECT v.id, v.word, v.language, v.first_seen_at, v.
         (SELECT s.context_sentence FROM vocab_sighting s WHERE s.vocab_id = v.id AND s.context_sentence IS NOT NULL
          ORDER BY s.looked_up_at LIMIT 1),
         (SELECT group_concat(title, char(31)) FROM (SELECT DISTINCT coalesce(b.user_title, b.title) AS title
-         FROM vocab_sighting s JOIN book b ON b.id = s.book_id WHERE s.vocab_id = v.id))
+         FROM vocab_sighting s JOIN book b ON b.id = s.book_id WHERE s.vocab_id = v.id)),
+        v.user_note
      FROM vocab v";
 
 fn vocab_from_row(r: &rusqlite::Row) -> rusqlite::Result<Vocab> {
@@ -74,6 +80,7 @@ fn vocab_from_row(r: &rusqlite::Row) -> rusqlite::Result<Vocab> {
             .get::<_, Option<String>>(9)?
             .map(|s| s.split('\u{1f}').map(str::to_owned).collect())
             .unwrap_or_default(),
+        gloss: r.get(10)?,
     })
 }
 
@@ -93,7 +100,7 @@ impl Library {
             "{VOCAB_SELECT}
              WHERE (?1 IS NULL OR EXISTS (SELECT 1 FROM vocab_sighting s WHERE s.vocab_id = v.id AND s.book_id = ?1))
                AND (?2 IS NULL OR v.word LIKE ?2 ESCAPE '\\' OR v.lemma LIKE ?2 ESCAPE '\\'
-                    OR v.definition LIKE ?2 ESCAPE '\\'
+                    OR v.definition LIKE ?2 ESCAPE '\\' OR v.user_note LIKE ?2 ESCAPE '\\'
                     OR EXISTS (SELECT 1 FROM vocab_sighting s WHERE s.vocab_id = v.id
                                AND s.context_sentence LIKE ?2 ESCAPE '\\'))
              ORDER BY v.first_seen_at DESC, v.id DESC"
@@ -117,7 +124,7 @@ impl Library {
         };
         let mut stmt = self.conn.prepare(
             "SELECT s.id, coalesce(b.user_title, b.title), s.surface_form, s.looked_up_at, s.context_sentence,
-                    s.context_candidates, s.book_id
+                    s.context_candidates, s.book_id, s.annotation_id IS NOT NULL
              FROM vocab_sighting s LEFT JOIN book b ON b.id = s.book_id
              WHERE s.vocab_id = ?1 ORDER BY s.looked_up_at, s.id",
         )?;
@@ -134,6 +141,7 @@ impl Library {
                         .and_then(|j| serde_json::from_str(&j).ok())
                         .unwrap_or_default(),
                     book_id: r.get(6)?,
+                    circled: r.get(7)?,
                 })
             })?
             .collect::<rusqlite::Result<_>>()?;
@@ -279,6 +287,19 @@ impl Library {
             "UPDATE vocab SET definition = ?2, definition_source = CASE WHEN ?2 IS NULL THEN NULL ELSE 'edited' END,
                     updated_at = ?3 WHERE id = ?1",
             params![id, definition, Utc::now()],
+        )?;
+        Ok(())
+    }
+
+    /// Sets (or with `None`, clears) the reader's own note on a word.
+    pub fn set_vocab_gloss(&self, id: i64, gloss: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE vocab SET user_note = ?2, updated_at = ?3 WHERE id = ?1",
+            params![
+                id,
+                gloss.map(str::trim).filter(|g| !g.is_empty()),
+                Utc::now()
+            ],
         )?;
         Ok(())
     }

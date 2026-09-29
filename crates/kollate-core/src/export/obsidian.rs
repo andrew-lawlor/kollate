@@ -143,6 +143,9 @@ fn vocab_md(v: &VocabDetail, out: &mut String) {
         }
         None => out.push('\n'),
     }
+    if let Some(gloss) = &v.vocab.gloss {
+        out.push_str(&format!("  *Your gloss:* {gloss}\n"));
+    }
     for s in &v.sightings {
         if let Some(context) = &s.context {
             out.push_str(&format!(

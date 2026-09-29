@@ -5,10 +5,13 @@
 //! model, which the caller supplies as a [`Reader`] (see `kollate-transcribe`).
 
 pub mod image;
+pub mod marks;
 pub mod segment;
+pub mod shape;
 mod snap;
 
 pub use image::{Page, RgbImage};
+pub(crate) use snap::similarity as snap_similarity;
 pub use snap::snap;
 
 use crate::Result;
@@ -28,6 +31,8 @@ pub struct Transcription {
     pub text: Option<String>,
     /// The handwriting, one note per line.
     pub note: Option<String>,
+    /// Single words circled on the page, as the book spells them (glosses).
+    pub circled: Vec<String>,
 }
 
 /// What helps read a markup besides its ink.
@@ -50,17 +55,39 @@ pub fn transcribe(
     reader: &mut dyn Reader,
 ) -> Result<Transcription> {
     let strokes = segment::strokes(svg);
-    let segments = segment::segment(&strokes);
+    let mut segments = segment::segment(&strokes);
+    // A loop around a word or two is too small to be a circle by size alone,
+    // and would otherwise be "read" as handwriting.
+    let mut writing = Vec::new();
+    for note in std::mem::take(&mut segments.notes) {
+        if shape::is_word_loop(svg, &strokes, &note)? {
+            segments.marks.push(segment::Mark {
+                kind: segment::MarkKind::Circle,
+                strokes: note.strokes,
+            });
+        } else {
+            writing.push(note);
+        }
+    }
+    segments.marks.sort_by_key(|m| m.strokes.first().copied());
 
     let mut notes = Vec::new();
-    for note in &segments.notes {
-        let img = image::render_note(svg, &strokes, note, 16)?;
-        // A note's own line breaks are just where the margin ran out.
-        let text = reader
-            .handwriting(&img)?
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ");
+    for note in &writing {
+        // A drawn star and a question mark are known by their shape; the
+        // model tends to read them as "5" and "3".
+        let text = if shape::is_star(&strokes, note) {
+            "*".to_owned()
+        } else if shape::is_question(&strokes, note) {
+            "?".to_owned()
+        } else {
+            let img = image::render_note(svg, &strokes, note, 16)?;
+            // A note's own line breaks are just where the margin ran out.
+            reader
+                .handwriting(&img)?
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
         let text = match (context.book_words, context.known_word) {
             (Some(words), Some(known)) => snap::correct_names(&text, words, known),
             _ => text,
@@ -71,6 +98,7 @@ pub fn transcribe(
     }
 
     let mut marked = Vec::new();
+    let mut circled = Vec::new();
     if let (Some(jpeg), false) = (context.page_jpeg, segments.marks.is_empty()) {
         let page = Page::from_jpeg(jpeg)?;
         for mark in &segments.marks {
@@ -89,6 +117,11 @@ pub fn transcribe(
                 .book_words
                 .and_then(|words| snap(&reading, words))
                 .unwrap_or_else(|| snap::tidy(&reading));
+            if mark.kind == segment::MarkKind::Circle
+                && let Some(word) = single_word(&text)
+            {
+                circled.push(word.to_owned());
+            }
             if !text.is_empty() {
                 marked.push(text);
             }
@@ -99,7 +132,20 @@ pub fn transcribe(
     Ok(Transcription {
         text: join(marked),
         note: join(notes),
+        circled,
     })
+}
+
+/// The word, if `text` is one word (letters, with a hyphen or apostrophe
+/// inside), without punctuation around it.
+fn single_word(text: &str) -> Option<&str> {
+    let word = text.trim_matches(|c: char| !c.is_alphanumeric());
+    let inner = |c: char| c.is_alphabetic() || matches!(c, '-' | '\'' | '’');
+    (word.chars().count() >= 2
+        && word.chars().all(inner)
+        && word.starts_with(char::is_alphabetic)
+        && word.ends_with(char::is_alphabetic))
+    .then_some(word)
 }
 
 /// Reads a notebook page: its writing line by line, one line per line of
@@ -110,6 +156,15 @@ pub fn read_page(svg: &str, reader: &mut dyn Reader) -> Result<Option<String>> {
     let strokes = segment::strokes(svg);
     let mut lines = Vec::new();
     for line in segment::lines(&strokes) {
+        // A star or question mark on a line of its own is a pen mark (§8c).
+        if shape::is_star(&strokes, &line) {
+            lines.push("*".to_owned());
+            continue;
+        }
+        if shape::is_question(&strokes, &line) {
+            lines.push("?".to_owned());
+            continue;
+        }
         let img = image::render_note(svg, &strokes, &line, 16)?;
         let mut words: Vec<String> = reader
             .handwriting(&img)?
@@ -127,7 +182,8 @@ pub fn read_page(svg: &str, reader: &mut dyn Reader) -> Result<Option<String>> {
         let letters = text.chars().filter(|c| c.is_alphabetic()).count();
         let distinct: std::collections::HashSet<char> = text.chars().collect();
         let runaway = text.chars().count() > 12 && distinct.len() < 4;
-        if line.strokes.len() <= 2 && (letters < 2 || runaway) {
+        let mark = matches!(text.as_str(), "*" | "?");
+        if line.strokes.len() <= 2 && (letters < 2 || runaway) && !mark {
             continue;
         }
         if !text.is_empty() {
@@ -156,6 +212,16 @@ mod tests {
         fn print(&mut self, _: &RgbImage) -> Result<String> {
             Ok(self.print.remove(0).to_owned())
         }
+    }
+
+    #[test]
+    fn single_words_only() {
+        assert_eq!(single_word("Nehemiah,"), Some("Nehemiah"));
+        assert_eq!(single_word("“knight-errant”"), Some("knight-errant"));
+        assert_eq!(single_word("o’er"), Some("o’er"));
+        assert_eq!(single_word("two words"), None);
+        assert_eq!(single_word("1984"), None);
+        assert_eq!(single_word("a"), None);
     }
 
     #[test]
@@ -205,8 +271,8 @@ mod tests {
         assert_eq!(
             t,
             Transcription {
-                text: None,
-                note: Some("Woah, this works well!".into())
+                note: Some("Woah, this works well!".into()),
+                ..Default::default()
             }
         );
     }

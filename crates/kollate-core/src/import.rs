@@ -298,6 +298,12 @@ impl Importer<'_> {
             }
         };
 
+        // Marks typed in a note on the Kobo (SPEC §8c), applied once.
+        if let Some(note) = &bm.note {
+            let (_, marks) = crate::markup::marks::take_marks(note);
+            crate::store::apply_pen_marks(self.tx, id, &marks)?;
+        }
+
         self.tx.execute(
             "INSERT INTO annotation_source (bookmark_id, device_id, annotation_id, first_seen_at, last_seen_at)
              VALUES (?1, ?2, ?3, ?4, ?4)
