@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/kollate-core", "crates/kollate-transcribe", "crates/kollate-cli", "crates/kollate"]
 
 [workspace.package]
-version = "0.4.2"
+version = "0.5.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 

@@ -17,6 +17,7 @@
     <ul>
       <li>Read your handwritten notes and notebooks as text, with a model on your computer</li>
       <li>Star, tag and add words to your vocabulary with marks in the margin as you read</li>
+      <li>Share a highlight as a quote card, or email it to yourself</li>
       <li>Triage new highlights in an inbox, star, tag, edit and archive them</li>
       <li>See the sentence each vocabulary word appeared in, with an offline definition</li>
       <li>Sync notes to an Obsidian vault and export Anki decks, JSON, CSV or Readwise CSV</li>
@@ -34,6 +35,16 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.5.0" date="2026-09-30">
+      <description>
+        <p>Quote cards: share a highlight as an image, or send it by email.</p>
+        <ul>
+          <li>Share as Image… turns any highlight, note, markup or notebook page into a card, set in the Literata typeface, square or tall</li>
+          <li>Six palettes, including one tinted with the highlight's own Kobo colour; a markup's card can show the page with your ink</li>
+          <li>Copy the card, save it, or open an email in your email app with it attached. Set your own address in Preferences to send cards to yourself</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.2" date="2026-09-29">
       <description>
         <p>Small improvements to exports, and a new project page.</p>
