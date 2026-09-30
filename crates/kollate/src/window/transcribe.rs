@@ -36,7 +36,14 @@ impl Window {
         self.transcribing.set(true);
         let gpu = !self.flag(CPU_ONLY);
         let dictionary_dirs = dict::search_dirs(self.lib.borrow().assets_dir().as_deref());
-        self.toast(&format!("Reading the handwriting in {}…", what(&jobs)));
+        // A toast that stays while reading, counting through a long run
+        // (a first import can bring hundreds of markups).
+        let total = jobs.len();
+        let progress = adw::Toast::builder()
+            .title(format!("Reading the handwriting in {}…", what(&jobs)))
+            .timeout(0)
+            .build();
+        self.show_toast(progress.clone());
         let this = self.clone();
         glib::spawn_future_local(async move {
             // The model loads once, on the worker, and is handed back each time.
@@ -45,7 +52,10 @@ impl Window {
             // Why the last reading failed, so a run where nothing worked
             // says so instead of ending in silence.
             let mut last_error: Option<String> = None;
-            for job in jobs {
+            for (i, job) in jobs.into_iter().enumerate() {
+                if total > 1 {
+                    progress.set_title(&format!("Reading handwriting… {} of {total}", i + 1));
+                }
                 let (to_load, dirs) = (model.clone(), dictionary_dirs.clone());
                 let taken = worker.take();
                 let outcome = gio::spawn_blocking(move || {
@@ -103,6 +113,7 @@ impl Window {
                 }
             }
             this.transcribing.set(false);
+            progress.dismiss();
             // Circled words just added to Vocabulary need definitions.
             if words > 0 {
                 this.enrich_vocab();

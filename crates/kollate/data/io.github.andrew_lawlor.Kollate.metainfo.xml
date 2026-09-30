@@ -4,28 +4,61 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>Kollate</name>
-  <summary>Collect and curate highlights and vocabulary from your Kobo</summary>
+  <summary>Your Kobo highlights and handwriting</summary>
   <developer id="io.github.andrew_lawlor">
     <name>Andrew Lawlor</name>
   </developer>
   <description>
     <p>
-      Plug in your Kobo e-reader and Kollate brings in your highlights, notes,
-      handwritten markups, notebooks and Vocabulary Builder words, without ever changing
-      anything on the device and without duplicates.
+      Plug in your Kobo e-reader and Kollate brings in everything you marked while
+      reading: highlights, notes, handwritten markups, notebooks and the words you
+      looked up. It never changes anything on the Kobo, and never goes online.
     </p>
     <ul>
-      <li>Read your handwritten notes and notebooks as text, with a model on your computer</li>
-      <li>Star, tag and add words to your vocabulary with marks in the margin as you read</li>
+      <li>Reads your handwriting as text, with a small model that runs on your computer; what you underlined comes word for word from the book</li>
+      <li>Curate as you read: a star, a question mark or a #tag in the margin files the passage, and a circled word goes to your vocabulary</li>
+      <li>Imports Basic and Advanced notebooks, every page redrawn and read</li>
+      <li>Finds the sentence each looked-up word came from, with an offline dictionary definition</li>
+      <li>Triage new highlights in an inbox from the keyboard; star, tag, edit and search everything</li>
       <li>Share a highlight as a quote card, or email it to yourself</li>
-      <li>Triage new highlights in an inbox, star, tag, edit and archive them</li>
-      <li>See the sentence each vocabulary word appeared in, with an offline definition</li>
-      <li>Sync notes to an Obsidian vault and export Anki decks, JSON, CSV or Readwise CSV</li>
+      <li>Sync notes to an Obsidian vault, and export Anki decks, JSON, CSV or Readwise CSV</li>
     </ul>
-    <p>Kollate works entirely offline.</p>
   </description>
   <launchable type="desktop-id">io.github.andrew_lawlor.Kollate.desktop</launchable>
   <url type="homepage">https://github.com/andrew-lawlor/kollate</url>
+  <url type="bugtracker">https://github.com/andrew-lawlor/kollate/issues</url>
+  <url type="vcs-browser">https://github.com/andrew-lawlor/kollate</url>
+  <url type="help">https://github.com/andrew-lawlor/kollate/blob/main/docs/guide.md</url>
+  <branding>
+    <color type="primary" scheme_preference="light">#e4dcf3</color>
+    <color type="primary" scheme_preference="dark">#272137</color>
+  </branding>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/andrew-lawlor/kollate/v0.5.1/docs/screenshots/markups.png</image>
+      <caption>A handwritten margin note, read as text, with the words underlined in the book</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/andrew-lawlor/kollate/v0.5.1/docs/screenshots/pen-question.png</image>
+      <caption>A question mark in the margin files the passage under “question”</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/andrew-lawlor/kollate/v0.5.1/docs/guide/notebooks.png</image>
+      <caption>A notebook page, redrawn from your ink and read as text</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/andrew-lawlor/kollate/v0.5.1/docs/screenshots/vocabulary.png</image>
+      <caption>Looked-up words, each in the sentence you met it, with a definition</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/andrew-lawlor/kollate/v0.5.1/docs/screenshots/inbox.png</image>
+      <caption>New highlights to triage in the Inbox</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/andrew-lawlor/kollate/v0.5.1/docs/screenshots/books.png</image>
+      <caption>Your library by cover</caption>
+    </screenshot>
+  </screenshots>
   <content_rating type="oars-1.1"/>
   <requires>
     <display_length compare="ge">360</display_length>
