@@ -3,10 +3,10 @@
 </p>
 
 <p align="center">
-  Collect the highlights, notes, handwriting and vocabulary from your Kobo e-reader,<br>
-  and curate them as you read: a star, a tag or a circled word in the margin does the filing.<br>
-  A native Linux app, built with GTK 4 and libadwaita. Designed for GNOME, and works on any desktop.<br>
-  Offline, read-only on your device, and free of duplicates.
+  <b>Everything you mark on your Kobo, read, sorted and put to work.</b><br>
+  Kollate turns your margin notes and notebooks into text, files what you star and tag with the pen,<br>
+  and makes flashcards from the words you look up.<br>
+  <sub>A native Linux app for GNOME and any desktop. Offline, private, and it never writes to your Kobo.</sub>
 </p>
 
 <p align="center">
@@ -25,8 +25,7 @@ Write in the margin with a stylus Kobo, and Kollate reads it. Your notes become 
   <img src="docs/screenshots/markups.png" alt="A page of the Odyssey with two lines underlined and a handwritten note. Below it, the underlined lines taken from the book, and the note as Kollate read it.">
 </p>
 <p align="center">
-  <i>Monday, Book XVIII of the Odyssey: a passage underlined, a thought in the margin. Kollate reads both.</i><br>
-  <sub>The handwriting here is staged (a handwriting font on a page of the book); the text below it is Kollate's real reading.</sub>
+  <i>Monday, Book XVIII of the Odyssey: a passage underlined, a thought in the margin. Kollate reads both.</i>
 </p>
 
 ## Curate with the pen

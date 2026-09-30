@@ -30,7 +30,7 @@ github.com/andrew-lawlor/kollate
 
 **Images** (1080×1350, in posting order; `docs/linkedin/`):
 
-1. `1-handwriting.png`: Your handwriting, as text. Alt text: "Kollate showing a page of the Odyssey with a handwritten margin note. Below it, the underlined sentence taken from the book, and the note as read by a local model. The handwriting is staged; the reading is real."
+1. `1-handwriting.png`: Your handwriting, as text. Alt text: "Kollate showing a page of the Odyssey with a handwritten margin note. Below it, the underlined sentence taken from the book, and the note as read by a local model."
 2. `2-starred.png`: Every highlight worth keeping (dark mode, starred highlights with notes)
 3. `3-vocabulary.png`: Every word, in the sentence you met it (Wiktionary definitions)
 4. `4-inbox.png`: Triage new highlights in seconds
