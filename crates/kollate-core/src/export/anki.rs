@@ -57,6 +57,7 @@ const CSS: &str = ".card { font-family: Georgia, serif; font-size: 20px; text-al
 .definition { margin-top: 1em; text-align: left; display: inline-block; }
 .quote { font-size: 22px; line-height: 1.4; text-align: left; }
 .note { font-style: italic; margin-top: 1em; }
+.gloss { margin-top: 0.8em; color: #555; }
 .source, .hint { color: #777; font-size: 15px; margin-top: 1em; }
 .cloze { font-weight: bold; color: #1c71d8; }
 .nightMode .cloze, .night_mode .cloze { color: #78aeed; }";

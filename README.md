@@ -19,19 +19,23 @@
   <sub>The books pictured are from <a href="https://standardebooks.org"><b>Standard Ebooks</b></a>: free, carefully produced public-domain ebooks, with a Kobo edition of every one.</sub>
 </p>
 
-## What it does
+Here's what it does, over a week of reading, starting with what nothing else does.
 
-Plug in your Kobo and Kollate imports everything you've marked while reading:
+## Your handwriting, read as text
 
-- **Your handwriting as text** (optional). Kollate can read your stylus notes, and take the exact words you underlined or circled from the book, using a local model you download once. It runs on your own computer, never online. Everything it reads is a suggestion you can correct.
-- **Highlights and notes**, in all four Kobo colours, sorted into chapters in reading order.
-- **Handwritten markups** from stylus models (tested on the Libra Colour), shown as the page with your ink on it.
-- **Notebooks** from stylus models, Basic and Advanced alike: every page redrawn from your pen strokes, with its writing as text. The Kobo itself only converts Advanced notebooks, and only when you ask.
-- **Vocabulary Builder words.** Kollate goes further than the Kobo here: it finds the sentence you looked each word up in, inside the book itself, and adds an offline dictionary definition.
+Write in the margin with a stylus Kobo, and Kollate reads it. Your notes become searchable text, and what you underlined or circled comes from the book itself, word for word, down to its punctuation. A small AI model does the reading on your own computer: nothing goes online, and anything it misreads is yours to correct.
+
+<p align="center">
+  <img src="docs/screenshots/markups.png" alt="A page of the Odyssey with two lines underlined and a handwritten note. Below it, the underlined lines taken from the book, and the note as Kollate read it.">
+</p>
+<p align="center">
+  <i>Monday, Book XVIII of the Odyssey: a passage underlined, a thought in the margin. Kollate reads both.</i><br>
+  <sub>The handwriting here is staged (a handwriting font on a page of the book); the text below it is Kollate's real reading.</sub>
+</p>
 
 ## Curate with the pen
 
-Most tools make you curate afterwards, at a desk. With Kollate you can do it while you read, the way readers always have: with a mark in the margin. Kollate reads the mark when it reads your handwriting, and does the filing.
+Most tools make you sort your highlights afterwards, at a desk. With Kollate you can do it while you read, the way readers always have: with a mark in the margin. Kollate reads the mark along with your handwriting, and does the filing.
 
 | In the margin | In Kollate |
 |---|---|
@@ -44,57 +48,62 @@ Most tools make you curate afterwards, at a desk. With Kollate you can do it whi
 | | |
 |---|---|
 | ![A passage from Moby-Dick underlined, with a question mark written in the margin, tagged "question" in Kollate](docs/screenshots/pen-question.png) | ![The word "daemon", circled on a page of Frankenstein, in Vocabulary with its definition, the gloss written beside it, and the sentence it was circled in](docs/screenshots/pen-gloss.png) |
-| **A `?` in the margin:** the passage lands under `question` | **A circled word:** in Vocabulary, with your gloss and its sentence |
+| *Tuesday: a `?` beside Melville's white whale files the passage under `question`…* | *…and "daemon", circled in Frankenstein, arrives in Vocabulary with the gloss written beside it.* |
 
-Write the mark beside what you underlined, and the card shows that passage. On a Kobo without a stylus, type the same marks as a highlight's note. Marks take effect once: unstar or untag something in Kollate and it stays that way. None of it goes online; the reading is done by a small model on your own computer.
+**No stylus? You still get most of it.** On any Kobo, type the same marks as a highlight's note (`#leadership`, `NB`, `?`) and Kollate files it the same way. Everything else on this page, from vocabulary to exports, works on every Kobo.
 
-It's an old habit made new. The asterisk began as the *asteriskos*, "little star", that Alexandria's librarians put beside lines of Homer; *nota bene* and *quaere* filled medieval margins; a *gloss* was a hard word's meaning written beside it, and glossaries grew from them. The [user guide](docs/guide.md#mark-it-in-the-margin) has the details.
+Marks take effect once: unstar or untag something in Kollate and it stays that way. It's an old habit made new: the asterisk began as the *asteriskos*, the "little star" Alexandria's librarians put beside lines of Homer; *nota bene* and *quaere* filled medieval margins; and a *gloss*, a hard word's meaning written beside it, gave us the glossary. The [user guide](docs/guide.md#mark-it-in-the-margin) has the details.
 
-## In the app
+## Notebooks, Basic and Advanced
 
-- An **Inbox** of new highlights you can triage from the keyboard: `K` keep, `A` archive, `S` star (starring also keeps), `E` edit, `Delete` trash.
-- **Bulk actions:** select several highlights (Ctrl- or Shift-click, Shift+↑/↓, Ctrl+A) and keep, archive, star or trash them together, or **Keep All** in the Inbox. Every action can be undone. Press **Ctrl+?** to see all keyboard shortcuts.
-- A **Books** page of covers, sorted by most recently read (or title, or author), with your five latest books always one click away in the sidebar.
-- **Star, tag, archive** and **search** everything: the search field at the top of every page filters highlights, books or words.
-- **Fix typos or rewrite notes.** Kollate keeps the Kobo's original and can restore it.
-- **Pick the right context sentence** and edit definitions for each word, and track words as *New*, *Learning*, *Known* or *Ignored*.
-
-And export:
-
-- **Obsidian:** one note per book plus a Vocabulary note, synced into your vault (optionally after every import). Each highlight can be linked to individually. Kollate rewrites the notes on every sync, so write your own thoughts about a book at the bottom of its note, below the `kollate:user` line; that part is never changed. For a thought about one highlight, add a note to it in Kollate.
-- **Anki:** a vocabulary deck (word → meaning, plus fill-in-the-blank from the book's sentence) and an optional highlights deck. Exporting again updates your cards without losing study progress.
-- **JSON** backup, **CSV** (highlights or vocabulary) and **Readwise** CSV.
-
-## Screenshots
+Stylus Kobos have a notebook app. The Kobo turns handwriting into text only in *Advanced* notebooks, and only when you ask. Kollate reads both kinds, every page, on its own: your ink redrawn, with the writing as text below it and drawings left out.
 
 <p align="center">
-  <img src="docs/screenshots/markups.png" alt="A handwritten margin note on a page of the Odyssey. Below it, the underlined sentence taken from the book, and the note as Kollate read it.">
+  <img src="docs/guide/notebooks.png" alt="A notebook page of reading notes and a drawing of the long way from Troy to Ithaca, redrawn from the Kobo's ink, with its writing read as text below it">
 </p>
-<p align="center">
-  <b>Your handwriting, as text:</b> the ink as you wrote it, the exact words you underlined, and your note as Kollate read it.<br>
-  <sub>The handwriting here is staged (a handwriting font on a page of the book); the text below it is Kollate's real reading.</sub>
-</p>
+<p align="center"><i>Wednesday: reading notes, and a map of Odysseus's long way home.</i></p>
+
+## Every word, in the sentence you met it
+
+The Kobo's Vocabulary Builder keeps the words you look up, but not where you met them. Kollate finds the sentence in the book, adds a definition from an offline dictionary (the English Wiktionary is built in), and tracks each word as *New*, *Learning* or *Known*. Then it makes Anki flashcards from them, which update without losing your progress.
 
 | | |
 |---|---|
-| ![The Inbox: new highlights grouped by book, with notes](docs/screenshots/inbox.png) | ![The Books page: a grid of covers with highlight and word counts](docs/screenshots/books.png) |
-| **Inbox:** new highlights to triage, with your notes | **Books:** your library by cover, most recent first |
-| ![A book page with its cover, reading progress and highlights by chapter](docs/screenshots/book.png) | ![Vocabulary words with definitions and the sentence each was found in](docs/screenshots/vocabulary.png) |
-| **A book:** cover, progress, highlights by chapter | **Vocabulary:** definition and the sentence from your book |
-| ![Word dialog for choosing the context sentence and editing the definition](docs/screenshots/word.png) | ![Dark mode: starred highlights from several books, with notes](docs/screenshots/dark.png) |
-| **Words:** pick the context, edit the definition | **Dark mode:** your starred highlights across books |
+| ![Vocabulary words, each with its definition and the sentence from the book it was met in](docs/screenshots/vocabulary.png) | ![An Anki card from Kollate: "daemon" with its sentence on the front; the definition, the reader's gloss and the book on the back](docs/screenshots/anki-card.png) |
+| *Thursday: leviathan, ambergris and cetology, each in Melville's own sentence…* | *…and "daemon" as an Anki card, gloss and all.* |
+
+## Triage like an inbox
+
+New highlights land in an **Inbox**. Keep, archive, star or edit each with a key (`K`, `A`, `S`, `E`), trash it with `Delete`, or select several and act on them all. Every action can be undone, and your edits survive every re-import.
 
 <p align="center">
-  <img src="docs/screenshots/export.png" width="70%" alt="Export dialog with Obsidian, Anki and file options">
+  <img src="docs/screenshots/inbox.png" alt="The Inbox: new highlights and handwritten markups, grouped by book">
 </p>
+<p align="center"><i>Friday, ten minutes at the desk: the week's highlights, sorted.</i></p>
 
-## Your Kobo stays untouched, and nothing goes online
+## Your library, by cover
 
-- Kollate **never writes to your Kobo.** It copies the Kobo's database to a temporary folder and reads the copy, so you can eject at any time. The Flatpak enforces this: its sandbox can only read the Kobo. Kollate also refuses to save anything onto it, even if you pick the Kobo as an export or library location.
-- **No duplicates, ever.** Highlights are matched by the Kobo's own IDs, and by content if the IDs change (a factory reset, a second device, or calibre re-sending a book). Re-importing the same Kobo changes nothing.
-- **Your library is the source of truth.** Highlights you delete on the Kobo stay in Kollate, flagged "deleted on Kobo" and gathered in a *Deleted on Kobo* view. If you prefer, they can go to Kollate's Trash instead (Preferences), and they come back if they reappear on the Kobo.
-- **Your edits always win.** Corrected text, notes, tags, stars and triage survive every re-import. If something you edited in Kollate later changes on the Kobo, your version stays and the Kobo's is kept alongside it, flagged for you to review.
-- **Fully offline.** Handwriting is read by a model on your computer, and Kollate never downloads it for you: you download it in your browser and add the file. Definitions come from a bundled copy of the English [Wiktionary](https://www.wiktionary.org/) (over 800,000 words, compiled by [reader.dict](https://www.reader-dict.com/)). For other languages, download a reader.dict dictionary in DictFile format and add it in Preferences. StarDict and [kaikki.org](https://kaikki.org) extracts work too.
+| | |
+|---|---|
+| ![The Books page: a grid of covers with highlight and word counts](docs/screenshots/books.png) | ![A book's page: its cover, reading progress and highlights by chapter](docs/screenshots/book.png) |
+| *Every book you've marked, most recently read first…* | *…and each one's highlights in reading order, chapter by chapter.* |
+
+## Take it where you work
+
+**Obsidian:** one note per book, plus one for your vocabulary, synced into your vault, even after every import. Kollate rewrites them on each sync, so write your own thoughts at the bottom of a book's note, below the `kollate:user` line, which is never touched. **Anki:** vocabulary cards (and optionally your highlights). **Files:** a JSON backup, CSV, and Readwise CSV.
+
+<p align="center">
+  <img src="docs/screenshots/obsidian.png" width="80%" alt="Obsidian showing Moby-Dick's note from Kollate: the page with the underlined opening line and the handwritten note, then the quote, the note, and the next highlight with its tag">
+</p>
+<p align="center"><i>Saturday, in Obsidian: Moby-Dick's note, with the page as you marked it.</i></p>
+
+## Private, and read-only on your Kobo
+
+- Kollate **never writes to your Kobo.** It reads a copy of the Kobo's database, so you can eject at any time. The Flatpak enforces this: its sandbox can only read the Kobo.
+- **Fully offline.** The app has no network access. You download the handwriting model yourself, once, in your browser. Definitions come from a bundled copy of the English [Wiktionary](https://www.wiktionary.org/) (over 800,000 words, compiled by [reader.dict](https://www.reader-dict.com/)); for other languages, add a reader.dict, StarDict or [kaikki.org](https://kaikki.org) dictionary in Preferences.
+- **No duplicates, ever.** Highlights are matched by the Kobo's own IDs, and by their content if those change (a factory reset, a second Kobo, calibre re-sending a book). Importing again changes nothing.
+- **Your library is the source of truth.** A highlight deleted on the Kobo stays in Kollate, flagged; your edits, stars and tags survive every import, and if the Kobo later changes something you edited, your version stays and the Kobo's is kept for review.
+- **Verifiable builds.** Every release is built by GitHub Actions from its tagged source, with signed build provenance (see below).
 
 ## Install
 
@@ -145,15 +154,15 @@ sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev \
 cargo run --release -p kollate
 ```
 
-## Usage
+## Getting started
 
 1. Start Kollate and connect your Kobo with a USB cable. Choose *Connect* on the Kobo if it asks.
-2. Kollate spots the Kobo and imports it automatically. You can change this in *Preferences*: *Ask first* or *Do nothing*.
+2. Kollate spots the Kobo and imports it (or asks first, if you prefer; see *Preferences*).
 3. Work through the **Inbox**, browse by book or tag, and visit **Vocabulary**.
-4. Open **Export** (`Ctrl+E`), pick a folder in your Obsidian vault and/or export an Anki deck.
+4. Open **Export** (`Ctrl+E`) to sync to Obsidian or make an Anki deck.
 5. Press **Eject** in the banner when you're done.
 
-The **[user guide](docs/guide.md)** covers everything in detail, with screenshots: triage, handwriting, vocabulary, exports, shortcuts and troubleshooting.
+The **[user guide](docs/guide.md)** covers everything in detail, with screenshots: triage, handwriting, marks, notebooks, vocabulary, exports, shortcuts and troubleshooting.
 
 ### Reading your handwriting
 

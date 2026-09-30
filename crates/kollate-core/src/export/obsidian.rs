@@ -112,7 +112,8 @@ fn annotation_md(a: &Annotation, attachment: Option<&str>, out: &mut String) {
                 .to_string(),
         );
     }
-    if a.kind != "page" && (a.kind == "markup" || a.color != 0) {
+    // Yellow, the Kobo's default, goes unsaid; markups and pages have no colour.
+    if matches!(a.kind.as_str(), "highlight" | "note") && a.color != 0 {
         meta.push(color_name(a.color).to_owned());
     }
     if a.starred {
