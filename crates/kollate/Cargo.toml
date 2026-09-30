@@ -12,6 +12,11 @@ kollate-transcribe = { path = "../kollate-transcribe" }
 chrono.workspace = true
 gtk = { version = "0.11.5", package = "gtk4", features = ["v4_12"] }
 adw = { version = "0.9.2", package = "libadwaita", features = ["v1_5"] }
+pangocairo = "0.22"
+# Cards are written as PNG.
+cairo-rs = { version = "0.22", features = ["png"] }
+# The page image is decoded here, not by glycin (its helper processes can fail in sandboxes).
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
 [package.metadata.deb]
 name = "kollate"
 maintainer = "Andrew Lawlor <andrew@lawlor.io>"
@@ -24,7 +29,7 @@ extended-description = """\
 Kollate imports highlights, notes, handwritten markups and Vocabulary Builder \
 words from a Kobo e-reader connected over USB, without writing to the device \
 and without duplicates. Curate them in a GTK/libadwaita app, see each word's \
-context sentence and an offline WordNet definition, and export to Obsidian, \
+context sentence and an offline Wiktionary definition, and export to Obsidian, \
 Anki, JSON, CSV or Readwise."""
 assets = [
     ["target/release/kollate", "usr/bin/", "755"],
@@ -34,4 +39,5 @@ assets = [
     ["data/io.github.andrew_lawlor.Kollate.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
     ["../../data/dictionaries/wiktionary-en.db", "usr/share/kollate/dictionaries/", "644"],
     ["data/THIRD-PARTY.md", "usr/share/doc/kollate/", "644"],
+    ["data/fonts/OFL.txt", "usr/share/doc/kollate/OFL-Literata.txt", "644"],
 ]

@@ -27,6 +27,7 @@ mod content;
 mod device;
 mod exports;
 mod preferences;
+mod share;
 mod sidebar;
 mod transcribe;
 

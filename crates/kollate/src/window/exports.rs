@@ -341,7 +341,7 @@ impl Window {
 /// Refuses destinations on a Kobo. In the Flatpak a chosen location arrives
 /// as a document-portal path, so its real location is checked as well (a
 /// subfolder of the Kobo wouldn't otherwise be recognisable).
-fn not_on_kobo(path: &std::path::Path) -> kollate_core::Result<()> {
+pub(super) fn not_on_kobo(path: &std::path::Path) -> kollate_core::Result<()> {
     kollate_core::kobo::ensure_not_on_kobo(path)?;
     match portal::host_path(path) {
         Some(real) => kollate_core::kobo::ensure_not_on_kobo(&real),

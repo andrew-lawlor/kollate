@@ -92,6 +92,13 @@ New highlights land in an **Inbox**. Keep, archive, star or edit each with a key
 </p>
 <p align="center"><i>Saturday, in Obsidian: Moby-Dick's note, with the page as you marked it.</i></p>
 
+**Quote cards:** any highlight, note, markup or notebook page as an image, set in a reading typeface. Copy it, save it, or open a new email in Thunderbird (or your usual email app) with it attached, to send to a friend or to yourself.
+
+<p align="center">
+  <img src="docs/screenshots/quote-cards.png" width="85%" alt="Two quote cards: The Count of Monte Cristo's &quot;Wait and hope&quot; with the note &quot;Also our deployment strategy&quot;, and a page of the Odyssey with its underlines and handwritten note, the quote and the note below it">
+</p>
+<p align="center"><i>Sunday: the week's best lines, ready to share.</i></p>
+
 ## Private, and read-only on your Kobo
 
 - Kollate **never writes to your Kobo.** It reads a copy of the Kobo's database, so you can eject at any time. The Flatpak enforces this: its sandbox can only read the Kobo.

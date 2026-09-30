@@ -145,6 +145,16 @@ The search field at the top of every page (**Ctrl+F**) filters what's shown as y
 
 A card's **⋮** menu has **Copy Text**, and **Copy as Markdown**: the highlight as a quote, credited to the author, book and chapter, followed by your note. Markups also have **Open Page Image**, to see the whole page in your image viewer.
 
+### Share as an image
+
+**Share as Image…** in a card's **⋮** menu turns a highlight, note, markup or notebook page into a quote card: the words in a reading typeface, your note under them if you like, and the book at the foot. Choose **Square** or **Tall** (the shape social feeds prefer), **Light** or **Dark**, and for a markup whether to **Show the Page** with your ink on it. Then:
+
+- **Copy** puts the image on the clipboard, to paste anywhere.
+- **Email…** opens a new email in your email app (Thunderbird, Evolution…) with the card attached and the quote in the message, for sending to a friend, or to yourself to have it on your phone. Kollate sends nothing: it's your email app that sends it, if you press Send. The app used is the one set in your system settings (in GNOME, **Settings → Apps → Default Apps → Mail**).
+- **Save…** saves it as a PNG.
+
+Kollate remembers your choices for next time.
+
 ### Dark mode
 
 Kollate follows your desktop's light or dark style.

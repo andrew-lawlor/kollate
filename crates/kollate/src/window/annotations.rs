@@ -83,6 +83,7 @@ impl Window {
             }
         });
         add("edit", |this, row, id| this.edit(row, id));
+        add("share", |this, _, id| this.share_card(id));
         add("open-image", |this, _, id| {
             let Some(path) = this
                 .lib

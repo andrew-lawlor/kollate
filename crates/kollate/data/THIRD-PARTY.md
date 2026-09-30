@@ -17,3 +17,10 @@ etymologies, usage notes, synonym lists and quotations are left out.
 
 "reader.dict" is a trademark of its owner. Kollate is not affiliated with
 reader.dict or the Wikimedia Foundation.
+
+## Literata
+
+The Literata typeface, built into the program for quote cards, is
+© 2017 The Literata Project Authors (https://github.com/googlefonts/literata),
+licensed under the SIL Open Font License, Version 1.1; see
+`crates/kollate/data/fonts/OFL.txt`.

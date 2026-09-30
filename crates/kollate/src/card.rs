@@ -38,6 +38,9 @@ fn menu(a: &Annotation) -> gio::Menu {
     main.append(Some("_Edit…"), Some("card.edit"));
     main.append(Some("_Copy Text"), Some("card.copy"));
     main.append(Some("Copy as _Markdown"), Some("card.copy-markdown"));
+    if a.text().is_some() || a.note().is_some() {
+        main.append(Some("_Share as Image…"), Some("card.share"));
+    }
     if a.markup_svg.is_some() || a.markup_jpg.is_some() {
         main.append(Some("_Open Page Image"), Some("card.open-image"));
     }

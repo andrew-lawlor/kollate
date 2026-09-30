@@ -311,6 +311,12 @@ A pen star also keeps the highlight; marks work in typed notes too, on every Kob
 
 A drawn manicule (hard to recognise reliably), the obelus as a "doubt" tag, colour as meaning (colours aren't decoded, §8b), and marks that act on other highlights on the page.
 
+## 8d. Quote cards (0.5)
+
+**Share as Image…** in a card's menu draws the highlight (or a markup's or notebook page's text) as a 1080×1080 or 1080×1350 PNG, light or dark: a rule in the Kobo highlight colour, optionally the markup's page with its ink, the quote in Literata sized to fit (88 px down to 24, then cut with an ellipsis), the note in italics, and the book and author at the foot; optionally a small "Kollate". A notebook page with its page shown is the page alone. Drawn in the app with Pango and Cairo; the page JPEG is decoded with `image`, not glycin, whose sandboxed loaders can fail inside a sandbox. Literata (SIL OFL, credited in THIRD-PARTY.md) is built into the binary, written to the cache on first use and added to fontconfig for the process; a fresh Pango font map sees it, so the rest of the app is untouched.
+
+The card can be copied (as a texture), saved (never onto a Kobo), or attached to a draft in the user's email app through the desktop's Email portal (`org.freedesktop.portal.Email.ComposeEmail`, with the PNG passed as a file descriptor from Kollate's cache). The portal opens the default mail app (Thunderbird, Evolution…); Kollate sends nothing itself and needs no network permission. Choices are remembered (`card_*` settings).
+
 ---
 
 ## 9. UI (libadwaita)
