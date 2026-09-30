@@ -15,10 +15,6 @@
   <a href="SPEC.md">Design notes</a>
 </p>
 
-<p align="center">
-  <sub>The books pictured are from <a href="https://standardebooks.org"><b>Standard Ebooks</b></a>: free, carefully produced public-domain ebooks, with a Kobo edition of every one.</sub>
-</p>
-
 Here's what it does, over a week of reading, starting with what nothing else does.
 
 ## Your handwriting, read as text
