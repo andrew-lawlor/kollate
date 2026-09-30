@@ -92,7 +92,7 @@ New highlights land in an **Inbox**. Keep, archive, star or edit each with a key
 </p>
 <p align="center"><i>Saturday, in Obsidian: Moby-Dick's note, with the page as you marked it.</i></p>
 
-**Quote cards:** any highlight, note, markup or notebook page as an image, set in a reading typeface. Copy it, save it, or open a new email in Thunderbird (or your usual email app) with it attached, to send to a friend or to yourself.
+**Quote cards:** any highlight, note, markup or notebook page as an image, set in a reading typeface, in six palettes (one tinted with the highlight's own colour). Copy it, save it, or open a new email in Thunderbird (or your usual email app) with it attached, to send to a friend or to yourself.
 
 <p align="center">
   <img src="docs/screenshots/quote-cards.png" width="85%" alt="Two quote cards: The Count of Monte Cristo's &quot;Wait and hope&quot; with the note &quot;Also our deployment strategy&quot;, and a page of the Odyssey with its underlines and handwritten note, the quote and the note below it">
@@ -123,7 +123,7 @@ The bundle uses the GNOME 51 runtime from Flathub, and Flatpak installs it autom
 ### Debian / Ubuntu (.deb)
 
 ```sh
-sudo apt install ./kollate_0.4.2-1_amd64.deb
+sudo apt install ./kollate_0.5.0-1_amd64.deb
 ```
 
 The package includes the app, the `kollate-cli` tool and the English Wiktionary dictionary. It needs GTK ≥ 4.12 and libadwaita ≥ 1.5, which Debian 13 and Ubuntu 24.04 or newer provide.

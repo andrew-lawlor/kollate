@@ -1,6 +1,6 @@
 # Kollate user guide
 
-For Kollate 0.4.2. Kollate brings everything you mark on a Kobo e-reader — highlights, notes, stylus markups, notebooks and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
+For Kollate 0.5.0. Kollate brings everything you mark on a Kobo e-reader — highlights, notes, stylus markups, notebooks and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
 
 **Contents**
 
@@ -35,7 +35,7 @@ Flatpak installs the GNOME runtime from Flathub if you don't have it. The Flatpa
 **Debian 13 or Ubuntu 24.04 and newer** (`.deb`):
 
 ```sh
-sudo apt install ./kollate_0.4.2-1_amd64.deb
+sudo apt install ./kollate_0.5.0-1_amd64.deb
 ```
 
 This also installs `kollate-cli`, the [command-line tool](#11-the-command-line).
@@ -147,7 +147,7 @@ A card's **⋮** menu has **Copy Text**, and **Copy as Markdown**: the highlight
 
 ### Share as an image
 
-**Share as Image…** in a card's **⋮** menu turns a highlight, note, markup or notebook page into a quote card: the words in a reading typeface, your note under them if you like, and the book at the foot. Choose **Square** or **Tall** (the shape social feeds prefer), **Light** or **Dark**, and for a markup whether to **Show the Page** with your ink on it. Then:
+**Share as Image…** in a card's **⋮** menu turns a highlight, note, markup or notebook page into a quote card: the words in a reading typeface, your note under them if you like, and the book at the foot. Choose **Square** or **Tall** (the shape social feeds prefer), a **Palette**, and for a markup whether to **Show the Page** with your ink on it. The palettes: **Paper** (a book page), **Night** (dark), **Sepia**, **Highlight** (a soft tint of the highlight's own Kobo colour, so a pink highlight makes a pink card), **Ink** (black and white) and **E-ink** (the grey of your Kobo's screen). Then:
 
 - **Copy** puts the image on the clipboard, to paste anywhere.
 - **Email…** opens a new email in your email app (Thunderbird, Evolution…) with the card attached and the quote in the message, for sending to a friend, or to yourself to have it on your phone. Put your own address in **Preferences → Sharing → Email Cards To**, and every card's email is addressed to you. Kollate sends nothing: it's your email app that sends it, if you press Send. The app used is the one set in your system settings (in GNOME, **Settings → Apps → Default Apps → Mail**).

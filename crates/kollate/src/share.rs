@@ -17,13 +17,94 @@ use kollate_core::store::Annotation;
 pub struct CardOptions {
     /// 1080×1350 rather than square.
     pub tall: bool,
-    pub dark: bool,
+    pub palette: Palette,
     /// Include the reader's note under the quote.
     pub note: bool,
     /// For a markup or notebook page, show the page with the ink.
     pub page: bool,
     /// A small "Kollate" at the foot.
     pub credit: bool,
+}
+
+/// A card's colours, each designed as a whole (text, note, rule, page).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Palette {
+    /// Warm off-white: a book page.
+    #[default]
+    Paper,
+    /// Deep charcoal, for evening reading.
+    Night,
+    /// Parchment and brown ink.
+    Sepia,
+    /// A soft tint of the highlight's own Kobo colour.
+    Highlight,
+    /// Black and white, high contrast.
+    Ink,
+    /// The grey of an e-ink screen.
+    Eink,
+}
+
+impl Palette {
+    pub const ALL: [Self; 6] = [
+        Self::Paper,
+        Self::Night,
+        Self::Sepia,
+        Self::Highlight,
+        Self::Ink,
+        Self::Eink,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Paper => "Paper",
+            Self::Night => "Night",
+            Self::Sepia => "Sepia",
+            Self::Highlight => "Highlight",
+            Self::Ink => "Ink",
+            Self::Eink => "E-ink",
+        }
+    }
+
+    /// The key it's remembered by.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Paper => "paper",
+            Self::Night => "night",
+            Self::Sepia => "sepia",
+            Self::Highlight => "highlight",
+            Self::Ink => "ink",
+            Self::Eink => "eink",
+        }
+    }
+
+    pub fn from_key(key: Option<&str>) -> Self {
+        Self::ALL
+            .into_iter()
+            .find(|p| Some(p.key()) == key)
+            .unwrap_or_default()
+    }
+
+    fn dark(self) -> bool {
+        matches!(self, Self::Night | Self::Ink)
+    }
+
+    /// Background, text, and the muted colour of the note and author, for
+    /// a highlight of Kobo colour `color` (the Highlight palette uses it).
+    fn colours(self, color: Option<usize>) -> (Rgb, Rgb, Rgb) {
+        match self {
+            Self::Paper => (hex(0xfbf8f1), hex(0x1c1b1a), hex(0x6b665e)),
+            Self::Night => (hex(0x1f1d24), hex(0xf2eee6), hex(0xa9a39a)),
+            Self::Sepia => (hex(0xf1e6cf), hex(0x3b2a1e), hex(0x7a6048)),
+            Self::Highlight => {
+                // Soft tints of yellow, pink, blue and green; grey for ink.
+                let tint = [0xfbf0c6, 0xfadcea, 0xdce9fa, 0xd8f3e2];
+                let bg = color.map_or(0xeceae6, |c| tint[c]);
+                (hex(bg), hex(0x1c1b1a), hex(0x57534d))
+            }
+            Self::Ink => (hex(0x000000), hex(0xffffff), hex(0x9e9e9e)),
+            Self::Eink => (hex(0xdddbd6), hex(0x121212), hex(0x55534f)),
+        }
+    }
 }
 
 const WIDTH: i32 = 1080;
@@ -85,16 +166,29 @@ fn hex(s: u32) -> Rgb {
     )
 }
 
-/// The highlight's Kobo colour (GNOME palette, a shade darker on light).
-fn accent(a: &Annotation, dark: bool) -> Rgb {
-    let palette: [u32; 4] = if dark {
+/// A highlight's Kobo colour as an index (yellow, pink, blue, green), or
+/// `None` for a markup or notebook page, which have none.
+fn kobo_colour(a: &Annotation) -> Option<usize> {
+    matches!(a.kind.as_str(), "highlight" | "note").then(|| a.color.clamp(0, 3) as usize)
+}
+
+/// The rule's colour: the highlight's Kobo colour (GNOME palette, a shade
+/// darker on light cards), or a grey.
+fn accent(a: &Annotation, palette: Palette) -> Rgb {
+    let shades: [u32; 4] = if palette.dark() {
         [0xf6d32d, 0xf36fb1, 0x62a0ea, 0x57e389]
+    } else if palette == Palette::Highlight {
+        // Deep enough to stand out on its own tint.
+        [0xc88800, 0xb5236f, 0x1c71d8, 0x26a269]
     } else {
         [0xe5a50a, 0xe01b8f, 0x3584e4, 0x26a269]
     };
-    match a.kind.as_str() {
-        "highlight" | "note" => hex(palette[a.color.clamp(0, 3) as usize]),
-        _ => hex(if dark { 0x9a9996 } else { 0x77767b }),
+    match kobo_colour(a) {
+        // An e-ink screen has no colour.
+        Some(_) if palette == Palette::Eink => hex(0x3d3846),
+        Some(c) => hex(shades[c]),
+        None if palette.dark() => hex(0x9a9996),
+        None => hex(0x77767b),
     }
 }
 
@@ -128,11 +222,7 @@ pub fn render(a: &Annotation, o: CardOptions) -> Result<Vec<u8>, String> {
     let h = if o.tall { 1350 } else { 1080 };
     let (w, hf) = (f64::from(WIDTH), f64::from(h));
     let inner = w - 2.0 * MARGIN;
-    let (bg, fg, muted) = if o.dark {
-        (hex(0x1f1d24), hex(0xf2eee6), hex(0xa9a39a))
-    } else {
-        (hex(0xfbf8f1), hex(0x1c1b1a), hex(0x6b665e))
-    };
+    let (bg, fg, muted) = o.palette.colours(kobo_colour(a));
 
     let surface =
         cairo::ImageSurface::create(cairo::Format::Rgb24, WIDTH, h).map_err(|e| e.to_string())?;
@@ -146,7 +236,7 @@ pub fn render(a: &Annotation, o: CardOptions) -> Result<Vec<u8>, String> {
 
     // The rule, in the highlight's colour.
     let mut y = MARGIN;
-    set(&cr, accent(a, o.dark));
+    set(&cr, accent(a, o.palette));
     cr.rectangle(MARGIN, y, 72.0, 7.0);
     cr.fill().map_err(|e| e.to_string())?;
     y += 56.0;
@@ -408,7 +498,7 @@ mod tests {
                     "sq-light",
                     CardOptions {
                         tall: false,
-                        dark: false,
+                        palette: Palette::Paper,
                         note: true,
                         page: true,
                         credit: false,
@@ -418,7 +508,7 @@ mod tests {
                     "tall-dark",
                     CardOptions {
                         tall: true,
-                        dark: true,
+                        palette: Palette::Night,
                         note: true,
                         page: true,
                         credit: true,
@@ -426,6 +516,16 @@ mod tests {
                 ),
             ] {
                 if let Ok(png) = render(&a, o) {
+                    if a.id == 3 && tag == "sq-light" {
+                        for p in Palette::ALL {
+                            let png = render(&a, CardOptions { palette: p, ..o }).unwrap();
+                            std::fs::write(
+                                Path::new(&out).join(format!("palette-{}.png", p.key())),
+                                png,
+                            )
+                            .unwrap();
+                        }
+                    }
                     std::fs::write(Path::new(&out).join(format!("{}-{tag}.png", a.id)), png)
                         .unwrap();
                 }

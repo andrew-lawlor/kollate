@@ -2,11 +2,11 @@
 //! copied, saved, or attached to an email draft.
 
 use super::*;
-use crate::share::{self, CardOptions};
+use crate::share::{self, CardOptions, Palette};
 
 /// Remembered choices ("1" on). Note and page are on unless turned off.
 const TALL: &str = "card_tall";
-const DARK: &str = "card_dark";
+const PALETTE: &str = "card_palette";
 const NO_NOTE: &str = "card_no_note";
 const NO_PAGE: &str = "card_no_page";
 const CREDIT: &str = "card_credit";
@@ -17,7 +17,9 @@ impl Window {
     fn card_options(&self) -> CardOptions {
         CardOptions {
             tall: self.flag(TALL),
-            dark: self.flag(DARK),
+            palette: Palette::from_key(
+                self.lib.borrow().setting(PALETTE).ok().flatten().as_deref(),
+            ),
             note: !self.flag(NO_NOTE),
             page: !self.flag(NO_PAGE),
             credit: self.flag(CREDIT),
@@ -74,10 +76,18 @@ impl Window {
         let shape = adw::ActionRow::builder().title("Shape").build();
         shape.add_suffix(&shape_box);
         options.add(&shape);
-        let (style_box, dark) = pair("Light", "Dark", o.dark);
-        let style = adw::ActionRow::builder().title("Style").build();
-        style.add_suffix(&style_box);
-        options.add(&style);
+        let names: Vec<&str> = Palette::ALL.iter().map(|p| p.name()).collect();
+        let palette = adw::ComboRow::builder()
+            .title("Palette")
+            .model(&gtk::StringList::new(&names))
+            .selected(
+                Palette::ALL
+                    .iter()
+                    .position(|p| *p == o.palette)
+                    .unwrap_or(0) as u32,
+            )
+            .build();
+        options.add(&palette);
         let note = adw::SwitchRow::builder()
             .title("Include Your Note")
             .active(o.note)
@@ -143,7 +153,7 @@ impl Window {
             #[weak]
             tall,
             #[weak]
-            dark,
+            palette,
             #[weak]
             note,
             #[weak]
@@ -156,7 +166,11 @@ impl Window {
             a,
             move || {
                 this.set_flag(TALL, tall.is_active());
-                this.set_flag(DARK, dark.is_active());
+                let chosen =
+                    Palette::ALL[(palette.selected() as usize).min(Palette::ALL.len() - 1)];
+                if let Err(err) = this.lib.borrow().set_setting(PALETTE, chosen.key()) {
+                    eprintln!("kollate: couldn’t save the palette: {err}");
+                }
                 this.set_flag(NO_NOTE, !note.is_active());
                 this.set_flag(NO_PAGE, !page.is_active());
                 this.set_flag(CREDIT, credit.is_active());
@@ -171,10 +185,10 @@ impl Window {
                 }
             }
         ));
-        for b in [&tall, &dark] {
-            let r = redraw.clone();
-            b.connect_toggled(move |_| r());
-        }
+        let r = redraw.clone();
+        tall.connect_toggled(move |_| r());
+        let r = redraw.clone();
+        palette.connect_selected_notify(move |_| r());
         for s in [&note, &page, &credit] {
             let r = redraw.clone();
             s.connect_active_notify(move |_| r());
