@@ -68,6 +68,15 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.5.1" date="2026-09-30">
+      <description>
+        <p>Getting ready for Flathub.</p>
+        <ul>
+          <li>Reading a lot of handwriting at once, as after a first import, now shows how far along it is</li>
+          <li>A fuller description and screenshots for software centres</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-09-30">
       <description>
         <p>Quote cards: share a highlight as an image, or send it by email. And dictionaries for more languages, a click away.</p>
