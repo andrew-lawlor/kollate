@@ -112,7 +112,7 @@ The bundle uses the GNOME 51 runtime from Flathub, and Flatpak installs it autom
 ### Debian / Ubuntu (.deb)
 
 ```sh
-sudo apt install ./kollate_0.4.0-1_amd64.deb
+sudo apt install ./kollate_0.4.1-1_amd64.deb
 ```
 
 The package includes the app, the `kollate-cli` tool and the English Wiktionary dictionary. It needs GTK ≥ 4.12 and libadwaita ≥ 1.5, which Debian 13 and Ubuntu 24.04 or newer provide.

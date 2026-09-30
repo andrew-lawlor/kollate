@@ -960,7 +960,7 @@ dependencies = [
 
 [[package]]
 name = "kollate"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "chrono",
  "gtk4",
@@ -971,7 +971,7 @@ dependencies = [
 
 [[package]]
 name = "kollate-cli"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -982,7 +982,7 @@ dependencies = [
 
 [[package]]
 name = "kollate-core"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "blake3",
  "bzip2-rs",
@@ -1004,7 +1004,7 @@ dependencies = [
 
 [[package]]
 name = "kollate-transcribe"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "blake3",
  "kollate-core",

@@ -34,6 +34,16 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.4.1" date="2026-09-29">
+      <description>
+        <p>Fixes for reading handwriting.</p>
+        <ul>
+          <li>Passages you mark on a page are listed in page order, not the order you marked them in</li>
+          <li>A word an underline runs on to past a full stop, or a stray bracket, is left out of the marked text</li>
+          <li>If reading your handwriting fails, Kollate now says why, instead of leaving your markups unread without a word</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-09-29">
       <description>
         <p>Curate while you read, with a mark in the margin, as readers have for two thousand years. Kollate reads the mark along with your handwriting and does the filing.</p>
