@@ -37,11 +37,12 @@
   <releases>
     <release version="0.5.0" date="2026-09-30">
       <description>
-        <p>Quote cards: share a highlight as an image, or send it by email.</p>
+        <p>Quote cards: share a highlight as an image, or send it by email. And dictionaries for more languages, a click away.</p>
         <ul>
           <li>Share as Image… turns any highlight, note, markup or notebook page into a card, set in the Literata typeface, square or tall</li>
           <li>Six palettes, including one tinted with the highlight's own Kobo colour; a markup's card can show the page with your ink</li>
           <li>Copy the card, save it, or open an email in your email app with it attached. Set your own address in Preferences to send cards to yourself</li>
+          <li>Dictionaries for 16 more languages, as easy as handwriting models: Preferences suggests the languages your books are in, with a download link for each</li>
         </ul>
       </description>
     </release>

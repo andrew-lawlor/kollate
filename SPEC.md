@@ -311,6 +311,10 @@ A pen star also keeps the highlight; marks work in typed notes too, on every Kob
 
 A drawn manicule (hard to recognise reliably), the obelus as a "doubt" tag, colour as meaning (colours aren't decoded, §8b), and marks that act on other highlights on the page.
 
+## 8c'. Dictionaries for other languages (0.5)
+
+Preferences → **Get a Dictionary** lists reader.dict's free Wiktionary dictionaries (`dict::catalog::READER_DICT`: 17 languages with approximate sizes; `https://www.reader-dict.com/file/<l>/dict-<l>-<l>.df.bz2`), the way Handwriting lists models: the languages the library uses (books with annotations or words, and looked-up words' dictionary languages, `Library::languages_in_use`) that no dictionary covers come first, marked "Your books use it"; the rest are under More Languages. **Download** opens the address in the browser; the file is then added with **+**, whose chooser starts in the Downloads folder, and named and assigned a language from its file name as before. reader.dict updates its files in place, so unlike models they aren't pinned by checksum; any DictFile is accepted.
+
 ## 8d. Quote cards (0.5)
 
 **Share as Image…** in a card's menu draws the highlight (or a markup's or notebook page's text) as a 1080×1080 or 1080×1350 PNG in one of six palettes (Paper, Night, Sepia, Highlight: a tint of the Kobo colour, Ink, E-ink), each designed as a whole rather than free colour choices, so a card stays readable: a rule in the Kobo highlight colour, optionally the markup's page with its ink, the quote in Literata sized to fit (88 px down to 24, then cut with an ellipsis), the note in italics, and the book and author at the foot; optionally a small "Kollate". A notebook page with its page shown is the page alone. Drawn in the app with Pango and Cairo; the page JPEG is decoded with `image`, not glycin, whose sandboxed loaders can fail inside a sandbox. Literata (SIL OFL, credited in THIRD-PARTY.md) is built into the binary, written to the cache on first use and added to fontconfig for the process; a fresh Pango font map sees it, so the rest of the app is untouched.

@@ -261,7 +261,7 @@ Words that share a dictionary form ("leviathans", "leviathan") are merged into o
 
 ### Other languages
 
-Kollate includes the English Wiktionary. For other languages, **Preferences → Dictionaries → Dictionaries for Other Languages** opens reader.dict, where free Wiktionary dictionaries are available; download the **DictFile** version (`.df.bz2`) and add it with **+**. StarDict (`.ifo`) and kaikki.org (`.jsonl`) dictionaries work too. Each word is looked up in the dictionaries for its language; dictionaries you add are tried before the included one.
+Kollate includes the English Wiktionary. Free Wiktionary dictionaries for 16 more languages, compiled by reader.dict, are a click away, the same way as handwriting models: **Preferences → Get a Dictionary** suggests the languages your books are in (a Spanish novel brings up Spanish), with every other language under **More Languages**. Press **Download**, and when it's done, add the file with **+** under Dictionaries (the file chooser opens in your Downloads folder). Words already in Vocabulary in that language are defined straight away. StarDict (`.ifo`) and kaikki.org (`.jsonl`) dictionaries can be added with **+** too. reader.dict is made by volunteers; the same group has links to their website and to **Donate**, if their dictionaries help you. Each word is looked up in the dictionaries for its language; dictionaries you add are tried before the included one.
 
 ## 8. Export
 

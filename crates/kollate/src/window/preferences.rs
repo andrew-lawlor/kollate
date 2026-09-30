@@ -138,24 +138,6 @@ impl Window {
             }
         ));
 
-        // Free Wiktionary dictionaries for other languages, with credit.
-        let more = adw::ActionRow::builder()
-            .title("Dictionaries for Other Languages")
-            .subtitle("Free Wiktionary dictionaries from reader.dict. Download the DictFile version (.df.bz2), then add it with +.")
-            .activatable(true)
-            .build();
-        more.add_suffix(&gtk::Image::from_icon_name("adw-external-link-symbolic"));
-        let weak = Rc::downgrade(self);
-        more.connect_activated(move |_| {
-            if let Some(this) = weak.upgrade() {
-                gtk::UriLauncher::new(MORE_DICTIONARIES_URL).launch(
-                    Some(&this.win),
-                    gio::Cancellable::NONE,
-                    |_| {},
-                );
-            }
-        });
-
         let dicts = self.dictionaries.borrow();
         if dicts.is_empty() {
             header.add(
@@ -165,8 +147,7 @@ impl Window {
                     .build(),
             );
         }
-        header.add(&more);
-        let mut groups = vec![header];
+        let mut groups = vec![header, self.get_dictionaries_group(&dicts)];
 
         // One group per language, languages by name, dictionaries in lookup order.
         let mut languages: Vec<Option<&str>> = Vec::new();
@@ -230,6 +211,118 @@ impl Window {
 
     /// Converts a user-chosen StarDict or kaikki.org file into the user's
     /// dictionary folder, then defines any words still missing a definition.
+    /// Dictionaries to download, like handwriting models: languages the
+    /// library uses first, then the rest. Download in the browser, add with +.
+    fn get_dictionaries_group(self: &Rc<Self>, dicts: &[Dictionary]) -> adw::PreferencesGroup {
+        use kollate_core::dict::catalog;
+        let group = adw::PreferencesGroup::builder()
+            .title("Get a Dictionary")
+            .description(
+                "Free Wiktionary dictionaries, compiled by reader.dict (CC BY-SA 4.0). Download one in \
+                 your browser, then add it with + above.",
+            )
+            .build();
+        let covered = |l: &str| dicts.iter().any(|d| d.covers(l));
+        let in_use = self.lib.borrow().languages_in_use().unwrap_or_default();
+        let wanted: Vec<&str> = in_use
+            .iter()
+            .map(String::as_str)
+            .filter(|l| !covered(l) && catalog::size_mb(l).is_some())
+            .collect();
+        let row = |language: &str, why: Option<&str>| {
+            let size = catalog::size_mb(language).unwrap_or_default();
+            let size = if size < 1.0 {
+                "under 1 MB".to_owned()
+            } else {
+                format!("about {size:.0} MB")
+            };
+            let row = adw::ActionRow::builder()
+                .title(language_name(Some(language)))
+                .subtitle(why.map_or(size.clone(), |w| format!("{w} · {size}")))
+                .build();
+            let download = gtk::Button::builder()
+                .label("Download")
+                .valign(gtk::Align::Center)
+                .build();
+            download.update_property(&[gtk::accessible::Property::Label(&format!(
+                "Download the {} dictionary",
+                language_name(Some(language))
+            ))]);
+            let (weak, url) = (Rc::downgrade(self), catalog::download_url(language));
+            download.connect_clicked(move |_| {
+                if let Some(this) = weak.upgrade() {
+                    gtk::UriLauncher::new(&url).launch(
+                        Some(&this.win),
+                        gio::Cancellable::NONE,
+                        |_| {},
+                    );
+                    this.toast("When it’s downloaded, add it with +");
+                }
+            });
+            row.add_suffix(&download);
+            row
+        };
+        for language in &wanted {
+            group.add(&row(language, Some("Your books use it")));
+        }
+        let more = adw::ExpanderRow::builder()
+            .title(if wanted.is_empty() {
+                "Languages"
+            } else {
+                "More Languages"
+            })
+            .build();
+        let mut any = false;
+        for (language, _) in catalog::READER_DICT {
+            if !covered(language) && !wanted.contains(language) {
+                more.add_row(&row(language, None));
+                any = true;
+            }
+        }
+        if any {
+            group.add(&more);
+        }
+
+        // Credit, and a way to give back: reader.dict is made by volunteers.
+        let credit = adw::ActionRow::builder()
+            .title("Dictionaries by reader.dict")
+            .subtitle("Compiled from Wiktionary by volunteers, and free for everyone. If they help you, consider supporting their work.")
+            .build();
+        credit.add_prefix(&gtk::Image::from_icon_name("emote-love-symbolic"));
+        for (label, url, tip) in [
+            (
+                "Website",
+                catalog::READER_DICT_URL,
+                "Open reader.dict’s website",
+            ),
+            (
+                "Donate",
+                catalog::READER_DICT_DONATE_URL,
+                "Donate to reader.dict",
+            ),
+        ] {
+            let button = gtk::Button::builder()
+                .label(label)
+                .valign(gtk::Align::Center)
+                .tooltip_text(tip)
+                .css_classes(["flat"])
+                .build();
+            let weak = Rc::downgrade(self);
+            button.connect_clicked(move |_| {
+                if let Some(this) = weak.upgrade() {
+                    gtk::UriLauncher::new(url).launch(
+                        Some(&this.win),
+                        gio::Cancellable::NONE,
+                        |_| {},
+                    );
+                }
+            });
+            credit.add_suffix(&button);
+        }
+        group.add(&credit);
+        group
+    }
+
     fn add_dictionary(self: &Rc<Self>, prefs: &adw::PreferencesDialog) {
         let Some(user_dir) = self.lib.borrow().assets_dir().map(|d| dict::user_dir(&d)) else {
             return;
@@ -255,6 +348,10 @@ impl Window {
             .filters(&filters)
             .modal(true)
             .build();
+        // Where the browser just put it.
+        if let Some(downloads) = glib::user_special_dir(glib::UserDirectory::Downloads) {
+            chooser.set_initial_folder(Some(&gio::File::for_path(downloads)));
+        }
         let this = self.clone();
         let prefs = prefs.clone();
         glib::spawn_future_local(async move {
@@ -340,6 +437,7 @@ fn language_name(code: Option<&str>) -> String {
         "hu" => "Hungarian",
         "it" => "Italian",
         "ja" => "Japanese",
+        "lt" => "Lithuanian",
         "ko" => "Korean",
         "la" => "Latin",
         "nb" | "no" => "Norwegian",

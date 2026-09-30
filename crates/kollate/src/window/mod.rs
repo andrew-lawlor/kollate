@@ -135,9 +135,6 @@ enum BannerAction {
 /// Credit line for dictionaries converted from reader.dict's Wiktionary extracts.
 const WIKTIONARY_SOURCE: &str = "Wiktionary contributors, via reader.dict (CC BY-SA 4.0)";
 
-/// Where to get Wiktionary dictionaries for other languages.
-const MORE_DICTIONARIES_URL: &str = "https://www.reader-dict.com/";
-
 /// How many books the sidebar lists under Recent.
 const RECENT_BOOKS: usize = 5;
 
@@ -763,6 +760,16 @@ impl Window {
                 Some("© Wiktionary contributors"),
                 gtk::License::Custom,
                 Some("Definitions from <a href=\"https://www.wiktionary.org/\">Wiktionary</a>, compiled by <a href=\"https://www.reader-dict.com/\">reader.dict</a>, licensed under <a href=\"https://creativecommons.org/licenses/by-sa/4.0/\">CC BY-SA 4.0</a>."),
+            );
+            about.add_legal_section(
+                "Literata",
+                Some("© 2017 The Literata Project Authors"),
+                gtk::License::Custom,
+                Some("The typeface of quote cards, licensed under the <a href=\"https://openfontlicense.org\">SIL Open Font License 1.1</a>."),
+            );
+            about.add_acknowledgement_section(
+                Some("Dictionaries"),
+                &["reader.dict https://www.reader-dict.com/"],
             );
             about.present(Some(&this.win));
         });

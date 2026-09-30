@@ -3,6 +3,7 @@
 //! same small SQLite format and looked up with a rule-based lemmatizer.
 
 mod build;
+pub mod catalog;
 mod dictfile;
 mod lemma;
 

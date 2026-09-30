@@ -291,6 +291,23 @@ impl Library {
         Ok(())
     }
 
+    /// Languages the library's books and looked-up words are in, as
+    /// two-letter codes ("es" from "es-ES"), most used first.
+    pub fn languages_in_use(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT lower(substr(language, 1, 2)) AS l, count(*) FROM (
+                 SELECT b.language FROM book b WHERE b.language IS NOT NULL AND length(b.language) >= 2
+                   AND (EXISTS (SELECT 1 FROM annotation a WHERE a.book_id = b.id)
+                        OR EXISTS (SELECT 1 FROM vocab_sighting s WHERE s.book_id = b.id))
+                 UNION ALL
+                 SELECT v.language FROM vocab v WHERE length(v.language) >= 2)
+             GROUP BY l ORDER BY count(*) DESC, l",
+        )?;
+        Ok(stmt
+            .query_map([], |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
     /// Sets (or with `None`, clears) the reader's own note on a word.
     pub fn set_vocab_gloss(&self, id: i64, gloss: Option<&str>) -> Result<()> {
         self.conn.execute(
