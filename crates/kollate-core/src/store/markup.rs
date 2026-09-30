@@ -108,8 +108,9 @@ impl Library {
             let jpg = jpg.map(PathBuf::from).filter(|p| p.is_file());
             let mut h = blake3::Hasher::new();
             // Bumped when reading changes in a way worth reading again for
-            // (2: loops, stars and question marks known by shape, 0.4).
-            h.update(b"reading 2");
+            // (2: loops, stars and question marks known by shape, 0.4;
+            // 3: marked passages in page order, overshoot trimmed).
+            h.update(b"reading 3");
             h.update(&ink);
             h.update(&[u8::from(jpg.is_some()), u8::from(context.is_some())]);
             h.update(source.as_bytes());

@@ -293,7 +293,7 @@ A medieval reader who met a hard word wrote its meaning above it or in the margi
 
 ### Data model (migration 9)
 
-`annotation.pen_marks TEXT` (JSON: `{"star": true, "tags": ["leadership"]}`) and `vocab_sighting.annotation_id INTEGER REFERENCES annotation(id) ON DELETE SET NULL`, unique with the word. No change to import identity: marks and glosses are derived from the reading, after import. The transcription hash (§8a) includes a reading version, bumped to 2, so every markup is read once more after upgrading: loops that were read as notes become circles, and marks already written are applied.
+`annotation.pen_marks TEXT` (JSON: `{"star": true, "tags": ["leadership"]}`) and `vocab_sighting.annotation_id INTEGER REFERENCES annotation(id) ON DELETE SET NULL`, unique with the word. No change to import identity: marks and glosses are derived from the reading, after import. Marked passages are listed in page order (top to bottom), not drawing order, and a word or two the pen ran on to past a full stop ("…humanity. At"), or started on before one, is trimmed. The transcription hash (§8a) includes a reading version (2 in 0.4.0, 3 after these fixes), so every markup is read once more after upgrading: loops that were read as notes become circles, and marks already written are applied.
 
 ### Samples (2026-09-29)
 

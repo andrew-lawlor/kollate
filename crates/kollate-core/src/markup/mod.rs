@@ -69,7 +69,14 @@ pub fn transcribe(
             writing.push(note);
         }
     }
-    segments.marks.sort_by_key(|m| m.strokes.first().copied());
+    // In page order, top to bottom, whatever order they were drawn in.
+    let top = |m: &segment::Mark| {
+        m.strokes
+            .iter()
+            .map(|&i| strokes[i].bounds.top)
+            .fold(f32::MAX, f32::min)
+    };
+    segments.marks.sort_by(|a, b| top(a).total_cmp(&top(b)));
 
     let mut notes = Vec::new();
     for note in &writing {
@@ -117,6 +124,7 @@ pub fn transcribe(
                 .book_words
                 .and_then(|words| snap(&reading, words))
                 .unwrap_or_else(|| snap::tidy(&reading));
+            let text = trim_overshoot(&text);
             if mark.kind == segment::MarkKind::Circle
                 && let Some(word) = single_word(&text)
             {
@@ -134,6 +142,44 @@ pub fn transcribe(
         note: join(notes),
         circled,
     })
+}
+
+/// Drops the word or two a pen runs on past a full stop ("…humanity. At"),
+/// or starts before one ("man.” Over the centuries…"): nobody means to mark
+/// the first word of the next sentence, or the last of the one before.
+fn trim_overshoot(text: &str) -> String {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    // A word ending a sentence (not a paragraph number like "8.").
+    let ends = |w: &str| {
+        w.chars().any(char::is_alphabetic)
+            && w.trim_end_matches(['"', '\'', '”', '’', ')', ']'])
+                .trim_end_matches(|c: char| c.is_ascii_digit())
+                .ends_with(['.', '!', '?', '…'])
+    };
+    let n = words.len();
+    let mut from = 0;
+    let mut to = n;
+    // A sentence ending within the last three words, with at most two after it.
+    if let Some(i) = (n.saturating_sub(3)..n.saturating_sub(1))
+        .rev()
+        .find(|&i| ends(words[i]))
+        && i >= 2
+    {
+        to = i + 1;
+    }
+    // One ending within the first two words, with more than two after it.
+    if let Some(i) = (0..2.min(n)).find(|&i| ends(words[i]))
+        && to - i - 1 > 2
+    {
+        from = i + 1;
+    }
+    let text = words[from..to].join(" ");
+    // A bracket whose partner lies outside the mark ("novarum)").
+    match (text.contains('('), text.contains(')')) {
+        (false, true) => text.trim_end_matches(')').to_owned(),
+        (true, false) => text.trim_start_matches('(').to_owned(),
+        _ => text,
+    }
 }
 
 /// The word, if `text` is one word (letters, with a hyphen or apostrophe
@@ -212,6 +258,32 @@ mod tests {
         fn print(&mut self, _: &RgbImage) -> Result<String> {
             Ok(self.print.remove(0).to_owned())
         }
+    }
+
+    #[test]
+    fn trims_what_the_pen_ran_on_to() {
+        assert_eq!(
+            trim_overshoot(
+                "Over the centuries, development has improved the living conditions of humanity. At"
+            ),
+            "Over the centuries, development has improved the living conditions of humanity."
+        );
+        assert_eq!(
+            trim_overshoot("man.” Over the centuries, technological development has improved"),
+            "Over the centuries, technological development has improved"
+        );
+        assert_eq!(trim_overshoot("novarum)"), "novarum");
+        assert_eq!(trim_overshoot("(rerum novarum)"), "(rerum novarum)");
+        // A marked sentence, or two, is left whole.
+        assert_eq!(trim_overshoot("Call me Ishmael."), "Call me Ishmael.");
+        assert_eq!(
+            trim_overshoot("It was cold. It was dark."),
+            "It was cold. It was dark."
+        );
+        assert_eq!(
+            trim_overshoot("8. The Book of Nehemiah, in turn"),
+            "8. The Book of Nehemiah, in turn"
+        );
     }
 
     #[test]
