@@ -34,6 +34,15 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.4.2" date="2026-09-29">
+      <description>
+        <p>Small improvements to exports, and a new project page.</p>
+        <ul>
+          <li>On Anki cards, the gloss you wrote beside a circled word stands apart from the dictionary's definition</li>
+          <li>Obsidian notes no longer give handwritten markups a highlight colour</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.1" date="2026-09-29">
       <description>
         <p>Fixes for reading handwriting.</p>
