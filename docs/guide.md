@@ -150,7 +150,7 @@ A card's **⋮** menu has **Copy Text**, and **Copy as Markdown**: the highlight
 **Share as Image…** in a card's **⋮** menu turns a highlight, note, markup or notebook page into a quote card: the words in a reading typeface, your note under them if you like, and the book at the foot. Choose **Square** or **Tall** (the shape social feeds prefer), **Light** or **Dark**, and for a markup whether to **Show the Page** with your ink on it. Then:
 
 - **Copy** puts the image on the clipboard, to paste anywhere.
-- **Email…** opens a new email in your email app (Thunderbird, Evolution…) with the card attached and the quote in the message, for sending to a friend, or to yourself to have it on your phone. Kollate sends nothing: it's your email app that sends it, if you press Send. The app used is the one set in your system settings (in GNOME, **Settings → Apps → Default Apps → Mail**).
+- **Email…** opens a new email in your email app (Thunderbird, Evolution…) with the card attached and the quote in the message, for sending to a friend, or to yourself to have it on your phone. Put your own address in **Preferences → Sharing → Email Cards To**, and every card's email is addressed to you. Kollate sends nothing: it's your email app that sends it, if you press Send. The app used is the one set in your system settings (in GNOME, **Settings → Apps → Default Apps → Mail**).
 - **Save…** saves it as a PNG.
 
 Kollate remembers your choices for next time.
@@ -298,6 +298,7 @@ Choose a folder in your vault and press **Sync**. Kollate writes one note per bo
 | When a Kobo Is Connected | Import automatically · Ask first · Do nothing |
 | When a Highlight Is Deleted on the Kobo | Keep it, marked as deleted · Move it to Trash |
 | Handwriting | Download, add, choose and remove models; Use Graphics Card; Circled Words Go to Vocabulary |
+| Sharing | Email Cards To: the address quote cards are emailed to, usually your own |
 | Dictionaries | Add or remove dictionaries, by language |
 | Library | Where your library is (see [Your data](#12-your-data)) |
 

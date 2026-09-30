@@ -10,6 +10,8 @@ const DARK: &str = "card_dark";
 const NO_NOTE: &str = "card_no_note";
 const NO_PAGE: &str = "card_no_page";
 const CREDIT: &str = "card_credit";
+/// The address Email… fills in (Preferences → Sharing): usually the user's own.
+pub(super) const EMAIL_TO: &str = "card_email_to";
 
 impl Window {
     fn card_options(&self) -> CardOptions {
@@ -245,9 +247,11 @@ impl Window {
                     return this.error("Couldn’t Prepare the Email", err);
                 }
                 let (subject, text) = share::email_text(&a, this.card_options());
+                let address = this.lib.borrow().setting(EMAIL_TO).ok().flatten().unwrap_or_default();
                 let this = this.clone();
                 glib::spawn_future_local(async move {
-                    match share::compose_email(&subject, &text, &path).await {
+                    let to = (!address.is_empty()).then_some(address.as_str());
+                    match share::compose_email(to, &subject, &text, &path).await {
                         Ok(()) => {
                             dialog.close();
                         }

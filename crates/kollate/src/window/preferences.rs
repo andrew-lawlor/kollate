@@ -54,6 +54,38 @@ impl Window {
 
         page.add(&group);
         page.add(&self.handwriting_group(&dialog));
+
+        // Quote cards' Email… is addressed here, usually to the user.
+        let sharing = adw::PreferencesGroup::builder()
+            .title("Sharing")
+            .description("Share as Image… can open an email with the card attached. Put your own address here to send cards to yourself, to read them on your phone.")
+            .build();
+        let email_to = adw::EntryRow::builder()
+            .title("Email Cards To")
+            .text(
+                self.lib
+                    .borrow()
+                    .setting(super::share::EMAIL_TO)
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default(),
+            )
+            .input_purpose(gtk::InputPurpose::Email)
+            .show_apply_button(true)
+            .build();
+        let weak = Rc::downgrade(self);
+        email_to.connect_apply(move |row| {
+            let Some(this) = weak.upgrade() else { return };
+            if let Err(err) = this
+                .lib
+                .borrow()
+                .set_setting(super::share::EMAIL_TO, row.text().trim())
+            {
+                this.error("Couldn’t Save Setting", err);
+            }
+        });
+        sharing.add(&email_to);
+        page.add(&sharing);
         for group in self.dictionaries_groups(&dialog) {
             page.add(&group);
         }

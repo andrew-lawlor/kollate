@@ -340,7 +340,9 @@ pub fn email_text(a: &Annotation, o: CardOptions) -> (String, String) {
 /// Opens a draft in the user's email app (Thunderbird, Evolution…) through
 /// the desktop's Email portal, with the card attached. Kollate itself sends
 /// nothing; the email app does, if the user presses Send.
+/// `to` fills in the recipient (e.g. the user's own address).
 pub async fn compose_email(
+    to: Option<&str>,
     subject: &str,
     body: &str,
     attachment: &Path,
@@ -350,6 +352,9 @@ pub async fn compose_email(
     let fds = gio::UnixFDList::new();
     let index = fds.append(&file)?;
     let options = glib::VariantDict::new(None);
+    if let Some(to) = to.map(str::trim).filter(|t| !t.is_empty()) {
+        options.insert_value("address", &to.to_variant());
+    }
     options.insert_value("subject", &subject.to_variant());
     options.insert_value("body", &body.to_variant());
     options.insert_value(
