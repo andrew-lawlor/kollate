@@ -89,8 +89,8 @@ pub fn transcribe(
         } else {
             let img = image::render_note(svg, &strokes, note, 16)?;
             // A note's own line breaks are just where the margin ran out.
-            reader
-                .handwriting(&img)?
+            let text = reader.handwriting(&img)?;
+            without_runaway(&text)
                 .split_whitespace()
                 .collect::<Vec<_>>()
                 .join(" ")
@@ -182,6 +182,56 @@ fn trim_overshoot(text: &str) -> String {
     }
 }
 
+/// Where a model reading starts repeating itself ("+ 1 + 1 + 1…", "2222…"),
+/// as a byte index: a run of at least five copies of a piece up to eight
+/// characters long, at least 16 characters in all. Small models do this on
+/// ink they can't read, until they run out of tokens.
+pub fn runaway_start(text: &str) -> Option<usize> {
+    let chars: Vec<char> = text.chars().collect();
+    let starts: Vec<usize> = text.char_indices().map(|(i, _)| i).collect();
+    // Whether `len` characters from `i` repeat enough to be a loop.
+    let looping = |i: usize, len: usize| {
+        let Some(unit) = chars.get(i..i + len) else {
+            return false;
+        };
+        if unit.iter().all(|c| c.is_whitespace()) {
+            return false;
+        }
+        let mut copies = 1;
+        while chars.get(i + copies * len..i + (copies + 1) * len) == Some(unit) {
+            copies += 1;
+        }
+        copies >= 5 && copies * len >= 16
+    };
+    for i in 0..chars.len() {
+        for len in 1..=8 {
+            if looping(i, len) {
+                // "line the the the…" loops from "e the" as much as from
+                // "the ": start at a word if the loop still holds there.
+                let at = (i..i + len)
+                    .find(|&j| (j == 0 || chars[j - 1].is_whitespace()) && looping(j, len))
+                    .unwrap_or(i);
+                return Some(starts[at]);
+            }
+        }
+    }
+    None
+}
+
+/// A reading without the loop a model fell into, or nothing if that leaves
+/// less than a word (what came before a loop is rarely real).
+fn without_runaway(text: &str) -> &str {
+    let Some(at) = runaway_start(text) else {
+        return text;
+    };
+    let kept = text[..at].trim_end();
+    if kept.chars().filter(|c| c.is_alphabetic()).count() < 2 {
+        ""
+    } else {
+        kept
+    }
+}
+
 /// The word, if `text` is one word (letters, with a hyphen or apostrophe
 /// inside), without punctuation around it.
 fn single_word(text: &str) -> Option<&str> {
@@ -212,8 +262,8 @@ pub fn read_page(svg: &str, reader: &mut dyn Reader) -> Result<Option<String>> {
             continue;
         }
         let img = image::render_note(svg, &strokes, &line, 16)?;
-        let mut words: Vec<String> = reader
-            .handwriting(&img)?
+        let text = reader.handwriting(&img)?;
+        let mut words: Vec<String> = without_runaway(&text)
             .split_whitespace()
             .map(str::to_owned)
             .collect();
@@ -258,6 +308,21 @@ mod tests {
         fn print(&mut self, _: &RgbImage) -> Result<String> {
             Ok(self.print.remove(0).to_owned())
         }
+    }
+
+    #[test]
+    fn drops_a_reading_that_runs_away() {
+        assert_eq!(runaway_start("Need 114 K Y"), None);
+        assert_eq!(runaway_start("Wait... what?!! Really???"), None);
+        assert_eq!(runaway_start("hahaha, yes"), None);
+        assert_eq!(runaway_start("+ + 1 + 1 + 1 + 1 + 1 + 1 + 1"), Some(2));
+        assert_eq!(without_runaway("2222222222222222222222"), "");
+        assert_eq!(without_runaway("+ + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1"), "");
+        assert_eq!(
+            without_runaway("Lovely line the the the the the the the"),
+            "Lovely line"
+        );
+        assert_eq!(without_runaway("What a line!"), "What a line!");
     }
 
     #[test]

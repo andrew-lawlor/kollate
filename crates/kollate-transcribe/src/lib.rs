@@ -73,6 +73,7 @@ fn backend() -> Result<&'static LlamaBackend> {
 pub struct Transcriber {
     model: LlamaModel,
     vision: MtmdContext,
+    template: llama_cpp_2::model::LlamaChatTemplate,
     prompts: [String; 2],
 }
 
@@ -104,23 +105,40 @@ impl Transcriber {
             return Err(err("this vision file can't read images"));
         }
         let template = model.chat_template(None).map_err(err)?;
-        let prompt = |ask: &str| -> Result<String> {
-            let message =
-                LlamaChatMessage::new("user".into(), format!("{}\n{ask}", mtmd_default_marker()))
-                    .map_err(err)?;
-            model
-                .apply_chat_template(&template, &[message], true)
-                .map_err(err)
-        };
-        let prompts = [prompt(HANDWRITING)?, prompt(PRINT)?];
+        let prompts = [
+            prompt(&model, &template, HANDWRITING)?,
+            prompt(&model, &template, PRINT)?,
+        ];
         Ok(Self {
             model,
             vision,
+            template,
             prompts,
         })
     }
 
-    fn read(&self, image: &RgbImage, prompt: &str) -> Result<String> {
+    /// Asks anything about an image, for evaluations (the handwriting-eval
+    /// example): `latin` keeps the Latin-script grammar, and up to
+    /// `max_tokens` are generated.
+    #[doc(hidden)]
+    pub fn ask(
+        &self,
+        image: &RgbImage,
+        question: &str,
+        latin: bool,
+        max_tokens: usize,
+    ) -> Result<String> {
+        let prompt = prompt(&self.model, &self.template, question)?;
+        self.read(image, &prompt, latin, max_tokens)
+    }
+
+    fn read(
+        &self,
+        image: &RgbImage,
+        prompt: &str,
+        latin: bool,
+        max_tokens: usize,
+    ) -> Result<String> {
         let backend = backend()?;
         let params = LlamaContextParams::default()
             .with_n_ctx(NonZeroU32::new(4096))
@@ -143,14 +161,16 @@ impl Transcriber {
             .eval_chunks(&self.vision, &ctx, 0, 0, 2048, true)
             .map_err(err)?;
 
-        let mut sampler = LlamaSampler::chain_simple([
-            LlamaSampler::grammar(&self.model, LATIN, "root").map_err(err)?,
-            LlamaSampler::greedy(),
-        ]);
+        let mut samplers = Vec::new();
+        if latin {
+            samplers.push(LlamaSampler::grammar(&self.model, LATIN, "root").map_err(err)?);
+        }
+        samplers.push(LlamaSampler::greedy());
+        let mut sampler = LlamaSampler::chain_simple(samplers);
         let mut ctx = ctx;
         let mut batch = LlamaBatch::new(1, 1);
         let mut out = Vec::new();
-        for n_past in start..start + MAX_TOKENS as i32 {
+        for n_past in start..start + max_tokens as i32 {
             let token = sampler.sample(&ctx, -1);
             if self.model.is_eog_token(token) {
                 break;
@@ -161,6 +181,11 @@ impl Transcriber {
                     .token_to_piece_bytes(token, 32, false, None)
                     .map_err(err)?,
             );
+            // A model that can't read the ink loops until it runs out of
+            // tokens; what it wrote by then is dropped anyway.
+            if kollate_core::markup::runaway_start(&String::from_utf8_lossy(&out)).is_some() {
+                break;
+            }
             batch.clear();
             batch.add(token, n_past, &[0], true).map_err(err)?;
             ctx.decode(&mut batch).map_err(err)?;
@@ -169,12 +194,25 @@ impl Transcriber {
     }
 }
 
+/// A user turn holding the image and `ask`, in the model's chat format.
+fn prompt(
+    model: &LlamaModel,
+    template: &llama_cpp_2::model::LlamaChatTemplate,
+    ask: &str,
+) -> Result<String> {
+    let message = LlamaChatMessage::new("user".into(), format!("{}\n{ask}", mtmd_default_marker()))
+        .map_err(err)?;
+    model
+        .apply_chat_template(template, &[message], true)
+        .map_err(err)
+}
+
 impl Reader for Transcriber {
     fn handwriting(&mut self, image: &RgbImage) -> Result<String> {
-        self.read(image, &self.prompts[0].clone())
+        self.read(image, &self.prompts[0].clone(), true, MAX_TOKENS)
     }
 
     fn print(&mut self, image: &RgbImage) -> Result<String> {
-        self.read(image, &self.prompts[1].clone())
+        self.read(image, &self.prompts[1].clone(), true, MAX_TOKENS)
     }
 }

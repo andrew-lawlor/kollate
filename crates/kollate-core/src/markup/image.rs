@@ -173,10 +173,11 @@ impl Page {
                     for &(top, bottom) in &self.lines {
                         let middle = (top + bottom) as f32 / 2.0;
                         if (b.top..=b.bottom).contains(&middle) {
+                            let (left, right) = self.words_inside(top, bottom, b.left, b.right);
                             regions.push(Bounds {
-                                left: b.left,
+                                left,
                                 top: top as f32 - 4.0,
-                                right: b.right,
+                                right,
                                 bottom: bottom as f32 + 4.0,
                             });
                         }
@@ -185,6 +186,48 @@ impl Page {
             }
         }
         regions.iter().filter_map(|r| self.crop(r)).collect()
+    }
+
+    /// The left and right of the printed words on a line that lie mostly
+    /// within `left..right` (a circle's width). A circle drawn around a word
+    /// takes in the edges of its neighbours ("e Latian r"), which would be
+    /// read as words of their own. Words are told apart by the gaps between
+    /// them; without any wholly inside, the circle's own width is kept.
+    fn words_inside(&self, top: u32, bottom: u32, left: f32, right: f32) -> (f32, f32) {
+        let (w, _) = self.image.dimensions();
+        let dark_column = |x: u32| {
+            (top..=bottom).any(|y| {
+                let p = self.image.get_pixel(x, y).0;
+                (p[0] as u32 + p[1] as u32 + p[2] as u32) < 3 * 128
+            })
+        };
+        // A gap between words is wider than one between letters: about a
+        // fifth of the line's height.
+        let gap = ((bottom - top) / 5).max(4);
+        let mut words: Vec<(u32, u32)> = Vec::new();
+        let mut blank = gap;
+        for x in 0..w {
+            if !dark_column(x) {
+                blank += 1;
+                continue;
+            }
+            match words.last_mut() {
+                Some(word) if blank < gap => word.1 = x,
+                _ => words.push((x, x)),
+            }
+            blank = 0;
+        }
+        let inside: Vec<&(u32, u32)> = words
+            .iter()
+            .filter(|&&(a, b)| {
+                let overlap = (b as f32).min(right) - (a as f32).max(left);
+                overlap > 0.6 * (b - a + 1) as f32
+            })
+            .collect();
+        match (inside.first(), inside.last()) {
+            (Some(first), Some(last)) => (first.0 as f32 - 6.0, last.1 as f32 + 6.0),
+            _ => (left, right),
+        }
     }
 
     fn crop(&self, r: &Bounds) -> Option<RgbImage> {

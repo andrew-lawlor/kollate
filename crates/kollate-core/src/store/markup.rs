@@ -109,8 +109,9 @@ impl Library {
             let mut h = blake3::Hasher::new();
             // Bumped when reading changes in a way worth reading again for
             // (2: loops, stars and question marks known by shape, 0.4;
-            // 3: marked passages in page order, overshoot trimmed).
-            h.update(b"reading 3");
+            // 3: marked passages in page order, overshoot trimmed;
+            // 4: readings that loop are dropped).
+            h.update(b"reading 4");
             h.update(&ink);
             h.update(&[u8::from(jpg.is_some()), u8::from(context.is_some())]);
             h.update(source.as_bytes());

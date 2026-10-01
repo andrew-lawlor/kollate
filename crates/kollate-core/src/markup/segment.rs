@@ -188,38 +188,77 @@ pub fn segment(strokes: &[Stroke]) -> Segments {
         .collect();
     heights.sort_by(f32::total_cmp);
     let letter = heights.get(heights.len() / 2).copied().unwrap_or(40.0);
-    let (reach_x, reach_y) = (1.6 * letter, 0.8 * letter);
-    let mut group: Vec<usize> = (0..writing.len()).collect();
-    fn root(group: &mut [usize], mut i: usize) -> usize {
-        while group[i] != i {
-            group[i] = group[group[i]];
-            i = group[i];
-        }
-        i
-    }
-    for a in 0..writing.len() {
-        for b in a + 1..writing.len() {
-            let (sa, sb) = (&strokes[writing[a].0].bounds, &strokes[writing[b].0].bounds);
-            let (gx, gy) = sa.gap(sb);
-            let near = gx < reach_x && gy < reach_y;
-            let circled = (writing[a].1 && sa.contains(sb.centre()))
-                || (writing[b].1 && sb.contains(sa.centre()));
-            if near || circled {
-                let (ra, rb) = (root(&mut group, a), root(&mut group, b));
-                group[ra] = rb;
+    let across = group_writing(strokes, &writing, 1.6 * letter, 0.8 * letter);
+    // Writing down the margin has its word gaps the other way, so across
+    // the page it falls apart into pieces a word or two long, each read
+    // sideways on its own. Grouped again with the reaches swapped, and
+    // letters measured across (a sideways letter's height is its width on
+    // the page), it holds together: a long, narrow note made only of pieces
+    // that aren't lines across the page.
+    let ink_bounds = |g: &[usize]| {
+        Bounds::union(
+            g.iter()
+                .filter(|&&k| !writing[k].1)
+                .map(|&k| strokes[writing[k].0].bounds),
+        )
+    };
+    let upright = |g: &[usize]| ink_bounds(g).is_none_or(|b| b.height() < 0.5 * b.width());
+    let mut widths: Vec<f32> = across
+        .iter()
+        .filter(|g| g.len() >= 3 && !upright(g))
+        .flatten()
+        .filter(|&&k| !writing[k].1)
+        .map(|&k| strokes[writing[k].0].bounds.width())
+        .collect();
+    widths.sort_by(f32::total_cmp);
+    let mut joined: Vec<usize> = (0..across.len()).collect();
+    if let Some(&side) = widths.get(widths.len() / 2) {
+        let piece_of: std::collections::HashMap<usize, usize> = across
+            .iter()
+            .enumerate()
+            .flat_map(|(a, g)| g.iter().map(move |&k| (k, a)))
+            .collect();
+        for down in group_writing(strokes, &writing, 0.8 * side, 1.6 * side) {
+            let Some(b) = ink_bounds(&down) else { continue };
+            // At least a word or two: not a question mark and its dot.
+            if down.len() < 6 || b.height() < 5.0 * side || b.height() <= 1.8 * b.width() {
+                continue;
+            }
+            let mut parts: Vec<usize> = down.iter().map(|k| piece_of[k]).collect();
+            parts.sort_unstable();
+            parts.dedup();
+            // A line across the page is wider than it's tall, and longer
+            // than a couple of words side by side in two sideways lines.
+            let across_the_page = |g: &[usize]| {
+                ink_bounds(g).is_none_or(|p| p.height() < 0.5 * p.width() && p.width() > 3.0 * side)
+            };
+            if parts.len() < 2 || parts.iter().any(|&a| across_the_page(&across[a])) {
+                continue;
+            }
+            for pair in parts.windows(2) {
+                let (ra, rb) = (root(&mut joined, pair[0]), root(&mut joined, pair[1]));
+                joined[ra] = rb;
             }
         }
     }
-    let mut groups: Vec<Vec<(usize, bool)>> = Vec::new();
-    let mut index = std::collections::HashMap::new();
-    for (k, &w) in writing.iter().enumerate() {
-        let r = root(&mut group, k);
-        let slot = *index.entry(r).or_insert_with(|| {
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    let mut slot_of = std::collections::HashMap::new();
+    for (a, g) in across.into_iter().enumerate() {
+        let r = root(&mut joined, a);
+        let slot = *slot_of.entry(r).or_insert_with(|| {
             groups.push(Vec::new());
             groups.len() - 1
         });
-        groups[slot].push(w);
+        groups[slot].extend(g);
     }
+    let groups: Vec<Vec<(usize, bool)>> = groups
+        .into_iter()
+        .map(|g| {
+            let mut g: Vec<(usize, bool)> = g.into_iter().map(|k| writing[k]).collect();
+            g.sort_unstable();
+            g
+        })
+        .collect();
 
     let mut notes = Vec::new();
     for g in groups {
@@ -248,6 +287,53 @@ pub fn segment(strokes: &[Stroke]) -> Segments {
         });
     }
     Segments { notes, marks }
+}
+
+/// The representative of `i`'s set in a union-find forest.
+fn root(group: &mut [usize], mut i: usize) -> usize {
+    while group[i] != i {
+        group[i] = group[group[i]];
+        i = group[i];
+    }
+    i
+}
+
+/// Groups `writing` (strokes, and whether each is a circle around writing)
+/// into notes: strokes closer than `reach_x` sideways and `reach_y`
+/// vertically join, as does writing with the circle around it. Returns
+/// indexes into `writing`, each group in writing order, groups in the order
+/// their first stroke was written.
+fn group_writing(
+    strokes: &[Stroke],
+    writing: &[(usize, bool)],
+    reach_x: f32,
+    reach_y: f32,
+) -> Vec<Vec<usize>> {
+    let mut group: Vec<usize> = (0..writing.len()).collect();
+    for a in 0..writing.len() {
+        for b in a + 1..writing.len() {
+            let (sa, sb) = (&strokes[writing[a].0].bounds, &strokes[writing[b].0].bounds);
+            let (gx, gy) = sa.gap(sb);
+            let near = gx < reach_x && gy < reach_y;
+            let circled = (writing[a].1 && sa.contains(sb.centre()))
+                || (writing[b].1 && sb.contains(sa.centre()));
+            if near || circled {
+                let (ra, rb) = (root(&mut group, a), root(&mut group, b));
+                group[ra] = rb;
+            }
+        }
+    }
+    let mut groups: Vec<Vec<usize>> = Vec::new();
+    let mut index = std::collections::HashMap::new();
+    for k in 0..writing.len() {
+        let r = root(&mut group, k);
+        let slot = *index.entry(r).or_insert_with(|| {
+            groups.push(Vec::new());
+            groups.len() - 1
+        });
+        groups[slot].push(k);
+    }
+    groups
 }
 
 /// A notebook page's writing as lines, in reading order, each split where a
@@ -377,6 +463,44 @@ mod tests {
             "<svg width=\"1264\" height=\"1680\" viewBox=\"0 0 1264 1680\">\n<g fill=\"#000000\">\n{}\n</g></svg>",
             paths.join("\n")
         )
+    }
+
+    /// A word written down the page: `n` letters 40 wide and 20 tall
+    /// (sideways), from (x, y) downwards.
+    fn word_down(x: f32, y: f32, n: usize) -> Vec<String> {
+        (0..n)
+            .map(|i| rect(x, y + i as f32 * 24.0, x + 40.0, y + i as f32 * 24.0 + 20.0))
+            .collect()
+    }
+
+    #[test]
+    fn keeps_a_note_down_the_margin_whole() {
+        // Two lines written down the margin, words far apart along them, and
+        // a question mark with its dot elsewhere on the page.
+        let mut paths = Vec::new();
+        for (x, top) in [(1180.0, 200.0), (1120.0, 200.0)] {
+            let mut y = top;
+            for n in [4, 2, 5] {
+                paths.extend(word_down(x, y, n));
+                y += n as f32 * 24.0 + 45.0;
+            }
+        }
+        paths.push(path(&[(400.0, 520.0), (430.0, 525.0), (420.0, 560.0)]));
+        paths.push(rect(418.0, 575.0, 424.0, 581.0));
+        let ss = strokes(&svg(paths));
+        let s = segment(&ss);
+        let down: Vec<&Note> = s.notes.iter().filter(|n| n.bounds.left > 1000.0).collect();
+        assert_eq!(down.len(), 1, "{:?}", s.notes);
+        assert_eq!(down[0].strokes.len(), 22);
+        assert_eq!(down[0].rotation, Rotation::Anticlockwise);
+        assert!(
+            s.notes
+                .iter()
+                .filter(|n| n.bounds.left < 1000.0)
+                .all(|n| n.rotation == Rotation::None),
+            "{:?}",
+            s.notes
+        );
     }
 
     #[test]

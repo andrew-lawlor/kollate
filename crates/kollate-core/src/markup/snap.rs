@@ -81,7 +81,11 @@ pub fn correct_names(note: &str, words: &[String], known: &dyn Fn(&str) -> bool)
     note.split(' ')
         .map(|token| {
             let start = token.find(char::is_alphanumeric).unwrap_or(token.len());
-            let end = token.rfind(char::is_alphanumeric).map_or(start, |i| i + 1);
+            let end = token
+                .char_indices()
+                .rev()
+                .find(|(_, c)| c.is_alphanumeric())
+                .map_or(start, |(i, c)| i + c.len_utf8());
             let word = &token[start..end];
             if word.chars().count() < 5 || names.contains(&word) || known(&word.to_lowercase()) {
                 return token.to_owned();
@@ -154,6 +158,10 @@ mod tests {
         // "Moderns" starts a sentence in the book, so it isn't a name.
         assert_eq!(fix("Jarring for Modernz"), "Jarring for Modernz");
         assert_eq!(correct_names("Pokmarchus", &[], &dictionary), "Pokmarchus");
+        // Letters beyond ASCII, at either end of a word.
+        assert_eq!(fix("¡Qué café, Pokmarchus!"), "¡Qué café, Polemarchus!");
+        assert_eq!(fix("Pokmarchö"), "Pokmarchö");
+        assert_eq!(fix("米 ñandú"), "米 ñandú");
     }
 
     #[test]
