@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Scores handwriting-eval results against the writers' answers.
 
-    python3 handwriting-score.py <set dir> [--results <dir in it>] [--json]
+    python3 handwriting-score.py <set dir> [--results <dir in it>] [--only <keys.json>] [--json]
 
 For each run in <set dir>/results:
 - Handwriting: character accuracy (1 - edit distance / answer length, over
@@ -13,6 +13,8 @@ For each run in <set dir>/results:
 - Circled words: single circled words sent to Vocabulary.
 - Speed: median milliseconds per model call and per page.
 Items marked "Leave out" or "I can't read it either" are not scored.
+--only scores just the items listed in a JSON array of keys (say, pages
+written after any tuning, as a held-out check).
 """
 
 import itertools
@@ -72,7 +74,7 @@ def same_word(a, b):
     return a == b or SequenceMatcher(None, a, b).ratio() >= 0.8
 
 
-def score(run, answers, manifest, writer=None):
+def score(run, answers, manifest, writer=None, only=None):
     items = {i["key"]: i for i in manifest["items"]}
     s = dict(chars=0, errors=0, notes=0, exact=0, phantom=0, empty=0,
              star=[0, 0, 0], question=[0, 0, 0], tags=[0, 0, 0],
@@ -80,6 +82,8 @@ def score(run, answers, manifest, writer=None):
     for key, result in run["items"].items():
         a = answers.get(key, {})
         if a.get("skip") or a.get("unreadable") or "error" in result:
+            continue
+        if only is not None and key not in only:
             continue
         if writer and (a.get("writer") or "unassigned") != writer:
             continue
@@ -159,13 +163,16 @@ def main():
     writers = sorted({a.get("writer") or "unassigned" for a in answers.values()
                       if not a.get("skip")})
     out = {}
+    only = None
+    if "--only" in sys.argv:
+        only = set(json.loads(Path(sys.argv[sys.argv.index("--only") + 1]).read_text()))
     results = sys.argv[sys.argv.index("--results") + 1] if "--results" in sys.argv else "results"
     for path in sorted((set_dir / results).glob("*.json")):
         run = json.loads(path.read_text())
         name = f"{run['model']} · {run['setup']} · {run['device']}"
-        out[name] = {"all": summary(score(run, answers, manifest))}
+        out[name] = {"all": summary(score(run, answers, manifest, only=only))}
         for w in writers:
-            out[name][w] = summary(score(run, answers, manifest, w))
+            out[name][w] = summary(score(run, answers, manifest, w, only))
     if "--json" in sys.argv:
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return

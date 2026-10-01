@@ -3,7 +3,8 @@
 //! `handwriting-score.py` to compare with the writers' answers.
 //!
 //! `cargo run --release --example handwriting-eval -- <set dir> <model.gguf> <vision.gguf>
-//!     <name> [--setup kollate|no-names|no-grammar|whole-page] [--cpu] [--dictionaries <dir>]`
+//!     <name> [--setup kollate|no-names|no-grammar|whole-page] [--cpu] [--dictionaries <dir>]
+//!     [--results <dir in the set>]`
 //!
 //! Setups:
 //! - `kollate`: what the app does (SPEC §8a).
@@ -56,11 +57,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut setup = "kollate".to_owned();
     let mut cpu = false;
     let mut dictionaries = PathBuf::from("data/dictionaries");
+    let mut results_dir = "results".to_owned();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--setup" => setup = args.next().ok_or("--setup needs a value")?,
             "--cpu" => cpu = true,
+            "--results" => results_dir = args.next().ok_or("--results needs a dir")?,
             "--dictionaries" => {
                 dictionaries = args.next().ok_or("--dictionaries needs a dir")?.into()
             }
@@ -153,7 +156,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         results.insert(key.to_owned(), result);
     }
 
-    let out = set.join("results");
+    let out = set.join(results_dir);
     std::fs::create_dir_all(&out)?;
     let device = if cpu { "cpu" } else { "gpu" };
     let path = out.join(format!("{name}__{setup}__{device}.json"));
