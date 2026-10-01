@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Handwriting Answers</title>
+<style>
+:root {
+  --bg: #fafafa; --card: #fff; --fg: #1d1d1f; --muted: #6b6b73; --line: #dcdce0;
+  --accent: #5b3fb5; --done: #2e7d4f; --input: #fff;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b20; --card: #26252b; --fg: #ececf0; --muted: #a0a0aa; --line: #3a3940;
+    --accent: #b9a6f2; --done: #7fd19f; --input: #1f1e24;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.45 system-ui, sans-serif; }
+header { position: sticky; top: 0; z-index: 1; background: var(--bg);
+  border-bottom: 1px solid var(--line); padding: 12px 16px; }
+header .row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+h1 { font-size: 18px; margin: 0; }
+.progress { color: var(--muted); }
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+.intro { color: var(--muted); max-width: 70ch; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px; margin: 14px 0; }
+.item.answered { border-left: 4px solid var(--done); }
+.item img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px;
+  background: #fff; cursor: zoom-in; }
+.item > .form { position: sticky; top: 76px; align-self: start; }
+@media (max-width: 760px) { .item > .form { position: static; } }
+.meta { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.meta b { color: var(--fg); }
+label { display: block; font-weight: 600; margin: 10px 0 4px; }
+label small { font-weight: 400; color: var(--muted); }
+textarea, input[type=text], input[type=number], select {
+  width: 100%; font: inherit; color: var(--fg); background: var(--input);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+textarea { min-height: 6em; resize: vertical;
+  font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 14px; }
+input[type=number] { width: 6em; }
+.counts { display: flex; gap: 16px; flex-wrap: wrap; }
+.checks { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+.checks label { font-weight: 400; display: flex; gap: 6px; align-items: center; margin: 0; }
+button, .button { font: inherit; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--card); color: var(--fg); }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 13px; }
+.hidden { display: none; }
+dialog { border: none; padding: 0; max-width: 96vw; max-height: 96vh; background: #fff; }
+dialog img { display: block; max-width: 96vw; max-height: 96vh; }
+@media (max-width: 760px) { .item { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>Handwriting Answers</h1>
+    <span class="progress" id="progress"></span>
+    <label style="margin:0;font-weight:400">Show
+      <select id="filter" style="width:auto">
+        <option value="todo">Not yet answered</option>
+        <option value="all">Everything</option>
+        <option value="done">Answered</option>
+      </select>
+    </label>
+    <label style="margin:0;font-weight:400">Writers
+      <input type="text" id="writers" style="width:16em" placeholder="Andrew, …">
+    </label>
+    <button class="primary" id="save">Save Answers</button>
+    <button id="load">Load Answers…</button>
+    <input type="file" id="file" accept=".json,application/json" class="hidden">
+  </div>
+</header>
+<main>
+  <p class="intro">For each page, type what you <em>meant</em> to write, without looking at
+  what Kollate read. One note per line, top to bottom, spelled as intended, including
+  <code>*</code>, <code>?</code> and <code>#tags</code>. Underlines and circles around the
+  book's words aren't handwriting: just count them. Your answers stay in this browser as you
+  type; use <b>Save Answers</b> to keep a file, and send that file back.</p>
+  <div id="list"></div>
+</main>
+<dialog id="zoom"><img alt=""></dialog>
+<script src="data.js"></script>
+<script>
+const STORE = "kollate-handwriting-answers";
+let state = { writers: [], answers: {} };
+try { state = Object.assign(state, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch (e) {}
+const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
+
+const answered = a => a && a.writer && (a.skip || a.unreadable || (a.text || "").trim() !== ""
+  || (a.underlines | 0) + (a.circles | 0) > 0);
+const el = (tag, props = {}, kids = []) => {
+  const n = Object.assign(document.createElement(tag), props);
+  for (const k of [].concat(kids)) n.append(k);
+  return n;
+};
+
+function writerOptions(select, value) {
+  select.replaceChildren(el("option", { value: "", textContent: "Who wrote it?" }),
+    ...state.writers.map(w => el("option", { value: w, textContent: w, selected: w === value })));
+}
+
+function card(item) {
+  const a = state.answers[item.key] || (state.answers[item.key] = {});
+  const box = el("section", { className: "item" });
+  const img = el("img", { src: `items/${item.key}.view.jpg`, loading: "lazy",
+    alt: `Handwriting in ${item.book}` });
+  img.onclick = () => { zoom.querySelector("img").src = img.src; zoom.showModal(); };
+
+  const notebook = item.kind === "notebook";
+  const meta = el("div", { className: "meta" });
+  meta.innerHTML = "";
+  meta.append(el("b", { textContent: item.book }),
+    document.createTextNode(` · ${notebook ? "notebook page" : (item.chapter || "markup")}`
+      + (item.created ? ` · ${item.created.slice(0, 10)}` : "")
+      + (item.trashed ? " · in Trash" : "")));
+
+  const writer = el("select");
+  writerOptions(writer, a.writer);
+  const sameBook = el("button", { className: "link", type: "button",
+    textContent: "Same writer for the rest of this book" });
+
+  const text = el("textarea", { value: a.text || "", spellcheck: false,
+    placeholder: notebook ? "The page's writing, one line per line" : "One note per line" });
+  const fields = [
+    el("label", { textContent: "Writer" }), writer, sameBook,
+    el("label", {}, [notebook ? "Page text " : "Handwriting ",
+      el("small", { textContent: notebook ? "(leave out drawings)" : "(not the book's words)" })]),
+    text,
+  ];
+  const num = (k, title) => {
+    const input = el("input", { type: "number", min: 0, value: a[k] ?? "" });
+    input.oninput = () => { a[k] = input.value === "" ? null : +input.value; changed(); };
+    return el("div", {}, [el("label", { textContent: title }), input]);
+  };
+  let circled;
+  if (!notebook) {
+    fields.push(el("div", { className: "counts" }, [
+      num("underlines", "Underlined passages"), num("circles", "Circled passages")]));
+    circled = el("input", { type: "text", value: a.circled || "",
+      placeholder: "e.g. daemon, hierophant" });
+    circled.oninput = () => { a.circled = circled.value; changed(); };
+    fields.push(el("label", {}, ["Single words circled ",
+      el("small", { textContent: "(comma-separated; also counted above)" })]), circled);
+  }
+  const check = (k, title) => {
+    const c = el("input", { type: "checkbox", checked: !!a[k] });
+    c.onchange = () => { a[k] = c.checked; changed(); };
+    return el("label", {}, [c, title]);
+  };
+  fields.push(el("div", { className: "checks" }, [
+    check("unreadable", "I can't read it either"), check("skip", "Leave out (a test or a doodle)")]));
+
+  function changed() {
+    persist();
+    box.classList.toggle("answered", !!answered(a));
+    progress();
+  }
+  writer.onchange = () => { a.writer = writer.value; changed(); };
+  text.oninput = () => { a.text = text.value; changed(); };
+  sameBook.onclick = () => {
+    if (!a.writer) return;
+    for (const other of ITEMS.filter(i => i.book === item.book)) {
+      const o = state.answers[other.key] || (state.answers[other.key] = {});
+      if (!o.writer) o.writer = a.writer;
+    }
+    persist(); render();
+  };
+
+  box.classList.toggle("answered", !!answered(a));
+  box.append(el("div", {}, [img]), el("div", { className: "form" }, [meta, ...fields]));
+  return box;
+}
+
+function progress() {
+  const done = ITEMS.filter(i => answered(state.answers[i.key])).length;
+  document.getElementById("progress").textContent = `${done} of ${ITEMS.length} answered`;
+}
+
+function render() {
+  const f = document.getElementById("filter").value;
+  const shown = ITEMS.filter(i => f === "all" || (f === "done") === !!answered(state.answers[i.key]));
+  document.getElementById("list").replaceChildren(...shown.map(card));
+  progress();
+}
+
+const zoom = document.getElementById("zoom");
+zoom.onclick = () => zoom.close();
+const writers = document.getElementById("writers");
+writers.value = state.writers.join(", ");
+writers.onchange = () => {
+  state.writers = writers.value.split(",").map(s => s.trim()).filter(Boolean);
+  persist(); render();
+};
+document.getElementById("filter").onchange = render;
+document.getElementById("save").onclick = () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const link = el("a", { href: URL.createObjectURL(blob),
+    download: `handwriting-answers-${new Date().toISOString().slice(0, 10)}.json` });
+  link.click();
+  URL.revokeObjectURL(link.href);
+};
+const file = document.getElementById("file");
+document.getElementById("load").onclick = () => file.click();
+file.onchange = async () => {
+  try {
+    const loaded = JSON.parse(await file.files[0].text());
+    // Merge: answers in the file fill in or replace those here, item by item.
+    state.writers = [...new Set([...state.writers, ...(loaded.writers || [])])];
+    Object.assign(state.answers, loaded.answers || {});
+    writers.value = state.writers.join(", ");
+    persist(); render();
+  } catch (e) { alert("That file isn't a saved answers file."); }
+  file.value = "";
+};
+render();
+</script>
+</body>
+</html>

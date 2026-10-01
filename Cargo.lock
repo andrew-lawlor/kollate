@@ -1010,8 +1010,10 @@ name = "kollate-transcribe"
 version = "0.5.1"
 dependencies = [
  "blake3",
+ "image",
  "kollate-core",
  "llama-cpp-2",
+ "serde_json",
 ]
 
 [[package]]

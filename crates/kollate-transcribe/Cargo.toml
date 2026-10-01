@@ -9,3 +9,7 @@ license.workspace = true
 kollate-core = { path = "../kollate-core" }
 blake3.workspace = true
 llama-cpp-2 = { version = "=0.1.157", features = ["mtmd", "vulkan", "sampler", "common"] }
+
+[dev-dependencies]
+serde_json.workspace = true
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
