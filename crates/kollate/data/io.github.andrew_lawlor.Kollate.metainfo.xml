@@ -68,6 +68,18 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.5.2" date="2026-10-01">
+      <description>
+        <p>Handwriting is read more reliably, after measuring it against our own notes.</p>
+        <ul>
+          <li>A note written down the margin, even in two columns, is read whole and the right way up</li>
+          <li>A word circled in the book reaches Vocabulary even when the circle catches part of the next word</li>
+          <li>A note the model can't make out is left empty, not filled with repeated characters</li>
+          <li>Notes with accented letters (é, ñ) no longer stop the reading</li>
+          <li>Markups are read once more after updating, to pick up these fixes</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.1" date="2026-09-30">
       <description>
         <p>Getting ready for Flathub.</p>
