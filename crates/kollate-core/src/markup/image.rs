@@ -192,7 +192,9 @@ impl Page {
     /// within `left..right` (a circle's width). A circle drawn around a word
     /// takes in the edges of its neighbours ("e Latian r"), which would be
     /// read as words of their own. Words are told apart by the gaps between
-    /// them; without any wholly inside, the circle's own width is kept.
+    /// them; without any wholly inside, the circle's own width is kept. The
+    /// crop never reaches past the circle: a word joined to the next by a
+    /// dash ("Marseilles—The") has no gap to split it at.
     fn words_inside(&self, top: u32, bottom: u32, left: f32, right: f32) -> (f32, f32) {
         let (w, _) = self.image.dimensions();
         let dark_column = |x: u32| {
@@ -225,7 +227,10 @@ impl Page {
             })
             .collect();
         match (inside.first(), inside.last()) {
-            (Some(first), Some(last)) => (first.0 as f32 - 6.0, last.1 as f32 + 6.0),
+            (Some(first), Some(last)) => (
+                (first.0 as f32 - 6.0).max(left),
+                (last.1 as f32 + 6.0).min(right),
+            ),
             _ => (left, right),
         }
     }
