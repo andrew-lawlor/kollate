@@ -1,4 +1,4 @@
-# Kollate — Spec (v0.2)
+# Kollate — Spec
 
 A Linux desktop app that pulls highlights, notes, stylus markups and Vocab Builder words off a Kobo e‑reader over USB, keeps them in a local library with no duplicates, lets you curate them, and exports them to standard formats.
 
@@ -42,7 +42,7 @@ A Linux desktop app that pulls highlights, notes, stylus markups and Vocab Build
 
 **Chapter title resolution:** strip the `#fragment` from `Bookmark.ContentID`, then find `content` rows with `ContentType=899` (TOC entries), `BookID = VolumeID` and `ContentID LIKE '<stripped>%'`. This works on the sample: "Prologue: Driftwood", "9. Inroads". When there are several matches (a nested TOC), take the deepest or last one.
 
-**Markups:** the drawing isn't in the DB. It lives on the device at `.kobo/markups/<BookmarkID>.svg` (plus a `.jpg` page snapshot). I need to verify this path when the device is connected. Import copies both files into the library.
+**Markups:** the drawing isn't in the DB. It lives on the device at `.kobo/markups/<BookmarkID>.svg` (plus a `.jpg` page snapshot). Verified on the device (§13). Import copies both files into the library.
 
 ### 2.2 `WordList`: Vocab Builder (12 rows)
 
@@ -70,11 +70,11 @@ Read `.kobo/version` (comma-separated: serial, firmware, …, model ID) to tell 
 
 **Rust · GTK 4 + libadwaita (gtk4-rs / libadwaita-rs) · SQLite · Flatpak**
 
-The host has GTK 4.18 and libadwaita 1.7, so we can target `v4_18` / `v1_7` features.
+The minimum is GTK 4.12 and libadwaita 1.5 (Ubuntu 24.04, the .deb's oldest platform), so the app enables only the `v4_12` / `v1_5` features (§12).
 
 | Concern | Crate |
 |---|---|
-| UI | `gtk4` 0.11 (`v4_18`), `libadwaita` 0.9 (`v1_7`), plus `gio` / `glib` for the mount monitor and async main loop. Widgets are built in Rust code (no `.ui` templates); styles live in `style.css`. |
+| UI | `gtk4` 0.11 (`v4_12`), `libadwaita` 0.9 (`v1_5`), plus `gio` / `glib` for the mount monitor and async main loop. Widgets are built in Rust code (no `.ui` templates); styles live in `style.css`. |
 | SQLite (device + library) | `rusqlite` with the `bundled` feature (plus FTS5), so there's no system sqlite dependency. |
 | EPUB (context extraction) | `zip`, plus `quick-xml` to strip XHTML to text; sentence splitting with `unicode-segmentation`. |
 | Dictionaries (offline) | Bundled English Wiktionary (reader.dict DictFile, converted to SQLite), plus importers for DictFile, StarDict, kaikki.org JSONL and WordNet LMF. |
@@ -108,12 +108,13 @@ kollate/                     (cargo workspace)
 **Reading the device safely**
 1. Detect the mount (§5), then copy `.kobo/KoboReader.sqlite` and any `-wal`/`-shm` files to a temp dir.
 2. Open the copy with `?mode=ro`. Never hold a handle on the device, because that blocks a clean eject.
-3. Treat `ExtraAnnotationData` and any unexpected column as bytes. Check `DbVersion` and warn (don't fail) on unknown schema versions: `TESTED_DB_VERSIONS` lists the verified ones (only 176 so far). Any other version is still read; the CLI prints a warning, and the app shows a one-time toast per version with a **Report** button that opens a pre-filled GitHub compatibility issue. If reading an untested version fails, the error is `Error::UntestedDb`, which names the version, so the cause is clear.
+3. Treat `ExtraAnnotationData` and any unexpected column as bytes. Check `DbVersion` and warn (don't fail) on unknown schema versions: `TESTED_DB_VERSIONS` lists the verified ones (174 on the Clara 2E, 176 on the Libra Colour; §13). Any other version is still read; the CLI prints a warning, and the app shows a one-time toast per version with a **Report** button that opens a pre-filled GitHub compatibility issue. If reading an untested version fails, the error is `Error::UntestedDb`, which names the version, so the cause is clear.
 
 
 **Flatpak document-portal paths:** locations picked in a file chooser arrive as `/run/user/<uid>/doc/<id>/<name>/…`. `portal.rs` resolves them to the real location with `org.freedesktop.portal.Documents.GetHostPaths`. The Export dialog uses that to show the folder as a person would recognise it (`~/Notes/Reading`), and the Kobo check uses it too, since the `.kobo` folder above a chosen subfolder isn't visible through a portal path.
 
 **Never writing to the device** is enforced in the core. `kobo::ensure_not_on_kobo(path)` rejects any path on a Kobo: the path or its nearest existing ancestor is resolved through symlinks and checked for `.kobo/KoboReader.sqlite`. It's called before every write: `Library::open`, every export (Obsidian, Anki, JSON, CSV, Readwise), `DictionaryBuilder::create`, `copy_assets`, and even the temp folder for the database copy. The app also rejects a Kobo folder as the Obsidian target when you pick it. The error is `Error::OnKobo`, and a test confirms a fake Kobo stays byte-for-byte unchanged. Remaining caveat: on the `.deb`, Linux may update FAT last-access dates when files are read; the Flatpak's read-only access prevents that.
+
 ---
 
 ## 5. Device detection & import flow
@@ -205,7 +206,7 @@ Schema versioning via `PRAGMA user_version` with forward-only migrations.
 - **User-added:** in Preferences → Dictionaries, users can add DictFile (`.df`, `.df.bz2`; reader.dict's `dict-<lang>-<lang>` files get language `<lang>`), StarDict (`.ifo` + `.idx` + `.dict[.dz]`) or kaikki.org Wiktionary JSONL. A "Dictionaries for Other Languages" row links to reader.dict with credit. Preferences lists dictionaries grouped by language, in lookup order. A word is only looked up in dictionaries for its language, and dictionaries the user added are tried before the included one; there is no manual ordering. These are stored in `<library dir>/dictionaries/`, searched first, and can be removed.
 - **Search order:** user dictionaries, then `$KOLLATE_DATA_DIR/dictionaries`, then `$XDG_DATA_DIRS/kollate/dictionaries`. Debug builds also search the repo's `data/`.
 - Only words without a definition are looked up, so the user's own edits are never overwritten. "Look Up Again" clears a definition and fetches it again.
-- On your 12 fixture lookups, Wiktionary defines all 12; WordNet missed *hierophant*.
+- On the 12 fixture words, Wiktionary defines all 12; WordNet missed *hierophant*.
 
 **Lemmas and merging:** a rule-based English lemmatizer proposes candidates (`theophanies` → `theophany`, `debouched` → `debouch`, `stopped` → `stop`). The dictionary's headwords and irregular forms decide which one is right. Words sharing a lemma are merged into the earliest one: sightings, tags and every lookup key (`vocab_form`) move over, and the most advanced learning status wins. Because the old forms stay recorded, a re-import doesn't split them apart again.
 
@@ -344,7 +345,7 @@ Content pane:
 - **Search:** Ctrl+F searches the current view (text, note, chapter, book, author, tags) with an escaped `LIKE`, which is plenty for a personal library. FTS5 and filter chips for colour and date come later if needed.
 - **Keyboard triage** on the selected card: `K` keep, `A` archive, `S` star, `E`/`Enter`/double-click edit, `I` back to Inbox, `Delete` trash, `↑`/`↓` move. Status changes show an Undo toast. **Starring an Inbox item also keeps it** (one Undo reverts both).
 - **Multi-select:** the list allows multiple selection (Ctrl/Shift-click, Shift+arrows, Ctrl+A; Escape goes back to one). With several highlights selected, the triage keys act on all of them, and a bottom action bar shows "N selected" with Keep, Archive, Star and Trash. **Keep All** in the Inbox header keeps everything listed, respecting the search. Bulk actions reload the list and offer one Undo for everything.
-- **Keyboard Shortcuts window** (Ctrl+? or the main menu): grouped sections (Triage, Selecting Several, Moving Around, General) with keys drawn as keycaps. It's built with AdwPreferencesGroups because AdwShortcutsDialog needs libadwaita 1.8 and the .deb targets 1.7. A one-time tip banner in the Inbox mentions K/A/S/Delete and Ctrl+?; "Got It" dismisses it for good (`setting.tip_triage_dismissed`).
+- **Keyboard Shortcuts window** (Ctrl+? or the main menu): grouped sections (Triage, Selecting Several, Moving Around, General) with keys drawn as keycaps. It's built with AdwPreferencesGroups because AdwShortcutsDialog needs libadwaita 1.8 and the app targets 1.5 (§3). A one-time tip banner in the Inbox mentions K/A/S/Delete and Ctrl+?; "Got It" dismisses it for good (`setting.tip_triage_dismissed`).
 - **Search** is a permanent field at the top of every page (Ctrl+F focuses it, Escape clears it). Its placeholder says what it searches: highlights, books (title/author) or words (word, definition, context).
 
 **Preferences:** device-detection behaviour, definition sources, export targets, colour names (for example "blue = definitions").
@@ -382,7 +383,8 @@ Later: user-editable Markdown templates (minijinja), and a "since last export" o
    - ✅ Flatpak: `flatpak/io.github.andrew_lawlor.Kollate.yml` on GNOME 51 with rust-stable//26.08. The build is offline, using pinned sources in `flatpak/cargo-sources.json`, and the English Wiktionary is downloaded by sha256 from Kollate's data release and converted at build time. Permissions: wayland, fallback-x11, dri, ipc, `/media:ro`, `/run/media:ro`, `org.gtk.vfs.*`. **No network.** `scripts/build-flatpak.sh` installs the app for the user and writes `target/flatpak/kollate.flatpak`. Verified with the Kobo connected: it autodetected the device through gvfs, imported 56 highlights, found 12 contexts, defined 10 of 11 words, and copied 6 covers and 1 markup image.
    - ✅ README with screenshots. Public repo at https://github.com/andrew-lawlor/kollate.
    - ✅ Eject works from inside the Flatpak sandbox (confirmed by the user on the Libra Colour).
-   - Still to do: markup SVG rendering, and a Flathub submission (which needs a git source in place of `type: dir`).
+   - ✅ Markup pages are drawn by Kollate (`compose_page`, §8a).
+   - Still to do: a Flathub submission (which needs a git source in place of `type: dir`).
 
 ---
 
@@ -399,16 +401,16 @@ Later: user-editable Markdown templates (minijinja), and a "since last export" o
 - Handwriting transcription will be local only (Qwen3-VL via llama.cpp, in-process); a cloud model was rejected as contrary to the offline promise. Models are user-added files, never downloaded by the app (§8a).
 - Unknown Kobo database versions are imported with a warning rather than refused (§4); compatibility reports come through a GitHub issue form.
 
-## 13a. Verified on a Kobo Clara 2E (2026-09-27, firmware 4.38.21908, DbVersion 174)
-- Model ID suffix `…0386`; serial prefix N506. `content`, `WordList` and `DbVersion` match the Libra Colour's; `Bookmark` lacks only `Color` (no colour screen). Highlights read as colour 0, what colour Kobos record for a default highlight.
-- Its `WordList` pointed at `/mnt/onboard/books/…` paths no longer in `content`: the books had been moved (one) or removed (four). Moved books are matched by file name; removed ones get their title and author from calibre's path (`Toole, John Kennedy/Confederacy of Dunces, A.kepub.epub` → *A Confederacy of Dunces*, John Kennedy Toole; `_` for characters files can't hold).
-- Context sentences: EPUB 3 note references (`<a epub:type="noteref">`, `role="doc-noteref"`) and numeric superscript notes after punctuation are dropped ("entropy,10" → "entropy,"); exponents after a letter stay.
-
 ## 13. Verified on the device (2026-09-25, Libra Colour, firmware 4.45.23697)
 - `.kobo/version` = `N000000000000,4.9.77,4.45.23697,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390`, i.e. serial, ?, firmware, ?, ?, model ID (`…0390` = Libra Colour). The parser matches.
-- Markups: `.kobo/markups/<BookmarkID>.svg` holds **only the ink strokes** (Qt SVG, page-sized viewBox 1264×1680). `.jpg` is the rendered page **without** the ink (corrected 2026-09-26 with real stylus notes; the earlier sample's SVG held a single stray dot, so this went unnoticed). Import both. `assets::markup_page` writes `<id>.page.svg` in the library, the ink SVG with the page JPG embedded underneath. "Open Page Image" uses it. The card and the Obsidian export use `<id>.page-<top>-<bottom>.svg`, the same image cut (by `viewBox` alone) to the full-width band from the top of the ink or its anchored text to the bottom of either, plus a 40px margin. That band comes from `ExtraAnnotationData`, which `kobo::qvariant` reads leniently (it stops at any unknown type, so a firmware change costs the crop, never the import), and is stored in `annotation.markup_crop` (migration 6) when assets are copied.
+- Markups: `.kobo/markups/<BookmarkID>.svg` holds **only the ink strokes** (Qt SVG, page-sized viewBox 1264×1680). `.jpg` is the rendered page **without** the ink (corrected 2026-09-26 with real stylus notes; the earlier sample's SVG held a single stray dot, so this went unnoticed). Import both. `assets::markup_page` draws the ink onto the page (`compose_page`, §8a) and writes `<id>.page.jpg` in the library; "Open Page Image" uses it. The card and the Obsidian export use `<id>.page-<top>-<bottom>.jpg`, the same page cut to the full-width band from the top of the ink or its anchored text to the bottom of either, plus a 40px margin. That band comes from `ExtraAnnotationData`, which `kobo::qvariant` reads leniently (it stops at any unknown type, so a firmware change costs the crop, never the import), and is stored in `annotation.markup_crop` (migration 6) when assets are copied.
 - One markup holds all the ink from one visit to a page, so it can contain several separate notes. `Text`/`Annotation` stay empty: the Kobo doesn't transcribe handwriting in books. `ExtraAnnotationData` decodes fully (19 keys); the useful ones are `MarkupRect` (ink bounding box) and `RangeRect` (the text the markup is anchored to, in page pixels), plus `StartContainerPath`/`EndContainerPath` on the row.
 - Dictionaries: `.kobo/dict/dicthtml.zip` (English, **no `-en` suffix**) plus `dicthtml-en-zh-CN.zip` / `-zh-TW`. Inside: `words` / `prefix_exceptions` are marisa tries, and the `*.html` shards are **encrypted** (not gzip). **Decision: we don't use Kobo's dictionaries** (see §8).
 - `Exported Annotations/` and `Exported Notebooks/` exist (Kobo's own export feature) and are empty. Ignore them.
 - `driveinfo.calibre` is present, so the user manages books with calibre. Calibre may rename or re-send books, which the book fingerprint (§6) handles.
 - Colour index: 0 yellow, 1 pink, 2 blue, 3 green (verified with test highlights in *Free Software, Free Society*).
+
+## 13a. Verified on a Kobo Clara 2E (2026-09-27, firmware 4.38.21908, DbVersion 174)
+- Model ID suffix `…0386`; serial prefix N506. `content`, `WordList` and `DbVersion` match the Libra Colour's; `Bookmark` lacks only `Color` (no colour screen). Highlights read as colour 0, what colour Kobos record for a default highlight.
+- Its `WordList` pointed at `/mnt/onboard/books/…` paths no longer in `content`: the books had been moved (one) or removed (four). Moved books are matched by file name; removed ones get their title and author from calibre's path (`Toole, John Kennedy/Confederacy of Dunces, A.kepub.epub` → *A Confederacy of Dunces*, John Kennedy Toole; `_` for characters files can't hold).
+- Context sentences: EPUB 3 note references (`<a epub:type="noteref">`, `role="doc-noteref"`) and numeric superscript notes after punctuation are dropped ("entropy,10" → "entropy,"); exponents after a letter stay.
