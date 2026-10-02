@@ -3,7 +3,7 @@ name = "kollate"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Collect and curate highlights, notes and vocabulary from a Kobo e-reader"
+description = "Collect and curate highlights, notes and vocabulary from your e-reader (Kobo and KOReader)"
 homepage = "https://github.com/andrew-lawlor/kollate"
 
 [dependencies]
@@ -26,8 +26,9 @@ section = "text"
 priority = "optional"
 depends = "$auto"
 extended-description = """\
-Kollate imports highlights, notes, handwritten markups and Vocabulary Builder \
-words from a Kobo e-reader connected over USB, without writing to the device \
+Kollate imports highlights, notes, handwritten markups and looked-up words \
+from a Kobo e-reader connected over USB, in its own reader or in KOReader, \
+without writing to the device \
 and without duplicates. Curate them in a GTK/libadwaita app, see each word's \
 context sentence and an offline Wiktionary definition, and export to Obsidian, \
 Anki, JSON, CSV or Readwise."""

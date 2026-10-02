@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/hero.png" alt="Kollate: your Kobo highlights, notes and handwriting, curated on Linux. Verba volant, scripta manent: spoken words fly away, written words remain. A handwritten note on a page of the Odyssey, read as text, in front of the Inbox.">
+  <img src="docs/hero.png" alt="Kollate: your e-reader highlights, notes and handwriting, curated on Linux. Kobo, KOReader; offline and private. Verba volant, scripta manent: spoken words fly away, written words remain. A handwritten note on a page of the Odyssey, read as text, in front of the Inbox.">
 </p>
 
 <p align="center">
-  <b>Everything you mark on your Kobo, read, sorted and put to work.</b><br>
-  Kollate turns your margin notes and notebooks into text, files what you star and tag with the pen,<br>
-  and makes flashcards from the words you look up.<br>
-  <sub>A native Linux app for GNOME and any desktop. Offline, private, and it never writes to your Kobo.</sub>
+  <b>Everything you mark on your e-reader, read, sorted and put to work.</b><br>
+  Highlights and notes from your Kobo, in its own reader or in KOReader. Kollate turns your margin notes<br>
+  and notebooks into text, files what you star and tag with the pen, and makes flashcards from the words you look up.<br>
+  <sub>A native Linux app for GNOME and any desktop. Offline, private, and it never writes to your e-reader.</sub>
 </p>
 
 <p align="center">
@@ -14,6 +14,10 @@
   <a href="docs/guide.md"><b>User guide</b></a> ·
   <a href="SPEC.md">Design notes</a>
 </p>
+
+<p align="center"><i>"It is a comforting thing to have an archive: a place where the scattered leaves of memory are bound together."</i></p>
+
+E-readers are wonderful to read on, and stingy with what you write in them: highlights locked in a database, handwriting kept only as ink, notes split between readers. Kollate gathers all of it into one searchable library on your own computer, with no account and no cloud, and without sending a word of your notes anywhere.
 
 Here's what it does, over a week of reading, starting with what nothing else does.
 
@@ -67,6 +71,10 @@ The Kobo's Vocabulary Builder keeps the words you look up, but not where you met
 | ![Vocabulary words, each with its definition and the sentence from the book it was met in](docs/screenshots/vocabulary.png) | ![An Anki card from Kollate: "daemon" with its sentence on the front; the definition, the reader's gloss and the book on the back](docs/screenshots/anki-card.png) |
 | *Thursday: leviathan, ambergris and cetology, each in Melville's own sentence…* | *…and "daemon" as an Anki card, gloss and all.* |
 
+## Kobo's reader, KOReader, or both
+
+Read in [KOReader](https://koreader.rocks/)? Kollate brings in its highlights, notes and vocabulary too, over the same USB cable, alongside the Kobo's own. Every one of KOReader's highlight colours comes through, the marks you type in a note (`*`, `?`, `#tag`) file it just the same, words keep the sentence you looked them up in, and a book you read in both is one book in your library. If you only ever use KOReader, that's fine: books get their covers from the books themselves.
+
 ## Triage like an inbox
 
 New highlights land in an **Inbox**. Keep, archive, star or edit each with a key (`K`, `A`, `S`, `E`), trash it with `Delete`, or select several and act on them all. Every action can be undone, and your edits survive every re-import.
@@ -99,12 +107,12 @@ New highlights land in an **Inbox**. Keep, archive, star or edit each with a key
 </p>
 <p align="center"><i>Sunday: the week's best lines, ready to share.</i></p>
 
-## Private, and read-only on your Kobo
+## Private, and read-only on your e-reader
 
-- Kollate **never writes to your Kobo.** It reads a copy of the Kobo's database, so you can eject at any time. The Flatpak enforces this: its sandbox can only read the Kobo.
+- Kollate **never writes to your e-reader.** It reads a copy of the Kobo's database and KOReader's files, so you can eject at any time. The Flatpak enforces this: its sandbox can only read the device.
 - **Fully offline.** The app has no network access, yet setting up handwriting takes a minute: Preferences lists the models with their download links, you click to download in your browser, then add the files with **+**. Kollate checks them and takes it from there. Definitions come from a bundled copy of the English [Wiktionary](https://www.wiktionary.org/) (over 800,000 words, compiled by [reader.dict](https://www.reader-dict.com/)); for 16 more languages, Preferences suggests the ones your books are in, with download links, just like the handwriting models.
-- **No duplicates, ever.** Highlights are matched by the Kobo's own IDs, and by their content if those change (a factory reset, a second Kobo, calibre re-sending a book). Importing again changes nothing.
-- **Your library is the source of truth.** A highlight deleted on the Kobo stays in Kollate, flagged; your edits, stars and tags survive every import, and if the Kobo later changes something you edited, your version stays and the Kobo's is kept for review.
+- **No duplicates, ever.** Highlights are matched by the reader's own IDs, and by their content if those change (a factory reset, a second Kobo, calibre re-sending a book). Importing again changes nothing.
+- **Your library is the source of truth.** A highlight deleted on the device stays in Kollate, flagged; your edits, stars and tags survive every import, and if the Kobo later changes something you edited, your version stays and the Kobo's is kept for review.
 - **Verifiable builds.** Every release is built by GitHub Actions from its tagged source, with signed build provenance (see below).
 
 ## Install
@@ -123,7 +131,7 @@ The bundle uses the GNOME 51 runtime from Flathub, and Flatpak installs it autom
 ### Debian / Ubuntu (.deb)
 
 ```sh
-sudo apt install ./kollate_0.5.2-1_amd64.deb
+sudo apt install ./kollate_0.6.0-1_amd64.deb
 ```
 
 The package includes the app, the `kollate-cli` tool and the English Wiktionary dictionary. It needs GTK ≥ 4.12 and libadwaita ≥ 1.5, which Debian 13 and Ubuntu 24.04 or newer provide.
@@ -193,11 +201,13 @@ kollate-cli dict build-stardict ~/dicts/foo.ifo foo.db # convert a dictionary
 
 Tested on a **Kobo Libra Colour** (firmware 4.45, database version 176), a **Kobo Clara Colour** (firmware 4.42, database version 176) and a **Kobo Clara 2E** (firmware 4.38, database version 174), so on colour and black-and-white Kobos alike, with sideloaded and Kobo Store books. Other models use the same database layout and should work. If your Kobo's database version is new to Kollate, it still imports and shows a one-time notice with a **Report** button. Please [send a compatibility report](https://github.com/andrew-lawlor/kollate/issues/new?template=compatibility.yml), even if everything works. Context sentences need sideloaded, DRM-free books. Kobo Store books with DRM still import, just without context sentences.
 
+**KOReader** is read from its folder on the Kobo (`.adds/koreader`), tested with KOReader 2026.07 on the Libra Colour. Book settings are found wherever KOReader keeps them: next to the books (in any folder), in `docsettings` or in `hashdocsettings`. Handwriting from KOReader's third-party Pencil plugin isn't read yet. KOReader on other devices (Kindle, PocketBook) isn't detected yet.
+
 ## Development
 
 ```
 crates/
-  kollate-core/   Kobo reader, library (SQLite), import/dedup, dictionaries, EPUB context, exports
+  kollate-core/   Kobo and KOReader readers, library (SQLite), import/dedup, dictionaries, EPUB context, exports
   kollate-cli/    command-line tool
   kollate/        GTK 4 / libadwaita app
 tests/fixtures/   a trimmed Kobo database used by the tests
@@ -217,4 +227,4 @@ Definitions come from **[Wiktionary](https://www.wiktionary.org/)** © Wiktionar
 
 The books in the screenshots are **[Standard Ebooks](https://standardebooks.org)** editions, dedicated to the public domain ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)). Thanks to its volunteers for their work.
 
-Kollate isn't affiliated with or endorsed by Rakuten Kobo. "Kobo" is a trademark of Rakuten Kobo Inc.
+Kollate isn't affiliated with or endorsed by Rakuten Kobo or the KOReader project. "Kobo" is a trademark of Rakuten Kobo Inc.

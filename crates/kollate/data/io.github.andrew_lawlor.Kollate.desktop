@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Application
 Name=Kollate
-GenericName=Kobo Highlights
-Comment=Your Kobo highlights, notes, handwriting and vocabulary
+GenericName=E-reader Highlights
+Comment=Your e-reader highlights, notes, handwriting and vocabulary
 Exec=kollate
 Icon=io.github.andrew_lawlor.Kollate
 Terminal=false
 Categories=Office;GTK;GNOME;
-Keywords=kobo;ereader;e-reader;highlights;annotations;notes;handwriting;stylus;notebook;vocabulary;dictionary;anki;obsidian;readwise;
+Keywords=kobo;koreader;ereader;e-reader;highlights;annotations;notes;handwriting;stylus;notebook;vocabulary;dictionary;anki;obsidian;readwise;
 StartupNotify=true
 DBusActivatable=false

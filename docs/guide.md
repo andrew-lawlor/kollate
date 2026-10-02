@@ -1,6 +1,6 @@
 # Kollate user guide
 
-For Kollate 0.5.2. Kollate brings everything you mark on a Kobo e-reader — highlights, notes, stylus markups, notebooks and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
+For Kollate 0.6.0. Kollate brings everything you mark on a Kobo e-reader, in its own reader or in KOReader — highlights, notes, stylus markups, notebooks and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
 
 **Contents**
 
@@ -35,7 +35,7 @@ Flatpak installs the GNOME runtime from Flathub if you don't have it. The Flatpa
 **Debian 13 or Ubuntu 24.04 and newer** (`.deb`):
 
 ```sh
-sudo apt install ./kollate_0.5.2-1_amd64.deb
+sudo apt install ./kollate_0.6.0-1_amd64.deb
 ```
 
 This also installs `kollate-cli`, the [command-line tool](#11-the-command-line).
@@ -72,6 +72,19 @@ When you're done, press **Eject** in the banner, then unplug. You can also eject
 Page bookmarks (dog-ears) aren't imported. For books bought from the Kobo Store, which are locked with DRM, Kollate can't read the book text: their highlights import normally, but vocabulary words get no context sentence and markups get no exact marked text.
 
 To import from a backup of a Kobo rather than the device, use **Main Menu → Import from Folder…** and choose the folder that contains `.kobo`.
+
+### KOReader
+
+If KOReader is installed on your Kobo, Kollate imports from it in the same go, with nothing to set up:
+
+| From KOReader | In Kollate |
+|---|---|
+| Highlights, in all nine colours | Highlights, in their colours, by chapter |
+| Notes on a highlight | The highlight's note, with a `*`, `NB` or `?` on a line of its own, or a `#tag` anywhere, [filed as a mark](#mark-it-in-the-margin) |
+| Vocabulary builder words | [Vocabulary](#7-vocabulary), with the sentence KOReader kept |
+| Books | The same book as in the Kobo's reader, if you read it in both; a book only KOReader has seen gets its cover from the book file |
+
+Once your library has anything from KOReader, every card says which reader it came from, **Kobo** or **KOReader**. Bookmarks aren't imported, and neither is handwriting from KOReader's third-party Pencil plugin, yet. A highlight deleted in KOReader is treated like one deleted on the Kobo (below).
 
 ### Importing again
 
