@@ -70,6 +70,15 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.6.1" date="2026-10-02">
+      <description>
+        <p>Handwriting that arrives during a long reading is no longer left for later.</p>
+        <ul>
+          <li>Markups brought in by an import while handwriting is being read are read in the same session, not the next time Kollate starts</li>
+          <li>The progress of a long reading stays on screen through an import, coming back after its messages</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-10-02">
       <description>
         <p>KOReader joins the Kobo's own reader: its highlights, notes and vocabulary come in too.</p>
