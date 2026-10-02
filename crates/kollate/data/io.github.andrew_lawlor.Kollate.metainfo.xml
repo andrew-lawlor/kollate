@@ -4,21 +4,23 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <name>Kollate</name>
-  <summary>Your Kobo highlights and handwriting</summary>
+  <summary>E-reader highlights and handwriting</summary>
   <developer id="io.github.andrew_lawlor">
     <name>Andrew Lawlor</name>
   </developer>
   <description>
     <p>
       Plug in your Kobo e-reader and Kollate brings in everything you marked while
-      reading: highlights, notes, handwritten markups, notebooks and the words you
-      looked up. It never changes anything on the Kobo, and never goes online.
+      reading, in the Kobo's own reader or in KOReader: highlights, notes,
+      handwritten markups, notebooks and the words you looked up. It never changes
+      anything on the device, and never goes online.
     </p>
     <ul>
       <li>Reads your handwriting as text, with a small model that runs on your computer; what you underlined comes word for word from the book</li>
       <li>Curate as you read: a star, a question mark or a #tag in the margin files the passage, and a circled word goes to your vocabulary</li>
       <li>Imports Basic and Advanced notebooks, every page redrawn and read</li>
       <li>Finds the sentence each looked-up word came from, with an offline dictionary definition</li>
+      <li>Brings in KOReader's highlights, notes and vocabulary too, every colour included</li>
       <li>Triage new highlights in an inbox from the keyboard; star, tag, edit and search everything</li>
       <li>Share a highlight as a quote card, or email it to yourself</li>
       <li>Sync notes to an Obsidian vault, and export Anki decks, JSON, CSV or Readwise CSV</li>
@@ -68,6 +70,19 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.6.0" date="2026-10-02">
+      <description>
+        <p>KOReader joins the Kobo's own reader: its highlights, notes and vocabulary come in too.</p>
+        <ul>
+          <li>KOReader's highlights and notes are imported from the same USB connection, wherever its book settings are kept</li>
+          <li>Highlights keep their colours by name, all nine of KOReader's alongside the Kobo's four</li>
+          <li>Words looked up in KOReader arrive with the sentence they were found in</li>
+          <li>A *, ? or #tag typed in a KOReader note files the highlight, as on the Kobo</li>
+          <li>Once a library has highlights from both readers, each card says which one it came from</li>
+          <li>Books without a cover from the Kobo get the cover from inside the book</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.2" date="2026-10-01">
       <description>
         <p>Handwriting is read more reliably, after measuring it against our own notes.</p>
