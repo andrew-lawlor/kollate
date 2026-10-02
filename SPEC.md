@@ -378,8 +378,61 @@ Per book: `<book>.sdr/pencil_strokes.lua` and `<book>.sdr/pencil_images/<group i
 
 ### Plan
 - **Phase 1:** KOReader highlights, notes (with pen marks, §8c) and vocabulary, and named colours.
-- **Phase 2:** Pencil handwriting, best-effort as above, groups without an anchor imported at an approximate position.
+- **Phase 2:** Pencil handwriting: from the fork's markup export (§8f), and best-effort as above from the original plugin's files, groups without an anchor imported at an approximate position.
 - **Kobo only** at first; Kindle and PocketBook later.
+
+## 8f. Pencil fork and markup export (planned, 2026-10-02)
+
+The Pencil plugin (§8e) is AGPL-3.0 and unmaintained. A maintained fork, by the Kollate maintainer, fixes its anchoring and writes each page of handwriting the way Nickel does (ink, a clean page), plus what Nickel can't: where every word on the page is. Kollate then reads KOReader handwriting through the same pipeline as Nickel's (§8a), with marked text taken from the words by geometry instead of read from pixels.
+
+### The fork
+- **Drop-in:** the folder stays `pencil.koplugin`, so it replaces the original rather than competing for the stylus. Existing `pencil_strokes.lua` (version 3) is read and upgraded on save; no ink is lost.
+- **Licence and credit:** AGPL-3.0 kept, original copyright kept, the fork's changes under the maintainer's copyright, noted in the README. An issue on the original repo says the fork exists and offers to merge back. Open pull requests there (#86, strokes lost on file rename; #77, drawing lag) are reviewed and carried over with credit.
+- **Support:** the current KOReader release and nightlies; no older versions. EPUB first (rolling layout); PDF and other paged documents keep working and get the same export where they have a text layer.
+- **Name:** open (`andrew-lawlor/pencil.koplugin`, or a new repo name with "Pencil" as the plugin's display name).
+
+### Plugin store, version 4 (`pencil_strokes.lua`)
+The plugin's own fast store, still a Lua table. Changes from version 3:
+- **Stable group ids,** from the group's first stroke (its `datetime` and first point), never from the time of a regroup.
+- **An anchor per stroke,** recorded when it's drawn (the page is on screen, so it always can be): the XPointer of the nearest word and the stroke's offset from that word's box, in line heights. Regrouping (after an erase or undo) can't lose it. Version 3 strokes are anchored the first time their page is shown again, as today.
+- `version = 4`. Unknown fields are kept on save.
+
+### Markup export, the contract with Kollate
+One **markup** is the ink of one page visit: everything drawn on a page between arriving and leaving it, as on Nickel (§13). Returning later and writing more starts a new markup; erasing strokes rewrites the markup they belong to, and erasing all of them removes it. Written to the book's sidecar:
+
+```
+<book>.sdr/pencil/markups/<markup id>/
+  markup.json  written last: its presence means the folder is complete
+  ink.json     the strokes, in page pixels, in writing order
+  page.jpg     the page as rendered, without the plugin's ink
+  words.json   every word on the page, with its box and XPointers
+```
+
+- **markup.json:** `format` (1), `id`, `created`, `modified` (Unix seconds), `document` (`doc_path`, `partial_md5`), `page` (layout page number), `start`/`end` (XPointers of the first and last word on the page), `chapter`, `screen` (`width`, `height`, `rotation`), `layout` (font face and size, margins, line spacing: what changes pagination), `plugin_version`.
+- **ink.json:** `strokes[]`, each `points` (`[[x, y], ...]` in page pixels), `width`, `color` (name), `tool` (`pen` or `highlighter`), `datetime`, `anchor` (`xpointer`, `dx`, `dy`). Centre-lines; Kollate draws them as stroked paths (`segment::strokes` and `render_note` learn stroked paths next to Nickel's filled outlines).
+- **page.jpg:** the whole screen, painted by `ReaderView:paintTo` with the plugin's own drawing off (KOReader's highlights stay, as Nickel's page images keep theirs), JPEG quality 85. Written once per markup, after the existing capture delay or on leaving the page; about 150–300 KB.
+- **words.json:** `words[]`, each `text`, `box` (`[x0, y0, x1, y1]`), `pos0`, `pos1`. EPUB: walk the page from `getPageXPointer(page)` with `getNextVisibleWordStart`/`End`, boxes from `getWordBoxesFromPositions` (a few hundred calls into crengine per page; to be timed in the spike). PDF: `getTextBoxes(page)`. A page without a text layer (a scanned PDF) has none.
+- **Atomic:** a markup is written to a temporary folder beside it and renamed into place; Kollate ignores folders without `markup.json`.
+
+### Kollate, phase 2
+- A sidecar with `pencil/markups/` is read from those folders; one without falls back to version 3, best-effort (§8e).
+- Each markup becomes a `markup` annotation: `bookmark_id = "koreader-ink:" + id`, positioned by `start`, the ink SVG built from `ink.json`, the page from `page.jpg`, the crop from the ink's bounds (§13).
+- **Marked text by geometry:** an underline marks the words whose boxes sit just above it on the same line; a circle the words whose boxes it encloses (the same rules as on Nickel's page image, §8a, but on boxes). The text is the words' own, in order: no model reads print, nothing is snapped. Pages without words fall back to reading `page.jpg` and snapping (§8a).
+- Handwriting itself is read as on Nickel; circled single words go to Vocabulary (§8c) with the sentence from `words.json`.
+
+### Later (in the fork)
+**Ink after a font change:** strokes are drawn near their anchor words on the new layout (offsets in line heights), flagged in the plugin as "moved". Never exact for a margin note, but better than losing it; not promised for the first release.
+
+### Plan
+1. **Spike** in KOReader's desktop build (mouse as pen): the word walk and its cost per page, painting the page without ink, and the size and time of `page.jpg` on the Libra Colour.
+2. **Fork, first release:** version 4 store (stable ids, anchors per stroke), the markup export, the carried-over fixes, tests (the repo's `busted` specs, plus new ones for the store and export).
+3. **Kollate phase 2,** with fixture markups from the fork in `tests/fixtures/`.
+4. **Fork, later:** ink after a font change.
+
+### Open questions
+1. The fork's name.
+2. When a page visit ends for a long session on one page: on leaving only, or also after some minutes without ink?
+3. Whether highlighter strokes should also become native KOReader highlights (the plugin's `experimental_text_highlight`), now that the words under them are known.
 
 ## 9. UI (libadwaita)
 
