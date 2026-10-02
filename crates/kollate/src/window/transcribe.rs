@@ -23,7 +23,12 @@ impl Window {
     /// Reads, in the background, every markup the chosen model hasn't. Does
     /// nothing without a model, or while already running.
     pub(super) fn transcribe_pending(self: &Rc<Self>) {
-        if self.transcribing.get() || !kollate_transcribe::supported() {
+        if !kollate_transcribe::supported() {
+            return;
+        }
+        // Already reading: what's new (from an import, say) is read next.
+        if self.transcribing.get() {
+            self.transcribe_again.set(true);
             return;
         }
         let Some(model) = self.chosen_model() else {
@@ -39,11 +44,7 @@ impl Window {
         // A toast that stays while reading, counting through a long run
         // (a first import can bring hundreds of markups).
         let total = jobs.len();
-        let progress = adw::Toast::builder()
-            .title(format!("Reading the handwriting in {}…", what(&jobs)))
-            .timeout(0)
-            .build();
-        self.show_toast(progress.clone());
+        self.start_progress(&format!("Reading the handwriting in {}…", what(&jobs)));
         let this = self.clone();
         glib::spawn_future_local(async move {
             // The model loads once, on the worker, and is handed back each time.
@@ -54,7 +55,7 @@ impl Window {
             let mut last_error: Option<String> = None;
             for (i, job) in jobs.into_iter().enumerate() {
                 if total > 1 {
-                    progress.set_title(&format!("Reading handwriting… {} of {total}", i + 1));
+                    this.set_progress(Some(&format!("Reading handwriting… {} of {total}", i + 1)));
                 }
                 let (to_load, dirs) = (model.clone(), dictionary_dirs.clone());
                 let taken = worker.take();
@@ -113,7 +114,7 @@ impl Window {
                 }
             }
             this.transcribing.set(false);
-            progress.dismiss();
+            this.set_progress(None);
             // Circled words just added to Vocabulary need definitions.
             if words > 0 {
                 this.enrich_vocab();
@@ -134,6 +135,11 @@ impl Window {
                 this.toast(&message);
             } else if let Some(err) = last_error {
                 this.error("Couldn’t Read Your Handwriting", err);
+            }
+            // Handwriting that arrived meanwhile. Only on request, so a
+            // markup that can't be read isn't retried in a loop.
+            if this.transcribe_again.replace(false) {
+                this.transcribe_pending();
             }
         });
     }

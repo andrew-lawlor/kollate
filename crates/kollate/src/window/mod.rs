@@ -147,6 +147,13 @@ pub struct Window {
     toasts: adw::ToastOverlay,
     /// The most recent toast; replaced rather than queued behind.
     last_toast: RefCell<Option<adw::Toast>>,
+    /// The toast counting through a long background job, kept apart from
+    /// `last_toast` so other messages never dismiss it for good: they show,
+    /// and it comes back after them (see [`Window::set_progress`]).
+    progress: Rc<RefCell<Option<adw::Toast>>>,
+    /// Whether the progress toast should be showing: false once the job is
+    /// done, or after the user closed it.
+    progress_wanted: Rc<Cell<bool>>,
     /// The Preferences or Export dialog, while open. Toasts go there,
     /// because a dialog covers the window's own toasts.
     open_dialog: RefCell<Option<glib::WeakRef<adw::PreferencesDialog>>>,
@@ -169,6 +176,8 @@ pub struct Window {
     importing: Cell<bool>,
     /// Handwriting is being read in the background.
     transcribing: Cell<bool>,
+    /// More handwriting arrived (an import) while it was: read it next.
+    transcribe_again: Cell<bool>,
     selection_bar: gtk::ActionBar,
     selection_label: gtk::Label,
     selection_done: gtk::Button,
@@ -421,6 +430,8 @@ impl Window {
             split,
             toasts,
             last_toast: RefCell::default(),
+            progress: Rc::default(),
+            progress_wanted: Rc::default(),
             open_dialog: RefCell::default(),
             sidebar,
             sidebar_navs: RefCell::default(),
@@ -437,6 +448,7 @@ impl Window {
             kobo: RefCell::default(),
             importing: Cell::new(false),
             transcribing: Cell::new(false),
+            transcribe_again: Cell::new(false),
             selection_bar,
             selection_label,
             selection_done: clear_selection,
@@ -488,11 +500,57 @@ impl Window {
         if let Some(previous) = self.last_toast.replace(Some(toast.clone())) {
             previous.dismiss();
         }
+        // The progress toast steps aside; the next progress update queues
+        // it again behind this one.
+        if let Some(progress) = self.progress.take() {
+            progress.dismiss();
+        }
+        self.add_toast(toast);
+    }
+
+    fn add_toast(&self, toast: adw::Toast) {
         let dialog = self.open_dialog.borrow().as_ref().and_then(|d| d.upgrade());
         match dialog {
             Some(dialog) => dialog.add_toast(toast),
             None => self.toasts.add_toast(toast),
         }
+    }
+
+    /// Shows or updates the progress of a background job (`None` when it's
+    /// over). Shown again after any other message, unless the user closed it.
+    fn set_progress(&self, title: Option<&str>) {
+        let Some(title) = title else {
+            self.progress_wanted.set(false);
+            if let Some(progress) = self.progress.take() {
+                progress.dismiss();
+            }
+            return;
+        };
+        if let Some(progress) = self.progress.borrow().as_ref() {
+            progress.set_title(title);
+            return;
+        }
+        if !self.progress_wanted.get() {
+            return;
+        }
+        let toast = adw::Toast::builder().title(title).timeout(0).build();
+        // Still the current one when dismissed: the user closed it (another
+        // message or the end of the job takes it out first). It stays closed.
+        let (progress, wanted) = (self.progress.clone(), self.progress_wanted.clone());
+        toast.connect_dismissed(move |closed| {
+            if progress.borrow().as_ref() == Some(closed) {
+                progress.replace(None);
+                wanted.set(false);
+            }
+        });
+        self.progress.replace(Some(toast.clone()));
+        self.add_toast(toast);
+    }
+
+    /// Starts showing progress for a new background job.
+    fn start_progress(&self, title: &str) {
+        self.progress_wanted.set(true);
+        self.set_progress(Some(title));
     }
 
     /// Sends toasts to `dialog` until it closes.
