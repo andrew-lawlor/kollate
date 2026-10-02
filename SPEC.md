@@ -404,15 +404,16 @@ One **markup** is the ink of one page visit: everything drawn on a page between 
 <book>.sdr/pencil/markups/<markup id>/
   markup.json  written last: its presence means the folder is complete
   ink.json     the strokes, in page pixels, in writing order
-  page.jpg     the page as rendered, without the plugin's ink
+  page.png     the page as rendered, without the plugin's ink
   words.json   every word on the page, with its box and XPointers
 ```
 
 - **markup.json:** `format` (1), `id`, `created`, `modified` (Unix seconds), `document` (`doc_path`, `partial_md5`), `page` (layout page number), `start`/`end` (XPointers of the first and last word on the page), `chapter`, `screen` (`width`, `height`, `rotation`), `layout` (font face and size, margins, line spacing: what changes pagination), `plugin_version`.
 - **ink.json:** `strokes[]`, each `points` (`[[x, y], ...]` in page pixels), `width`, `color` (name), `tool` (`pen` or `highlighter`), `datetime`, `anchor` (`xpointer`, `dx`, `dy`). Centre-lines; Kollate draws them as stroked paths (`segment::strokes` and `render_note` learn stroked paths next to Nickel's filled outlines).
-- **page.jpg:** the whole screen, painted by `ReaderView:paintTo` with the plugin's own drawing off (KOReader's highlights stay, as Nickel's page images keep theirs), JPEG quality 85. Written once per markup, after the existing capture delay or on leaving the page; about 150–300 KB.
-- **words.json:** `words[]`, each `text`, `box` (`[x0, y0, x1, y1]`), `pos0`, `pos1`. EPUB: walk the page from `getPageXPointer(page)` with `getNextVisibleWordStart`/`End`, boxes from `getWordBoxesFromPositions` (a few hundred calls into crengine per page; to be timed in the spike). PDF: `getTextBoxes(page)`. A page without a text layer (a scanned PDF) has none.
+- **page.png:** the whole screen, painted by `ReaderView:paintTo` with the plugin's own drawing off (KOReader's highlights stay, as Nickel's page images keep theirs). PNG, not JPEG: text compresses far better without loss (a 1053×1400 page: 112 KB as PNG, 310 KB as JPEG at quality 85, 59 KB as 16-grey PNG). Greyscale on a black-and-white screen, colour on a colour one. Written once per markup, after the existing capture delay or on leaving the page. Kollate's `image` dependency gains PNG decoding.
+- **words.json:** `words[]`, each `text`, `boxes` (one `[x0, y0, x1, y1]` per line the word is on: a word hyphenated across lines has two), `pos0`, `pos1`. EPUB: the visible text's first and last positions (`getTextFromPositions` over the whole screen, not `getPageXPointer`, which didn't match the screen in the spike), then each word with `getNextVisibleWordStart`/`End`, its text from `getTextFromXPointers` and boxes from `getWordBoxesFromPositions`. PDF: `getTextBoxes(page)`. A page without a text layer (a scanned PDF) has none.
 - **Atomic:** a markup is written to a temporary folder beside it and renamed into place; Kollate ignores folders without `markup.json`.
+- **Partial re-rendering:** after a layout change, KOReader (with `partial_rerendering`, on by default) lays out only what's needed, finishes the full layout in the background, and shows a small icon in the top-left corner meanwhile (`ReaderRolling.rendering_state` is set; a `DocumentRerendered` event follows when it's done). What's on screen is what the reader wrote on, so ink, anchors and words taken then are right, but page numbers can still change and the icon would be painted into the page image. So `page.png` is captured only once `rendering_state` is clear (waiting for `DocumentRerendered` if need be), `page` in `markup.json` is advisory (the XPointers are what place a markup), and any test that changes the layout waits for the re-render before measuring.
 
 ### Kollate, phase 2
 - A sidecar with `pencil/markups/` is read from those folders; one without falls back to version 3, best-effort (§8e).
@@ -423,8 +424,15 @@ One **markup** is the ink of one page visit: everything drawn on a page between 
 ### Later (in the fork)
 **Ink after a font change:** strokes are drawn near their anchor words on the new layout (offsets in line heights), flagged in the plugin as "moved". Never exact for a margin note, but better than losing it; not promised for the first release.
 
+### Spike (2026-10-02)
+In KOReader 2026.07.1's Linux build, at 1053×1400 and 300 dpi, on *The Odyssey* (Standard Ebooks), with a throwaway plugin (`~/.cache/kollate-eval/pencil-spike/`):
+- **Word layer:** 181–196 words a page in 5–10 ms on a desktop CPU. Every box sat on its word, drawn over the page image to check; hyphenated words came back with a box per line.
+- **Page image:** painting 4 ms; PNG encoding 51 ms, JPEG 4 ms (sizes above).
+- **Anchors survive a font change:** a word's XPointer, taken at size 22, resolved after a re-layout at size 30 (page 40 became page 47) to the word's new box. The re-layout happens on the next screen refresh, and may be partial at first (above), so code that changes the layout must wait for it before measuring. The first capture in the spike, taken just after opening the book, has the partial-rendering icon in its corner.
+- **Still to measure on the device:** the same timings on the Libra Colour (expect several times slower; capture is deferred, so it only needs to stay well under a second), which means installing the spike plugin on the Kobo.
+
 ### Plan
-1. **Spike** in KOReader's desktop build (mouse as pen): the word walk and its cost per page, painting the page without ink, and the size and time of `page.jpg` on the Libra Colour.
+1. ~~Spike~~ (above); the device timings remain.
 2. **Fork, first release:** version 4 store (stable ids, anchors per stroke), the markup export, the carried-over fixes, tests (the repo's `busted` specs, plus new ones for the store and export).
 3. **Kollate phase 2,** with fixture markups from the fork in `tests/fixtures/`.
 4. **Fork, later:** ink after a font change.
