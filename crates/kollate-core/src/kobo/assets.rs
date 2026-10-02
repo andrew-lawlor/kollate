@@ -146,6 +146,23 @@ fn copy_if_changed(src: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The cover inside a sideloaded EPUB, written to `covers/` (named by the
+/// book's volume ID, so it's replaced only when it changes).
+fn epub_cover(mount: &Path, volume_id: &str, assets_dir: &Path) -> Option<PathBuf> {
+    let path = super::epub::volume_path(mount, volume_id)?;
+    let is_epub = path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("epub"));
+    if !is_epub {
+        return None;
+    }
+    let (bytes, ext) = super::epub::cover_image(&path).ok()??;
+    let name = blake3::hash(volume_id.as_bytes()).to_hex()[..24].to_owned();
+    let dest = assets_dir.join("covers").join(format!("{name}.{ext}"));
+    write_if_changed(&dest, &bytes).ok()?;
+    Some(dest)
+}
+
 /// Copies covers of the snapshot's books and all markup images into
 /// `assets_dir` (`covers/` and `markups/`), and writes each notebook page's
 /// ink and a blank page to draw it on (`notebooks/`), cropped to the ink.
@@ -159,16 +176,20 @@ pub fn copy_assets(
     super::ensure_not_on_kobo(assets_dir)?;
     let mut out = CopiedAssets::default();
     for book in &snapshot.books {
-        let Some(image_id) = &book.image_id else {
+        if let Some(image_id) = &book.image_id
+            && let Some(src) = cover_path(mount, image_id)
+        {
+            let name = blake3::hash(image_id.as_bytes()).to_hex()[..24].to_owned();
+            let dest = assets_dir.join("covers").join(format!("{name}.jpg"));
+            copy_if_changed(&src, &dest)?;
+            out.covers.push((book.volume_id.clone(), dest));
             continue;
-        };
-        let Some(src) = cover_path(mount, image_id) else {
-            continue;
-        };
-        let name = blake3::hash(image_id.as_bytes()).to_hex()[..24].to_owned();
-        let dest = assets_dir.join("covers").join(format!("{name}.jpg"));
-        copy_if_changed(&src, &dest)?;
-        out.covers.push((book.volume_id.clone(), dest));
+        }
+        // No cover from Nickel (a book only KOReader opened, say): the
+        // book's own. A book that can't be read just has none.
+        if let Some(dest) = epub_cover(mount, &book.volume_id, assets_dir) {
+            out.covers.push((book.volume_id.clone(), dest));
+        }
     }
     for (bookmark_id, page) in &snapshot.notebook_ink {
         let name = blake3::hash(bookmark_id.as_bytes()).to_hex()[..24].to_owned();
@@ -301,7 +322,7 @@ mod tests {
             kind: crate::kobo::AnnotationKind::Markup,
             text: None,
             note: None,
-            color: 0,
+            color: "yellow".into(),
             start: crate::kobo::Position {
                 container_path: String::new(),
                 child_index: 0,

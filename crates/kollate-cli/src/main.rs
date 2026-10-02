@@ -6,8 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use kollate_core::kobo::{
-    AnnotationKind, DeviceInfo, KoboDb, KoboSnapshot, color_name, find_kobo_db,
-    is_tested_db_version,
+    AnnotationKind, DeviceInfo, KoboDb, KoboSnapshot, find_kobo_db, is_tested_db_version,
 };
 use kollate_core::{Library, default_library_path};
 
@@ -438,7 +437,8 @@ fn library(library_path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Reads a Kobo: its database and, when mounted, its notebooks.
+/// Reads a Kobo: its database and, when mounted, its notebooks and
+/// KOReader's highlights and words.
 fn read_kobo(path: &Path) -> Result<KoboSnapshot> {
     let mut snapshot = KoboDb::open_copy(&find_kobo_db(path)?)?.snapshot()?;
     warn_if_untested(&snapshot);
@@ -446,6 +446,10 @@ fn read_kobo(path: &Path) -> Result<KoboSnapshot> {
         kollate_core::kobo::notebook::add_notebook_pages(path, &mut snapshot);
         for (volume_id, why) in &snapshot.unread_notebooks {
             eprintln!("warning: couldn't read notebook {volume_id}: {why}");
+        }
+        kollate_core::koreader::add_koreader(path, &mut snapshot);
+        for (file, why) in &snapshot.koreader_unread {
+            eprintln!("warning: couldn't read KOReader's {file}: {why}");
         }
     }
     Ok(snapshot)
@@ -504,7 +508,7 @@ fn inspect(path: PathBuf, json: bool) -> Result<()> {
             println!(
                 "    [{:<9} {:>6}] {}",
                 format!("{:?}", b.kind).to_lowercase(),
-                color_name(b.color),
+                b.color,
                 body
             );
             if let Some(note) = &b.note {

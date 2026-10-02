@@ -2,10 +2,16 @@
   min-width: 5px;
   border-radius: 3px;
 }
-.hl-0 { background-color: #f6d32d; }
-.hl-1 { background-color: #f36fb1; }
-.hl-2 { background-color: #62a0ea; }
-.hl-3 { background-color: #57e389; }
+.hl-yellow { background-color: #f6d32d; }
+.hl-pink { background-color: #f36fb1; }
+.hl-blue { background-color: #62a0ea; }
+.hl-green { background-color: #57e389; }
+.hl-red { background-color: #f66151; }
+.hl-orange { background-color: #ffa348; }
+.hl-olive { background-color: #b5bd38; }
+.hl-cyan { background-color: #33c7de; }
+.hl-purple { background-color: #c061cb; }
+.hl-gray { background-color: #9a9996; }
 .hl-unknown { background-color: alpha(currentColor, 0.3); }
 
 .quote {

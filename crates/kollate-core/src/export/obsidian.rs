@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 
 use super::{ExportBook, ExportOptions, safe_file_name};
 use crate::Result;
-use crate::kobo::color_name;
 use crate::kobo::epub::word_span;
 use crate::store::{Annotation, Library, VocabDetail};
 
@@ -112,9 +111,9 @@ fn annotation_md(a: &Annotation, attachment: Option<&str>, out: &mut String) {
                 .to_string(),
         );
     }
-    // Yellow, the Kobo's default, goes unsaid; markups and pages have no colour.
-    if matches!(a.kind.as_str(), "highlight" | "note") && a.color != 0 {
-        meta.push(color_name(a.color).to_owned());
+    // Yellow, the default, goes unsaid; markups and pages have no colour.
+    if matches!(a.kind.as_str(), "highlight" | "note") && a.color != crate::color::DEFAULT_COLOR {
+        meta.push(a.color.clone());
     }
     if a.starred {
         meta.push("★".to_owned());

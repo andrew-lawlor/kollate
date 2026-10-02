@@ -294,6 +294,93 @@ fn paragraphs(xhtml: &str) -> Vec<String> {
     out
 }
 
+/// The cover image declared in an EPUB, as (bytes, file extension): the
+/// manifest item with the EPUB 3 `cover-image` property, else the one EPUB 2's
+/// `<meta name="cover">` names, else an image whose ID or name says "cover".
+/// `None` without one, or when it isn't a readable image (encrypted).
+pub fn cover_image(path: &Path) -> Result<Option<(Vec<u8>, &'static str)>> {
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?).map_err(io_err)?;
+    let mut read = |name: &str| -> Result<Vec<u8>> {
+        let mut file = zip.by_name(name).map_err(io_err)?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+        Ok(bytes)
+    };
+    let container = String::from_utf8_lossy(&read("META-INF/container.xml")?).into_owned();
+    let mut reader = quick_xml::Reader::from_str(&container);
+    let mut opf_path = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.local_name().as_ref() == "rootfile" => {
+                opf_path = attr(&e, "full-path");
+                break;
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    let Some(opf_path) = opf_path else {
+        return Ok(None);
+    };
+    let opf = String::from_utf8_lossy(&read(&opf_path)?).into_owned();
+    // (id, href, media type, properties)
+    let mut items: Vec<(String, String, String, String)> = Vec::new();
+    let mut meta_cover = None;
+    let mut reader = quick_xml::Reader::from_str(&opf);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.local_name().as_ref() {
+                "item" => {
+                    if let Some(href) = attr(&e, "href") {
+                        items.push((
+                            attr(&e, "id").unwrap_or_default(),
+                            join_zip_path(&opf_path, &href),
+                            attr(&e, "media-type").unwrap_or_default(),
+                            attr(&e, "properties").unwrap_or_default(),
+                        ));
+                    }
+                }
+                "meta" if attr(&e, "name").as_deref() == Some("cover") => {
+                    meta_cover = attr(&e, "content");
+                }
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    let image = |i: &&(String, String, String, String)| i.2.starts_with("image/");
+    let href = items
+        .iter()
+        .filter(image)
+        .find(|i| i.3.split_whitespace().any(|p| p == "cover-image"))
+        .or_else(|| {
+            meta_cover
+                .as_ref()
+                .and_then(|id| items.iter().filter(image).find(|i| &i.0 == id))
+        })
+        .or_else(|| {
+            items.iter().filter(image).find(|i| {
+                i.0.to_lowercase().contains("cover") || i.1.to_lowercase().contains("cover")
+            })
+        })
+        .map(|i| i.1.clone());
+    let Some(href) = href else {
+        return Ok(None);
+    };
+    let Ok(bytes) = read(&href) else {
+        return Ok(None);
+    };
+    let ext = match image::guess_format(&bytes) {
+        Ok(image::ImageFormat::Jpeg) => "jpg",
+        Ok(image::ImageFormat::Png) => "png",
+        Ok(image::ImageFormat::Gif) => "gif",
+        Ok(image::ImageFormat::WebP) => "webp",
+        _ => return Ok(None),
+    };
+    Ok(Some((bytes, ext)))
+}
+
 impl BookText {
     /// Reads the spine of an EPUB. Returns `None` for encrypted (DRM) books.
     pub fn read(path: &Path) -> Result<Option<Self>> {
@@ -730,6 +817,70 @@ mod tests {
         assert_eq!(p[2], "A claim and another.");
         // EPUB 3 marks note references explicitly, superscript or not.
         assert_eq!(p[3], "and entropy, individuating");
+    }
+
+    #[test]
+    fn finds_the_cover_however_it_is_declared() {
+        use std::io::Write;
+        const PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+        const JPEG: &[u8] = b"\xff\xd8\xff\xe0\0\x10JFIF";
+        let dir = tempfile::tempdir().unwrap();
+        let book = |name: &str, opf: &str, files: &[(&str, &[u8])]| {
+            let path = dir.path().join(name);
+            let mut w = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+            let mut put = |n: &str, body: &[u8]| {
+                w.start_file(n, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                w.write_all(body).unwrap();
+            };
+            put(
+                "META-INF/container.xml",
+                br#"<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>"#,
+            );
+            put("OEBPS/content.opf", opf.as_bytes());
+            for (n, body) in files {
+                put(n, body);
+            }
+            w.finish().unwrap();
+            path
+        };
+        // EPUB 3: the cover-image property, even beside an image named "cover".
+        let epub3 = book(
+            "3.epub",
+            r#"<package><manifest>
+                <item id="c" href="images/cover-old.jpg" media-type="image/jpeg"/>
+                <item id="x" href="images/front.png" media-type="image/png" properties="cover-image"/>
+            </manifest></package>"#,
+            &[
+                ("OEBPS/images/front.png", PNG),
+                ("OEBPS/images/cover-old.jpg", JPEG),
+            ],
+        );
+        assert_eq!(cover_image(&epub3).unwrap(), Some((PNG.to_vec(), "png")));
+        // EPUB 2: <meta name="cover">.
+        let epub2 = book(
+            "2.epub",
+            r#"<package><metadata><meta name="cover" content="img1"/></metadata><manifest>
+                <item id="img1" href="../art.jpg" media-type="image/jpeg"/></manifest></package>"#,
+            &[("art.jpg", JPEG)],
+        );
+        assert_eq!(cover_image(&epub2).unwrap(), Some((JPEG.to_vec(), "jpg")));
+        // Only a file name to go on.
+        let named = book(
+            "n.epub",
+            r#"<package><manifest><item id="i" href="Cover.jpg" media-type="image/jpeg"/></manifest></package>"#,
+            &[("OEBPS/Cover.jpg", JPEG)],
+        );
+        assert!(cover_image(&named).unwrap().is_some());
+        // An encrypted cover isn't an image.
+        let locked = book(
+            "l.epub",
+            r#"<package><manifest><item id="i" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/></manifest></package>"#,
+            &[("OEBPS/cover.jpg", b"\x13\x37 not a jpeg")],
+        );
+        assert_eq!(cover_image(&locked).unwrap(), None);
+        let none = book("0.epub", "<package><manifest/></package>", &[]);
+        assert_eq!(cover_image(&none).unwrap(), None);
     }
 
     #[test]

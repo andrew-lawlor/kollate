@@ -77,7 +77,8 @@ pub struct Annotation {
     pub device_note: Option<String>,
     pub user_text: Option<String>,
     pub user_note: Option<String>,
-    pub color: i64,
+    /// Highlight colour by name (see [`crate::color`]).
+    pub color: String,
     pub chapter_title: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub starred: bool,
@@ -100,6 +101,8 @@ pub struct Annotation {
     pub ink_note: Option<String>,
     /// The model that read the handwriting.
     pub ink_source: Option<String>,
+    /// Made in KOReader rather than the Kobo's own reader (SPEC §8e).
+    pub from_koreader: bool,
 }
 
 impl Annotation {
@@ -213,7 +216,8 @@ pub(crate) const ANNOTATION_SELECT: &str = "SELECT a.id, a.book_id, a.kind, a.de
      coalesce(b.user_author, b.author),
      (SELECT group_concat(name, char(31)) FROM (SELECT t.name FROM annotation_tag x JOIN tag t ON t.id = x.tag_id
       WHERE x.annotation_id = a.id ORDER BY t.name COLLATE NOCASE)),
-     a.markup_svg_path, a.markup_jpg_path, a.markup_crop, a.ink_text, a.ink_note, a.ink_source
+     a.markup_svg_path, a.markup_jpg_path, a.markup_crop, a.ink_text, a.ink_note, a.ink_source,
+     EXISTS (SELECT 1 FROM annotation_source x WHERE x.annotation_id = a.id AND x.bookmark_id LIKE 'koreader:%')
      FROM annotation a JOIN book b ON b.id = a.book_id";
 
 /// A crop stored as "left,top,right,bottom".
@@ -261,6 +265,7 @@ pub(crate) fn annotation_from_row(r: &rusqlite::Row) -> rusqlite::Result<Annotat
         ink_text: r.get(20)?,
         ink_note: r.get(21)?,
         ink_source: r.get(22)?,
+        from_koreader: r.get(23)?,
     })
 }
 
@@ -490,6 +495,17 @@ impl Library {
                 |r| r.get(0),
             )
             .optional()?)
+    }
+
+    /// Whether any annotation came from KOReader: then cards name the
+    /// reader each came from (SPEC §8e).
+    pub fn has_koreader(&self) -> Result<bool> {
+        Ok(self.conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM annotation_source
+                            WHERE bookmark_id >= 'koreader:' AND bookmark_id < 'koreader;')",
+            [],
+            |r| r.get(0),
+        )?)
     }
 
     pub fn annotation(&self, id: i64) -> Result<Option<Annotation>> {

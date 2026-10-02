@@ -193,6 +193,7 @@ fn vocab_merges_case_and_records_sightings() {
         volume_id: Some(other_book),
         language: Some("en".into()),
         created: None,
+        context: None,
     });
     let stats = lib.import(&snap, &device("A"), false).unwrap();
     assert_eq!((stats.words_new, stats.word_sightings_new), (0, 1));
@@ -406,7 +407,7 @@ fn with_notebook(mut snap: KoboSnapshot) -> KoboSnapshot {
         kind: AnnotationKind::Page,
         text: None,
         note: None,
-        color: 0,
+        color: "yellow".into(),
         start: at.clone(),
         end: at,
         chapter_progress: 0.0,

@@ -3,7 +3,6 @@
 use adw::prelude::*;
 use chrono::Local;
 use gtk::gio;
-use kollate_core::kobo::color_name;
 use kollate_core::store::{Annotation, Book, Status};
 
 pub fn format_date(date: chrono::DateTime<chrono::Utc>) -> String {
@@ -93,7 +92,9 @@ fn icon_button(icon: &str, tooltip: &str, action: &str) -> gtk::Button {
 
 /// Builds the card. In a book view the list is grouped by chapter, so the
 /// chapter is left out of the details line; elsewhere it's grouped by book.
-pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
+/// `name_reader` adds which reader the annotation was made in, for a
+/// library with annotations from more than one.
+pub fn build(a: &Annotation, in_book_view: bool, name_reader: bool) -> gtk::Widget {
     let root = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(14)
@@ -105,12 +106,12 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
 
     let bar = gtk::Box::new(gtk::Orientation::Vertical, 0);
     bar.add_css_class("color-bar");
-    bar.add_css_class(&match color_name(a.color) {
-        "unknown" => "hl-unknown".to_owned(),
-        _ => format!("hl-{}", a.color),
+    bar.add_css_class(&match kollate_core::color::color_index(&a.color) {
+        Some(_) => format!("hl-{}", a.color),
+        None => "hl-unknown".to_owned(),
     });
     bar.set_margin_bottom(6);
-    bar.set_tooltip_text(Some(color_name(a.color)));
+    bar.set_tooltip_text(Some(&a.color));
     // Notebook pages have no highlight colour.
     if a.kind != "page" {
         root.append(&bar);
@@ -214,6 +215,9 @@ pub fn build(a: &Annotation, in_book_view: bool) -> gtk::Widget {
     }
     if let Some(date) = a.created_at {
         meta.push(format_date(date));
+    }
+    if name_reader {
+        meta.push(if a.from_koreader { "KOReader" } else { "Kobo" }.to_owned());
     }
     let meta_label = gtk::Label::builder()
         .label(meta.join(" · "))

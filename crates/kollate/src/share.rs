@@ -89,15 +89,19 @@ impl Palette {
     }
 
     /// Background, text, and the muted colour of the note and author, for
-    /// a highlight of Kobo colour `color` (the Highlight palette uses it).
+    /// a highlight of colour `color`, an index into `HIGHLIGHT_COLORS` (the
+    /// Highlight palette uses it).
     fn colours(self, color: Option<usize>) -> (Rgb, Rgb, Rgb) {
         match self {
             Self::Paper => (hex(0xfbf8f1), hex(0x1c1b1a), hex(0x6b665e)),
             Self::Night => (hex(0x1f1d24), hex(0xf2eee6), hex(0xa9a39a)),
             Self::Sepia => (hex(0xf1e6cf), hex(0x3b2a1e), hex(0x7a6048)),
             Self::Highlight => {
-                // Soft tints of yellow, pink, blue and green; grey for ink.
-                let tint = [0xfbf0c6, 0xfadcea, 0xdce9fa, 0xd8f3e2];
+                // Soft tints, in the order of HIGHLIGHT_COLORS; grey for ink.
+                let tint = [
+                    0xfbf0c6, 0xfadcea, 0xdce9fa, 0xd8f3e2, 0xfadcdc, 0xfde6d2, 0xeef0d2, 0xd6f3f7,
+                    0xf0dff4, 0xe4e3e0,
+                ];
                 let bg = color.map_or(0xeceae6, |c| tint[c]);
                 (hex(bg), hex(0x1c1b1a), hex(0x57534d))
             }
@@ -166,24 +170,35 @@ fn hex(s: u32) -> Rgb {
     )
 }
 
-/// A highlight's Kobo colour as an index (yellow, pink, blue, green), or
-/// `None` for a markup or notebook page, which have none.
-fn kobo_colour(a: &Annotation) -> Option<usize> {
-    matches!(a.kind.as_str(), "highlight" | "note").then(|| a.color.clamp(0, 3) as usize)
+/// A highlight's colour as an index into `HIGHLIGHT_COLORS` (an unknown one
+/// counts as yellow), or `None` for a markup or notebook page, which have
+/// none.
+fn highlight_colour(a: &Annotation) -> Option<usize> {
+    matches!(a.kind.as_str(), "highlight" | "note")
+        .then(|| kollate_core::color::color_index(&a.color).unwrap_or(0))
 }
 
-/// The rule's colour: the highlight's Kobo colour (GNOME palette, a shade
-/// darker on light cards), or a grey.
+/// The rule's colour: the highlight's colour (GNOME palette, a shade
+/// darker on light cards), or a grey. In the order of `HIGHLIGHT_COLORS`.
 fn accent(a: &Annotation, palette: Palette) -> Rgb {
-    let shades: [u32; 4] = if palette.dark() {
-        [0xf6d32d, 0xf36fb1, 0x62a0ea, 0x57e389]
+    let shades: [u32; 10] = if palette.dark() {
+        [
+            0xf6d32d, 0xf36fb1, 0x62a0ea, 0x57e389, 0xf66151, 0xffa348, 0xb5bd38, 0x33c7de,
+            0xc061cb, 0x9a9996,
+        ]
     } else if palette == Palette::Highlight {
         // Deep enough to stand out on its own tint.
-        [0xc88800, 0xb5236f, 0x1c71d8, 0x26a269]
+        [
+            0xc88800, 0xb5236f, 0x1c71d8, 0x26a269, 0xc01c28, 0xc64600, 0x6f7419, 0x0e7c8f,
+            0x813d9c, 0x5e5c64,
+        ]
     } else {
-        [0xe5a50a, 0xe01b8f, 0x3584e4, 0x26a269]
+        [
+            0xe5a50a, 0xe01b8f, 0x3584e4, 0x26a269, 0xe01b24, 0xe66100, 0x8a8f25, 0x1a9fb5,
+            0x9141ac, 0x77767b,
+        ]
     };
-    match kobo_colour(a) {
+    match highlight_colour(a) {
         // An e-ink screen has no colour.
         Some(_) if palette == Palette::Eink => hex(0x3d3846),
         Some(c) => hex(shades[c]),
@@ -222,7 +237,7 @@ pub fn render(a: &Annotation, o: CardOptions) -> Result<Vec<u8>, String> {
     let h = if o.tall { 1350 } else { 1080 };
     let (w, hf) = (f64::from(WIDTH), f64::from(h));
     let inner = w - 2.0 * MARGIN;
-    let (bg, fg, muted) = o.palette.colours(kobo_colour(a));
+    let (bg, fg, muted) = o.palette.colours(highlight_colour(a));
 
     let surface =
         cairo::ImageSurface::create(cairo::Format::Rgb24, WIDTH, h).map_err(|e| e.to_string())?;

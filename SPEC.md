@@ -326,6 +326,61 @@ The card can be copied (as a texture), saved (never onto a Kobo), or attached to
 
 ---
 
+## 8e. KOReader (phase 1 built 2026-10-02)
+
+KOReader is an alternative reader that runs alongside Nickel on Kobos (and on Kindles, PocketBooks and Android). It keeps its own highlights, notes and vocabulary, and with the third-party **Pencil** plugin (`pencil.koplugin`) it records stylus handwriting. None of this is in `KoboReader.sqlite`. Read-only, like everything else: Kollate never writes to the device.
+
+Sample (Libra Colour, KOReader v2026.07.1, Pencil plugin `pencil_strokes.lua` version 3) in `~/.cache/kollate-eval/koreader-sample`: 3 highlights (blue, yellow, green with a typed note), 2 vocabulary words, 8 Pencil groups (handwritten notes, underlines with a note and a `?`, circled words) in *The Broken Sword*. `lua2json.py` there parses the files.
+
+### Where the data lives (on a Kobo: `.adds/koreader/`)
+- **Book settings ("sidecar"):** `<book>.sdr/metadata.<ext>.lua`, a Lua table written by KOReader's `dump.lua` (`return { ... }`: strings, numbers, booleans, nested tables, `["key"] =` and `[n] =` keys, `--` comments). Location follows `document_metadata_folder` in `settings.reader.lua`: `doc` (next to the book, the default and the sample's), `dir` (`.adds/koreader/docsettings/<full book path>.sdr`) or `hash` (`.adds/koreader/hashdocsettings/<md5[0..2]>/<md5>.sdr`). Read all three. `.old` files are KOReader's previous copy; ignore them. Books can be in any folder: the device is walked eight folders deep (skipping hidden ones), and every book in KOReader's `history.lua` is looked up directly (`Book.kepub.epub` → `Book.kepub.sdr`).
+- **Vocabulary:** `settings/vocabulary_builder.sqlite3`.
+- Also present, not needed: `history.lua` (recent books), `settings/statistics.sqlite3` (reading time per page; could later feed `last_read_at`), `settings/lookup_history.lua` (every dictionary lookup).
+
+`koreader::lua` reads that subset with a small recursive parser (nesting capped), never `eval`. Unknown keys are ignored, so new KOReader fields cost nothing.
+
+### Books
+Per sidecar: `doc_path` (`/mnt/onboard/...`), `doc_props` (`title`, `authors`, `language`, `identifiers` newline-separated with ISBN/calibre/uuid, `series`), `partial_md5_checksum` (KOReader's own book identity), `percent_finished`, `summary.status` (`reading`, `complete`, `abandoned`). A KOReader book gets the volume ID Nickel uses for a sideloaded book (`file:///mnt/onboard/<path>`), so a book read in both is one book with one `book_source`, and Nickel's details win when both list it. Otherwise the fingerprint (§6.1) matches it as usual. Book details a reader doesn't know (KOReader has no publisher) no longer erase what another recorded (`coalesce` on import). A book without a Nickel cover (one only KOReader opened, say) gets the EPUB's own: the manifest item with the EPUB 3 `cover-image` property, else the one EPUB 2's `<meta name="cover">` names, else an image named "cover", kept only if it's really an image (`epub::cover_image`). KOReader writes settings for every book it opens; only those with an annotation or a word are imported, as with Nickel.
+
+### Highlights and notes (`annotations` in the sidecar)
+Each entry: `text`, `note` (optional, typed), `chapter`, `color`, `drawer`, `pos0`/`pos1` (crengine XPointers, e.g. `/body/DocFragment[9]/body/div/div/p[20]/span[1]/text().78`), `page` (= `pos0` for EPUB), `pageno` (layout-dependent; ignore), `datetime` and `datetime_updated` (device local time, `YYYY-MM-DD HH:MM:SS`, no zone). Bookmarks have no `pos0`/`text`; skip them, as with Nickel's dog-ears.
+- **Identity:** KOReader keys annotations by `datetime`. `bookmark_id = "koreader:" + blake3(partial_md5 + datetime + pos0)`. `datetime_updated` plays the part of Nickel's `DateModified` in the merge rules (§6.2); a missing entry is "removed on device". Annotations from KOReader aren't taken as removed when its files weren't read (`KoboSnapshot::koreader_read`, false for a database-only import or without KOReader) or when any of them couldn't be (`koreader_unread`): an unreadable sidecar can't be tied to its book.
+- **Colours:** KOReader has nine (`red`, `orange`, `yellow`, `green`, `olive`, `cyan`, `blue`, `purple`, `gray`); Kobo has four (§13). **Decided: named colours throughout.** Migration 10 turns `annotation.color` into a name (`TEXT`): Kobo's 0–3 become `yellow`, `pink`, `blue`, `green`, and KOReader's are stored as they are. That touches the card's colour bar (`hl-<name>` classes, one per colour in `style.css`), the quote card's Highlight palette (tinted by name), the Obsidian, CSV and JSON exports, and the CLI. Yellow stays the default that exports leave unsaid.
+- **Drawers:** `lighten` (highlight), `underscore`, `strikeout`, `invert`. All import as highlights; the drawer isn't stored yet.
+- **Positions:** `DocFragment[n]` is the n-th spine item (1-based), stored as `spine_index` n − 1; `start_path` is the rest of the XPointer and `start_offset` its trailing offset. Within a chapter, KOReader highlights sort among themselves by that path; they don't interleave exactly with Nickel's (`position_key` falls back to chapter progress). An XPointer-to-text walk for marks' context words (§8a) comes with phase 2.
+- **Pen marks** (§8c) apply to the typed `note`, as they do to Nickel notes.
+
+### Vocabulary (`vocabulary_builder.sqlite3`)
+`vocabulary(word UNIQUE, title_id, create_time, prev_context, next_context, highlight, ...)` and `title(id, name)`, read from a copy. The sentence is already there: `prev_context + word + next_context`, trimmed to the sentence, and stored as the sighting's context unless one was chosen. The language is the book's (`en` filed under none, as Kobo files English words), so a word looked up in both readers is one word. The book is known only by **title** (`title.name`), matched to a library book by normalized title (unique match only, else the sighting has no book). KOReader's review schedule (`due_time`, `streak_count`) is ignored. `highlight` holds the selection when the word was looked up from a highlight.
+
+### Handwriting (Pencil plugin)
+Per book: `<book>.sdr/pencil_strokes.lua` and `<book>.sdr/pencil_images/<group id>.jpg`.
+- **Strokes** (`strokes[]`): `points[]` of `{x, y}` in **screen pixels of the page as laid out at the time** (1264×1680 portrait on the Libra Colour), pen centre-lines (not Kobo's filled outlines), plus `page` (layout page number), `tool` (`pen` or `highlighter`), `width`, `color_name`, `alpha`, `datetime` (Unix seconds). Erasing removes whole strokes, so nothing erased remains.
+- **Groups** (`annotation_groups[]`): strokes on one page within 10 s and 200 px of each other, like one Nickel markup (one visit's ink): `stroke_indices`, `bbox`, `page`, `tool` (majority), `datetime`/`datetime_last`, and usually `xpointer` (the text at the bbox centre, `xpointer_v2 = true`), `image_path`, `image_rotation`.
+- **Images:** a full-width strip of the rendered page **with the ink drawn on**, from the bbox ± 24 px, at least 350 px tall, centred on the bbox and shifted to stay on screen (`Geometry.captureStripRect`). The strip's top is computable, so strokes line up with it exactly (checked). There's no ink-free page as on Nickel: erasing the strokes (their lines widened to ~9 px) from the strip leaves the print readable enough to find lines, with faint ghosts and some nicked descenders.
+- **Fragile anchoring:** layout page numbers change with font, margins or rotation, so a group is only placeable through its `xpointer`. When a stroke is erased, the plugin regroups everything; groups on other pages then **lose their `xpointer` and image** until that page is shown again in the same rotation (`backfillGroupXPointers`). In the sample 3 of 8 groups were in that state. Group `id`s also change on every regroup (`pencil_<regroup time>_<first stroke>`).
+- **Identity:** not the group id. `bookmark_id = "koreader-ink:" + blake3(partial_md5 + datetime and first point of the group's first stroke)`; a group whose strokes change is "changed on device", and new ink re-reads it (§8a hash).
+
+**The plugin itself** is AGPL-3.0, but its maintainer has been inactive since May 2026, with six pull requests unreviewed. Kollate reads its files as they are, best-effort, and doesn't depend on it changing. The changes that would make its handwriting as dependable as Nickel's: an anchor recorded per stroke when drawn (never dropped on regroup), a strip saved without ink next to the inked one, and group ids derived from the first stroke. Offer them upstream first; the licence allows a fork if they go unreviewed.
+
+**Reading it** reuses §8a/§8c:
+1. Build an ink SVG from the points: one `<path d="M… L…">` per stroke with `stroke-width` = `width`, in strip coordinates. `segment::strokes` and `image::render_note` learn stroked paths (bounds grow by half the width) next to Kobo's filled ones.
+2. Segment as now (underlines, circles, word loops, stars, `?`, notes; sideways notes).
+3. **Marked text:** the "page" is the strip with the strokes erased; lines come from the row profile as on Nickel; crops are read and snapped to the book's words around `xpointer` (the chapter from `DocFragment`, a window of words around the anchor).
+4. **Without an `xpointer`:** read the handwriting and pen marks only; skip marked text; place the note by `page / doc_pages` as an approximate position, flagged "approximate". Re-imports upgrade it when the plugin backfills the anchor.
+5. Highlighter strokes count as marks (like underlines), never as writing.
+6. The card shows the strip image (as Nickel markups show the page band).
+
+### Detection and UI
+- A mounted Kobo with `.adds/koreader/` is read for KOReader data on every import, alongside `KoboReader.sqlite` (`koreader::add_koreader`, in the app and the CLI). The import toast counts both; once the library has any annotation from KOReader, every card names its reader in its details, "Kobo" or "KOReader" (`Annotation::from_koreader`, `Library::has_koreader`); a Kobo-only library shows neither.
+- Other KOReader devices over USB (Kindle `koreader/`, PocketBook `applications/koreader/`) use the same files; detecting them comes later (decided 2026-10-02: Kobo only at first).
+- Untested Pencil versions (`version` other than 3) import highlights and vocabulary as usual and skip handwriting with a one-time notice.
+
+### Plan
+- **Phase 1:** KOReader highlights, notes (with pen marks, §8c) and vocabulary, and named colours.
+- **Phase 2:** Pencil handwriting, best-effort as above, groups without an anchor imported at an approximate position.
+- **Kobo only** at first; Kindle and PocketBook later.
+
 ## 9. UI (libadwaita)
 
 **Main window: `AdwNavigationSplitView`**

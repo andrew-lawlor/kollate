@@ -3,13 +3,19 @@
 use super::*;
 
 impl Window {
+    /// Whether cards say which reader made each annotation: only when the
+    /// library has some from KOReader.
+    fn name_reader(&self) -> bool {
+        self.lib.borrow().has_koreader().unwrap_or(false)
+    }
+
     pub(super) fn annotation_row(
         self: &Rc<Self>,
         a: &Annotation,
         in_book_view: bool,
     ) -> gtk::ListBoxRow {
         let row = gtk::ListBoxRow::builder()
-            .child(&card::build(a, in_book_view))
+            .child(&card::build(a, in_book_view, self.name_reader()))
             .name(format!("a{}", a.id))
             .build();
         let group = gio::SimpleActionGroup::new();
@@ -333,7 +339,11 @@ impl Window {
             .and_then(|v| v.into_iter().next());
         match still_here {
             Some(a) => {
-                row.set_child(Some(&card::build(&a, matches!(view, View::Book(_)))));
+                row.set_child(Some(&card::build(
+                    &a,
+                    matches!(view, View::Book(_)),
+                    self.name_reader(),
+                )));
                 row.grab_focus();
             }
             None => {

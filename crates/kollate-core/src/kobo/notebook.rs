@@ -240,7 +240,7 @@ pub fn add_notebook_pages(mount: &Path, snapshot: &mut super::KoboSnapshot) {
                 kind: AnnotationKind::Page,
                 text: None,
                 note: None,
-                color: 0,
+                color: "yellow".into(),
                 start: position.clone(),
                 end: position,
                 chapter_progress: 0.0,

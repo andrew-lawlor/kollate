@@ -43,6 +43,10 @@ impl Window {
                 let mut snapshot = KoboDb::open_copy(&find_kobo_db(&path)?)?.snapshot()?;
                 if path.is_dir() {
                     kollate_core::kobo::notebook::add_notebook_pages(&path, &mut snapshot);
+                    kollate_core::koreader::add_koreader(&path, &mut snapshot);
+                    for (file, why) in &snapshot.koreader_unread {
+                        eprintln!("kollate: couldn’t read KOReader’s {file}: {why}");
+                    }
                 }
                 // Asset copying is best-effort; a failure never blocks the import.
                 let assets = match (&assets_dir, path.is_dir()) {

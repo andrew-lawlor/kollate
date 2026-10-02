@@ -280,7 +280,7 @@ impl KoboDb {
                 kind: AnnotationKind::from_kobo(text(r, 3)?.as_deref()),
                 text: clean_opt(text(r, 4)?.as_deref()),
                 note: clean_opt(text(r, 5)?.as_deref()),
-                color: int(r, 6)?.unwrap_or(0),
+                color: crate::color::kobo_color(int(r, 6)?.unwrap_or(0)).to_owned(),
                 start: Position {
                     container_path: text(r, 7)?.unwrap_or_default(),
                     child_index: int(r, 8)?.unwrap_or(0),
@@ -338,6 +338,7 @@ impl KoboDb {
                         .map(|s| s.trim_start_matches('-').to_owned())
                         .filter(|s| !s.is_empty()),
                     created: parse_kobo_date(text(r, 3)?.as_deref()),
+                    context: None,
                 })
             })?
             .filter(|w| w.as_ref().map_or(true, |w| !w.word.is_empty()))

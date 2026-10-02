@@ -249,4 +249,54 @@ pub const MIGRATIONS: &[&str] = &[
     CREATE UNIQUE INDEX vocab_sighting_markup ON vocab_sighting(annotation_id, vocab_id)
         WHERE annotation_id IS NOT NULL;
     "#,
+    // 10: highlight colours by name (SPEC §8e): Kobo's four (0-3 become
+    // yellow, pink, blue, green) and KOReader's nine. Rebuilt, as in 8.
+    r#"
+    CREATE TABLE annotation_new (
+        id                   INTEGER PRIMARY KEY,
+        book_id              INTEGER NOT NULL REFERENCES book(id),
+        fingerprint          TEXT,
+        kind                 TEXT NOT NULL CHECK (kind IN ('highlight', 'note', 'markup', 'page')),
+        device_text          TEXT,
+        device_note          TEXT,
+        color                TEXT NOT NULL DEFAULT 'yellow',
+        chapter_title        TEXT,
+        content_id           TEXT NOT NULL,
+        spine_index          INTEGER,
+        start_path           TEXT NOT NULL,
+        start_offset         INTEGER NOT NULL,
+        end_path             TEXT NOT NULL,
+        end_offset           INTEGER NOT NULL,
+        chapter_progress     REAL NOT NULL DEFAULT 0,
+        created_at           TEXT,
+        device_modified_at   TEXT,
+        user_text            TEXT,
+        user_note            TEXT,
+        starred              INTEGER NOT NULL DEFAULT 0,
+        status               TEXT NOT NULL DEFAULT 'inbox'
+                             CHECK (status IN ('inbox', 'kept', 'archived', 'trashed')),
+        device_changed_at    TEXT,
+        removed_on_device_at TEXT,
+        markup_svg_path      TEXT,
+        markup_jpg_path      TEXT,
+        imported_at          TEXT NOT NULL,
+        updated_at           TEXT NOT NULL,
+        position_key         TEXT,
+        status_before_removal TEXT,
+        markup_crop          TEXT,
+        ink_text             TEXT,
+        ink_note             TEXT,
+        ink_source           TEXT,
+        ink_hash             TEXT,
+        markup_context       TEXT,
+        pen_marks            TEXT
+    );
+    INSERT INTO annotation_new (id, book_id, fingerprint, kind, device_text, device_note, color, chapter_title, content_id, spine_index, start_path, start_offset, end_path, end_offset, chapter_progress, created_at, device_modified_at, user_text, user_note, starred, status, device_changed_at, removed_on_device_at, markup_svg_path, markup_jpg_path, imported_at, updated_at, position_key, status_before_removal, markup_crop, ink_text, ink_note, ink_source, ink_hash, markup_context, pen_marks)
+        SELECT id, book_id, fingerprint, kind, device_text, device_note, CASE color WHEN 0 THEN 'yellow' WHEN 1 THEN 'pink' WHEN 2 THEN 'blue' WHEN 3 THEN 'green' ELSE 'yellow' END, chapter_title, content_id, spine_index, start_path, start_offset, end_path, end_offset, chapter_progress, created_at, device_modified_at, user_text, user_note, starred, status, device_changed_at, removed_on_device_at, markup_svg_path, markup_jpg_path, imported_at, updated_at, position_key, status_before_removal, markup_crop, ink_text, ink_note, ink_source, ink_hash, markup_context, pen_marks FROM annotation;
+    DROP TABLE annotation;
+    ALTER TABLE annotation_new RENAME TO annotation;
+    CREATE INDEX annotation_fingerprint ON annotation(fingerprint);
+    CREATE INDEX annotation_book ON annotation(book_id);
+    CREATE INDEX annotation_reading_order ON annotation(book_id, spine_index, position_key);
+    "#,
 ];

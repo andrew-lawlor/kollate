@@ -160,6 +160,6 @@ fn reads_kobos_without_colour() {
     assert_eq!(s.db_version, 174);
     assert!(kollate_core::kobo::is_tested_db_version(174));
     assert_eq!(s.bookmarks.len(), 52);
-    assert!(s.bookmarks.iter().all(|b| b.color == 0));
+    assert!(s.bookmarks.iter().all(|b| b.color == "yellow"));
     assert_eq!(s.words.len(), 12);
 }

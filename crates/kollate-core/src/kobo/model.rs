@@ -28,17 +28,6 @@ impl AnnotationKind {
     }
 }
 
-/// Kobo highlight colour index (verified on a Libra Colour).
-pub fn color_name(color: i64) -> &'static str {
-    match color {
-        0 => "yellow",
-        1 => "pink",
-        2 => "blue",
-        3 => "green",
-        _ => "unknown",
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Position {
     pub container_path: String,
@@ -80,7 +69,8 @@ pub struct KoboBookmark {
     pub text: Option<String>,
     /// Cleaned user note; `None` when empty.
     pub note: Option<String>,
-    pub color: i64,
+    /// Highlight colour by name (see [`crate::color`]).
+    pub color: String,
     pub start: Position,
     pub end: Position,
     pub chapter_progress: f64,
@@ -144,6 +134,9 @@ pub struct KoboWord {
     /// Dictionary language, from `DictSuffix` (`-en` becomes `en`).
     pub language: Option<String>,
     pub created: Option<DateTime<Utc>>,
+    /// The sentence it was looked up in, when the reader kept it
+    /// (KOReader does; Kobo's is found in the book later).
+    pub context: Option<String>,
 }
 
 /// `DbVersion`s Kollate has been verified against on a real device. Others
@@ -174,6 +167,13 @@ pub struct KoboSnapshot {
     /// Notebooks whose file couldn't be read: (volume ID, why). Their pages
     /// are left as they are, too.
     pub unread_notebooks: Vec<(String, String)>,
+    /// Whether KOReader's files were read (see [`add_koreader`](crate::koreader::add_koreader)).
+    /// When they weren't, annotations from KOReader already in the library
+    /// are left as they are.
+    pub koreader_read: bool,
+    /// KOReader files that couldn't be read: (path, why). The annotations of
+    /// their books are left as they are, too.
+    pub koreader_unread: Vec<(String, String)>,
     /// Each notebook page's ink, keyed by its bookmark ID.
     #[serde(skip)]
     pub notebook_ink: std::collections::HashMap<String, super::notebook::NotebookPage>,

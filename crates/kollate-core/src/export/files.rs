@@ -7,7 +7,6 @@ use serde::Serialize;
 
 use super::{ExportBook, ExportOptions};
 use crate::Result;
-use crate::kobo::color_name;
 use crate::store::Library;
 
 fn csv_err(e: csv::Error) -> crate::Error {
@@ -69,7 +68,7 @@ pub fn export_highlights_csv(lib: &Library, out: &Path, options: ExportOptions) 
                 a.chapter_title.as_deref().unwrap_or(""),
                 a.text().unwrap_or(""),
                 a.note().unwrap_or(""),
-                color_name(a.color),
+                a.color.as_str(),
                 &a.tags.join(", "),
                 &a.created_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
                 a.status.as_str(),

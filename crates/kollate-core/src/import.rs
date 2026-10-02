@@ -90,6 +90,25 @@ impl Library {
     }
 }
 
+/// What wasn't read in this import, so isn't taken as deleted.
+struct Skip<'a> {
+    /// Notebook pages, when notebooks weren't read at all.
+    pages: bool,
+    /// Notebooks (by volume ID) whose file couldn't be read.
+    notebooks: &'a [&'a str],
+    /// Everything from KOReader, when its files weren't all read.
+    koreader: bool,
+}
+
+impl Skip<'_> {
+    fn skips(&self, kind: &str, content_id: &str, source: &str) -> bool {
+        if kind == "page" && (self.pages || self.notebooks.contains(&content_id)) {
+            return true;
+        }
+        self.koreader && source.starts_with(crate::koreader::ID_PREFIX)
+    }
+}
+
 struct Importer<'a> {
     tx: &'a Transaction<'a>,
     now: DateTime<Utc>,
@@ -110,7 +129,7 @@ struct DeviceFields {
     kind: String,
     text: Option<String>,
     note: Option<String>,
-    color: i64,
+    color: String,
 }
 
 fn kind_str(kind: &AnnotationKind) -> Option<&'static str> {
@@ -167,7 +186,15 @@ impl Importer<'_> {
         if !s.notebooks_read {
             unread.extend(s.notebooks.iter().map(|b| b.volume_id.as_str()));
         }
-        self.flag_removed(&seen, !s.notebooks_read, &unread)?;
+        // KOReader's annotations, when its files weren't read, or any of
+        // them couldn't be (a sidecar can't be tied to its book without
+        // being read).
+        let skip = Skip {
+            pages: !s.notebooks_read,
+            notebooks: &unread,
+            koreader: !s.koreader_read || !s.koreader_unread.is_empty(),
+        };
+        self.flag_removed(&seen, &skip)?;
 
         for w in &s.words {
             let book = w.volume_id.as_deref().and_then(|v| books.get(v));
@@ -219,8 +246,13 @@ impl Importer<'_> {
         };
         // Refresh device-owned metadata; user overrides live in user_* columns.
         self.tx.execute(
-            "UPDATE book SET title = ?2, author = ?3, publisher = ?4, isbn = ?5, language = ?6,
-                    series = ?7, series_number = ?8, percent_read = ?9, last_read_at = ?10
+            // A reader that doesn't know a detail (KOReader has no
+            // publisher, Nickel no reading time for a KOReader book) leaves
+            // what the other one recorded.
+            "UPDATE book SET title = ?2, author = ?3, publisher = coalesce(?4, publisher),
+                    isbn = coalesce(?5, isbn), language = coalesce(?6, language),
+                    series = coalesce(?7, series), series_number = coalesce(?8, series_number),
+                    percent_read = coalesce(?9, percent_read), last_read_at = coalesce(?10, last_read_at)
              WHERE id = ?1",
             params![
                 id,
@@ -384,7 +416,7 @@ impl Importer<'_> {
             kind: kind.to_owned(),
             text: bm.text.clone(),
             note: bm.note.clone(),
-            color: bm.color,
+            color: bm.color.clone(),
         };
 
         if removed.is_some() {
@@ -400,11 +432,7 @@ impl Importer<'_> {
             let revisions = [
                 ("device_text", old.text.clone(), new.text.clone()),
                 ("device_note", old.note.clone(), new.note.clone()),
-                (
-                    "color",
-                    Some(old.color.to_string()),
-                    Some(new.color.to_string()),
-                ),
+                ("color", Some(old.color.clone()), Some(new.color.clone())),
             ];
             for (field, before, after) in revisions.into_iter().filter(|(_, a, b)| a != b) {
                 self.tx.execute(
@@ -456,16 +484,9 @@ impl Importer<'_> {
     }
 
     /// Flags annotations previously seen on this device that are gone now,
-    /// and moves them to Trash if the user chose that.
-    ///
-    /// Notebook pages aren't flagged when notebooks weren't read at all
-    /// (`skip_pages`), nor those of the `unread` notebooks (by volume ID).
-    fn flag_removed(
-        &mut self,
-        seen: &HashSet<i64>,
-        skip_pages: bool,
-        unread: &[&str],
-    ) -> Result<()> {
+    /// and moves them to Trash if the user chose that, except what `skip`
+    /// says wasn't read this time.
+    fn flag_removed(&mut self, seen: &HashSet<i64>, skip: &Skip) -> Result<()> {
         let policy: Option<String> = self
             .tx
             .query_row(
@@ -476,25 +497,27 @@ impl Importer<'_> {
             .optional()?;
         let trash = DeviceDeletePolicy::parse(policy.as_deref()) == DeviceDeletePolicy::Trash;
         let mut stmt = self.tx.prepare(
-            "SELECT DISTINCT a.id, a.kind, a.content_id FROM annotation_source s JOIN annotation a ON a.id = s.annotation_id
+            "SELECT a.id, a.kind, a.content_id, s.bookmark_id FROM annotation_source s
+             JOIN annotation a ON a.id = s.annotation_id
              WHERE s.device_id = ?1 AND a.removed_on_device_at IS NULL",
         )?;
-        let gone: Vec<i64> = stmt
+        let mut gone: Vec<i64> = stmt
             .query_map([self.device_id], |r| {
                 Ok((
                     r.get::<_, i64>(0)?,
                     r.get::<_, String>(1)?,
                     r.get::<_, String>(2)?,
+                    r.get::<_, String>(3)?,
                 ))
             })?
             .collect::<rusqlite::Result<Vec<_>>>()?
             .into_iter()
-            .filter(|(id, kind, content)| {
-                !seen.contains(id)
-                    && !(kind == "page" && (skip_pages || unread.contains(&content.as_str())))
+            .filter(|(id, kind, content, source)| {
+                !seen.contains(id) && !skip.skips(kind, content, source)
             })
-            .map(|(id, _, _)| id)
+            .map(|(id, _, _, _)| id)
             .collect();
+        gone.dedup();
         for id in &gone {
             self.tx.execute(
                 "UPDATE annotation SET removed_on_device_at = ?2, updated_at = ?2 WHERE id = ?1",
@@ -553,6 +576,14 @@ impl Importer<'_> {
             params![vocab_id, book_id, self.device_id, w.word, w.created],
         )?;
         self.stats.word_sightings_new += inserted;
+        // A sentence the reader kept (KOReader), unless one was chosen.
+        if let Some(context) = &w.context {
+            self.tx.execute(
+                "UPDATE vocab_sighting SET context_sentence = coalesce(context_sentence, ?4)
+                 WHERE vocab_id = ?1 AND IFNULL(book_id, 0) = IFNULL(?2, 0) AND surface_form = ?3",
+                params![vocab_id, book_id, w.word, context],
+            )?;
+        }
         Ok(())
     }
 }
