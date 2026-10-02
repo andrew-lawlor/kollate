@@ -429,10 +429,11 @@ In KOReader 2026.07.1's Linux build, at 1053×1400 and 300 dpi, on *The Odyssey*
 - **Word layer:** 181–196 words a page in 5–10 ms on a desktop CPU. Every box sat on its word, drawn over the page image to check; hyphenated words came back with a box per line.
 - **Page image:** painting 4 ms; PNG encoding 51 ms, JPEG 4 ms (sizes above).
 - **Anchors survive a font change:** a word's XPointer, taken at size 22, resolved after a re-layout at size 30 (page 40 became page 47) to the word's new box. The re-layout happens on the next screen refresh, and may be partial at first (above), so code that changes the layout must wait for it before measuring. The first capture in the spike, taken just after opening the book, has the partial-rendering icon in its corner.
-- **Still to measure on the device:** the same timings on the Libra Colour (expect several times slower; capture is deferred, so it only needs to stay well under a second), which means installing the spike plugin on the Kobo.
+- **On the Libra Colour** (1264×1680, 300 dpi, `Kobo_monza`, *The Broken Sword*, six pages; results in `~/.cache/kollate-eval/pencil-spike-device/results/`): 117–179 words a page in 39–68 ms, every box on its word; painting 35–63 ms; JPEG 41–54 ms (206–348 KB); **PNG 458–552 ms** (84–118 KB), of a colour (RGB32) buffer. KOReader is single-threaded, so half a second of PNG encoding would freeze the screen. The fork converts the page to 8-bit grey before encoding (a quarter of the data; colour adds nothing to finding lines or reading ink) and encodes when the page is left or the reader is idle, never right after a stroke; if grey PNG is still slow on the device, JPEG at quality 85 is the fallback (Kollate reads both). The fork's first build measures this.
+- **The page image must leave out the plugin's ink:** the spike's capture on the device includes the installed Pencil plugin's strokes, since `paintTo` paints every view module. The fork skips its own drawing while capturing (the plugin already sets `_capturing` for its strips).
 
 ### Plan
-1. ~~Spike~~ (above); the device timings remain.
+1. ~~Spike~~ (above), on the desktop and the Libra Colour.
 2. **Fork, first release:** version 4 store (stable ids, anchors per stroke), the markup export, the carried-over fixes, tests (the repo's `busted` specs, plus new ones for the store and export).
 3. **Kollate phase 2,** with fixture markups from the fork in `tests/fixtures/`.
 4. **Fork, later:** ink after a font change.
