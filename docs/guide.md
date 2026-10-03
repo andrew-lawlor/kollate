@@ -1,6 +1,6 @@
 # Kollate user guide
 
-For Kollate 0.6.1. Kollate brings everything you mark on a Kobo e-reader, in its own reader or in KOReader — highlights, notes, stylus markups, notebooks and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
+For Kollate 0.6.2. Kollate brings everything you mark on a Kobo e-reader, in its own reader or in KOReader — highlights, notes, stylus markups, notebooks and Vocabulary Builder words — into a library on your computer, where you can triage it, correct it, read your handwriting as text, and export it to Obsidian, Anki and more. It never writes to your Kobo and never goes online.
 
 **Contents**
 
@@ -35,7 +35,7 @@ Flatpak installs the GNOME runtime from Flathub if you don't have it. The Flatpa
 **Debian 13 or Ubuntu 24.04 and newer** (`.deb`):
 
 ```sh
-sudo apt install ./kollate_0.6.1-1_amd64.deb
+sudo apt install ./kollate_0.6.2-1_amd64.deb
 ```
 
 This also installs `kollate-cli`, the [command-line tool](#11-the-command-line).
@@ -64,7 +64,7 @@ When you're done, press **Eject** in the banner, then unplug. You can also eject
 |---|---|
 | Highlights, in all four colours | Highlights, sorted into chapters in reading order |
 | Notes you typed on a highlight | The highlight's note |
-| Stylus markups (stylus models; tested on the Libra Colour) | The page with your ink on it, and optionally [your handwriting as text](#6-read-your-handwriting) |
+| Stylus markups (stylus models; tested on the Libra Colour and Elipsa 2E) | The page with your ink on it, and optionally [your handwriting as text](#6-read-your-handwriting) |
 | Notebooks, Basic and Advanced (stylus models) | A book per notebook, each page redrawn from your ink, and optionally [its writing as text](#notebooks) |
 | Vocabulary Builder words | [Vocabulary](#7-vocabulary), with the sentence you looked each word up in and a definition |
 | Book covers, titles, authors, progress | The [Books](#books) page |
@@ -92,7 +92,7 @@ Import as often as you like. Kollate recognises everything it has seen before, e
 
 - **Edited on the Kobo:** if you change a highlight's note on the Kobo, Kollate updates it — unless you've edited it in Kollate too. Then your version stays and the card shows **changed on Kobo**; the card's menu has **Use Kobo's Version**.
 - **Deleted on the Kobo:** Kollate keeps it. The card shows **deleted on Kobo**, and a **Deleted on Kobo** view appears in the sidebar. If you'd rather they go to Kollate's Trash, change **Preferences → When a Highlight Is Deleted on the Kobo**; they come back out of Trash if they reappear on the Kobo.
-- **A new kind of Kobo:** Kollate is tested on a Kobo Libra Colour and a Kobo Clara 2E. If your Kobo's database is a version Kollate hasn't been tested with, it imports anyway and shows a notice once, with a **Report** button that opens a pre-filled compatibility report. Reports, even "it all worked", are very welcome.
+- **A new kind of Kobo:** Kollate is tested on a Kobo Libra Colour, Clara Colour, Clara 2E and Elipsa 2E. If your Kobo's database is a version Kollate hasn't been tested with, it imports anyway and shows a notice once, with a **Report** button that opens a pre-filled compatibility report. Reports, even "it all worked", are very welcome.
 
 ## 3. Triage the Inbox
 

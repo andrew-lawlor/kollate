@@ -70,6 +70,16 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.6.2" date="2026-10-03">
+      <description>
+        <p>The Kobo Elipsa 2E is supported, stylus and notebooks included.</p>
+        <ul>
+          <li>Notebook pages from the Elipsa 2E are drawn at the right size: its ink no longer runs off the edge of the page</li>
+          <li>A line of handwriting with wide gaps between words is read as one line, so a short word in it isn't misread on its own</li>
+          <li>The Elipsa 2E is named when it's connected</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.6.1" date="2026-10-02">
       <description>
         <p>Handwriting that arrives during a long reading is no longer left for later.</p>

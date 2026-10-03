@@ -131,7 +131,7 @@ The bundle uses the GNOME 51 runtime from Flathub, and Flatpak installs it autom
 ### Debian / Ubuntu (.deb)
 
 ```sh
-sudo apt install ./kollate_0.6.1-1_amd64.deb
+sudo apt install ./kollate_0.6.2-1_amd64.deb
 ```
 
 The package includes the app, the `kollate-cli` tool and the English Wiktionary dictionary. It needs GTK ≥ 4.12 and libadwaita ≥ 1.5, which Debian 13 and Ubuntu 24.04 or newer provide.
@@ -199,7 +199,7 @@ kollate-cli dict build-stardict ~/dicts/foo.ifo foo.db # convert a dictionary
 
 ## Compatibility
 
-Tested on a **Kobo Libra Colour** (firmware 4.45, database version 176), a **Kobo Clara Colour** (firmware 4.42, database version 176) and a **Kobo Clara 2E** (firmware 4.38, database version 174), so on colour and black-and-white Kobos alike, with sideloaded and Kobo Store books. Other models use the same database layout and should work. If your Kobo's database version is new to Kollate, it still imports and shows a one-time notice with a **Report** button. Please [send a compatibility report](https://github.com/andrew-lawlor/kollate/issues/new?template=compatibility.yml), even if everything works. Context sentences need sideloaded, DRM-free books. Kobo Store books with DRM still import, just without context sentences.
+Tested on a **Kobo Libra Colour** (firmware 4.45, database version 176), a **Kobo Clara Colour** (firmware 4.42, database version 176), a **Kobo Clara 2E** (firmware 4.38, database version 174) and a **Kobo Elipsa 2E** (firmware 4.38, database version 174), so on colour and black-and-white Kobos alike, with sideloaded and Kobo Store books. Stylus markups and notebooks are tested on the Libra Colour and the Elipsa 2E. Other models use the same database layout and should work. If your Kobo's database version is new to Kollate, it still imports and shows a one-time notice with a **Report** button. Please [send a compatibility report](https://github.com/andrew-lawlor/kollate/issues/new?template=compatibility.yml), even if everything works. Context sentences need sideloaded, DRM-free books. Kobo Store books with DRM still import, just without context sentences.
 
 **KOReader** is read from its folder on the Kobo (`.adds/koreader`), tested with KOReader 2026.07 on the Libra Colour. Book settings are found wherever KOReader keeps them: next to the books (in any folder), in `docsettings` or in `hashdocsettings`. Handwriting from KOReader's third-party Pencil plugin isn't read yet. KOReader on other devices (Kindle, PocketBook) isn't detected yet.
 
