@@ -961,7 +961,7 @@ dependencies = [
 
 [[package]]
 name = "kollate"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "cairo-rs",
  "chrono",
@@ -975,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "kollate-cli"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "kollate-core"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "blake3",
  "bzip2-rs",
@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "kollate-transcribe"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "blake3",
  "image",

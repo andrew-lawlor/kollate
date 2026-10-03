@@ -75,6 +75,21 @@ The Kobo's Vocabulary Builder keeps the words you look up, but not where you met
 
 Read in [KOReader](https://koreader.rocks/)? Kollate brings in its highlights, notes and vocabulary too, over the same USB cable, alongside the Kobo's own. Every one of KOReader's highlight colours comes through, the marks you type in a note (`*`, `?`, `#tag`) file it just the same, words keep the sentence you looked them up in, and a book you read in both is one book in your library. If you only ever use KOReader, that's fine: books get their covers from the books themselves.
 
+## Handwriting in KOReader, too
+
+Write in KOReader with [our fork of the Pencil plugin](https://github.com/andrew-lawlor/pencil.koplugin), and Kollate reads that handwriting as it reads the Kobo's. The fork saves each page you write on with the position of every word, so what you underline or circle comes in as the book's exact words, found from where the words are: nothing reads the print, and nothing has to be matched up. A single page with separate underlines gives separate passages.
+
+How the two compare so far, with the recommended 2B model:
+
+| | Kobo's reader | KOReader, with the Pencil fork |
+|---|---|---|
+| Handwritten notes, characters read right | 93% | 98.6% |
+| Underlined and circled passages found | 38 of 39 | 13 of 13 |
+| Marked text | read from the page picture, then matched to the book | the words on the page, exactly |
+| Measured on | 57 pages, two writers, Libra Colour | 26 markups, one writer, Elipsa 2E |
+
+The two sets are small and not alike: different pages, devices and writing, and the KOReader notes were written to try it out. Take the first row as a sign rather than a result. The third row holds by design.
+
 ## Triage like an inbox
 
 New highlights land in an **Inbox**. Keep, archive, star or edit each with a key (`K`, `A`, `S`, `E`), trash it with `Delete`, or select several and act on them all. Every action can be undone, and your edits survive every re-import.
@@ -131,7 +146,7 @@ The bundle uses the GNOME 51 runtime from Flathub, and Flatpak installs it autom
 ### Debian / Ubuntu (.deb)
 
 ```sh
-sudo apt install ./kollate_0.6.2-1_amd64.deb
+sudo apt install ./kollate_0.7.0-1_amd64.deb
 ```
 
 The package includes the app, the `kollate-cli` tool and the English Wiktionary dictionary. It needs GTK ≥ 4.12 and libadwaita ≥ 1.5, which Debian 13 and Ubuntu 24.04 or newer provide.

@@ -70,6 +70,16 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.7.0" date="2026-10-03">
+      <description>
+        <p>Handwriting written in KOReader is read too, with the Pencil plugin's maintained fork.</p>
+        <ul>
+          <li>Each page you write on in KOReader comes in as a markup, with the page as it looked, and your notes are read as on the Kobo</li>
+          <li>What you underline or circle in KOReader is taken from the positions of the words on the page, so it's always the book's exact text, and separate underlines on one page come in as separate passages</li>
+          <li>Circled words go to Vocabulary, and pen marks file passages, as they do from the Kobo</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.6.2" date="2026-10-03">
       <description>
         <p>The Kobo Elipsa 2E is supported, stylus and notebooks included.</p>
