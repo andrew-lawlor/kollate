@@ -116,6 +116,18 @@ fn write_if_changed(dest: &Path, data: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// A page picture from KOReader's Pencil plugin (PNG), as a JPEG.
+fn png_to_jpeg(png: &Path) -> Result<Vec<u8>> {
+    let image = image::load_from_memory_with_format(&std::fs::read(png)?, image::ImageFormat::Png)
+        .map_err(|e| std::io::Error::other(e.to_string()))?
+        .to_rgb8();
+    let mut out = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 90)
+        .encode_image(&image)
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    Ok(out)
+}
+
 /// A blank page, for notebook ink to be drawn on like a markup's.
 fn blank_page(width: u32, height: u32) -> Result<Vec<u8>> {
     let mut out = Vec::new();
@@ -220,7 +232,45 @@ pub fn copy_assets(
                 }),
         });
     }
+    for (bookmark_id, ink) in &snapshot.koreader_ink {
+        let name = blake3::hash(bookmark_id.as_bytes()).to_hex()[..24].to_owned();
+        let base = assets_dir.join("koreader").join(name);
+        let svg = base.with_extension("svg");
+        let jpg = base.with_extension("jpg");
+        write_if_changed(&svg, ink.svg.as_bytes())?;
+        // The page as a JPEG, like the Kobo's, so it's drawn and read the
+        // same way; a blank one when the plugin had no picture of it.
+        let older = |a: &Path, b: &Path| {
+            let modified = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+            modified(a) < modified(b)
+        };
+        match &ink.page_png {
+            Some(png) if !jpg.is_file() || older(&jpg, png) => {
+                write_if_changed(&jpg, &png_to_jpeg(png)?)?;
+            }
+            None if !jpg.is_file() => write_if_changed(&jpg, &blank_page(ink.width, ink.height)?)?,
+            _ => {}
+        }
+        if !ink.words.is_empty() {
+            let words = serde_json::to_vec(&ink.words).map_err(std::io::Error::other)?;
+            write_if_changed(&crate::store::page_words_path(&svg), &words)?;
+        }
+        out.markups.push(CopiedMarkup {
+            bookmark_id: bookmark_id.clone(),
+            svg: Some(svg),
+            jpg: Some(jpg),
+            crop: ink.crop.map(|[left, top, right, bottom]| Rect {
+                left,
+                top,
+                right,
+                bottom,
+            }),
+        });
+    }
     for bm in &snapshot.bookmarks {
+        if snapshot.koreader_ink.contains_key(&bm.bookmark_id) {
+            continue;
+        }
         let (svg, jpg) = markup_paths(mount, &bm.bookmark_id);
         if svg.is_none() && jpg.is_none() {
             continue;

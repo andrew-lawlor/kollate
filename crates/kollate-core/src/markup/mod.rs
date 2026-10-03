@@ -9,10 +9,12 @@ pub mod marks;
 pub mod segment;
 pub mod shape;
 mod snap;
+pub mod words;
 
 pub use image::{Page, RgbImage};
 pub(crate) use snap::similarity as snap_similarity;
 pub use snap::snap;
+pub use words::PageWord;
 
 use crate::Result;
 
@@ -40,6 +42,9 @@ pub struct Transcription {
 pub struct Context<'a> {
     /// The Kobo's page image, needed to find what marks cover.
     pub page_jpeg: Option<&'a [u8]>,
+    /// Every word on the page with its box (KOReader's Pencil export): what
+    /// marks cover is then taken from the boxes, not read from the image.
+    pub page_words: Option<&'a [PageWord]>,
     /// The book's words around the markup: marked text is snapped to them,
     /// and misread names in notes corrected against them.
     pub book_words: Option<&'a [String]>,
@@ -48,12 +53,41 @@ pub struct Context<'a> {
     pub known_word: Option<&'a dyn Fn(&str) -> bool>,
 }
 
+/// How wide pen centre lines (KOReader's ink) are drawn for the model, at
+/// least. The plugin's 3 px line reads worse than Nickel's outlines: on 18
+/// notes from an Elipsa 2E, 97.4% of characters right at 3 px, 98.6% at 6.
+const READING_WIDTH: f32 = 6.0;
+
+/// The ink as the model should see it: stroked paths drawn at least
+/// [`READING_WIDTH`] wide. Filled outlines (Nickel's) are left as they are.
+fn for_reading(svg: &str) -> std::borrow::Cow<'_, str> {
+    const ATTR: &str = " stroke-width=\"";
+    if !svg.contains(ATTR) {
+        return svg.into();
+    }
+    let mut out = String::with_capacity(svg.len());
+    let mut rest = svg;
+    while let Some(i) = rest.find(ATTR) {
+        let (head, tail) = rest.split_at(i + ATTR.len());
+        out.push_str(head);
+        let end = tail.find('"').unwrap_or(tail.len());
+        let width = tail[..end]
+            .parse::<f32>()
+            .map_or(READING_WIDTH, |w| w.max(READING_WIDTH));
+        out.push_str(&width.to_string());
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out.into()
+}
+
 /// Transcribes one markup.
 pub fn transcribe(
     svg: &str,
     context: Context<'_>,
     reader: &mut dyn Reader,
 ) -> Result<Transcription> {
+    let svg = &*for_reading(svg);
     let strokes = segment::strokes(svg);
     let mut segments = segment::segment(&strokes);
     // A loop around a word or two is too small to be a circle by size alone,
@@ -106,7 +140,23 @@ pub fn transcribe(
 
     let mut marked = Vec::new();
     let mut circled = Vec::new();
-    if let (Some(jpeg), false) = (context.page_jpeg, segments.marks.is_empty()) {
+    if let Some(page_words) = context.page_words {
+        // The book's own words, found by where they are: nothing to read.
+        for mark in &segments.marks {
+            let passages = words::marked(mark, &strokes, page_words);
+            for text in passages.iter().map(|p| trim_overshoot(p)) {
+                if mark.kind == segment::MarkKind::Circle
+                    && passages.len() == 1
+                    && let Some(word) = single_word(&text)
+                {
+                    circled.push(word.to_owned());
+                }
+                if !text.is_empty() {
+                    marked.push(text);
+                }
+            }
+        }
+    } else if let (Some(jpeg), false) = (context.page_jpeg, segments.marks.is_empty()) {
         let page = Page::from_jpeg(jpeg)?;
         for mark in &segments.marks {
             let mut reading = Vec::new();
@@ -292,6 +342,17 @@ pub fn read_page(svg: &str, reader: &mut dyn Reader) -> Result<Option<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draws_pen_lines_wide_enough_to_read() {
+        let svg = r#"<path stroke-width="3" d="M0,0 L9,9"/><path stroke-width="8" d="M1,1"/>"#;
+        assert_eq!(
+            for_reading(svg),
+            r#"<path stroke-width="6" d="M0,0 L9,9"/><path stroke-width="8" d="M1,1"/>"#
+        );
+        let nickel = r#"<path d="M0,0 L9,9"/>"#;
+        assert!(matches!(for_reading(nickel), std::borrow::Cow::Borrowed(_)));
+    }
 
     /// Answers from a script, and records what it was shown.
     struct Scripted {

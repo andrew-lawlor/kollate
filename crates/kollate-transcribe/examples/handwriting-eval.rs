@@ -140,6 +140,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     &svg,
                     Context {
                         page_jpeg: page.as_deref(),
+                        page_words: None,
                         book_words: words.as_deref(),
                         known_word: names,
                     },

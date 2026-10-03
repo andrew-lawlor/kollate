@@ -177,6 +177,10 @@ pub struct KoboSnapshot {
     /// Each notebook page's ink, keyed by its bookmark ID.
     #[serde(skip)]
     pub notebook_ink: std::collections::HashMap<String, super::notebook::NotebookPage>,
+    /// Each KOReader Pencil markup's ink, page and words, keyed by its
+    /// bookmark ID.
+    #[serde(skip)]
+    pub koreader_ink: std::collections::HashMap<String, crate::koreader::pencil::PencilMarkup>,
 }
 
 #[cfg(test)]

@@ -663,14 +663,24 @@ pub fn find_word_contexts(
     out
 }
 
-/// The book's words near every stylus markup in sideloaded books, keyed by
-/// bookmark ID, for [`Library::set_markup_contexts`](crate::Library::set_markup_contexts).
+/// The book's words near every stylus markup in sideloaded books (for a
+/// KOReader markup, the words on its page), keyed by bookmark ID, for
+/// [`Library::set_markup_contexts`](crate::Library::set_markup_contexts).
 pub fn markup_contexts(mount: &Path, snapshot: &KoboSnapshot) -> Vec<(String, Vec<String>)> {
-    snapshot
+    let mut found: Vec<(String, Vec<String>)> = snapshot
         .bookmarks
         .iter()
+        .filter(|bm| !snapshot.koreader_ink.contains_key(&bm.bookmark_id))
         .filter_map(|bm| Some((bm.bookmark_id.clone(), markup_words(mount, bm)?)))
-        .collect()
+        .collect();
+    // A KOReader markup has the words of its own page.
+    for (id, ink) in &snapshot.koreader_ink {
+        found.push((
+            id.clone(),
+            ink.words.iter().map(|w| w.text.clone()).collect(),
+        ));
+    }
+    found
 }
 
 /// Words of the book around a stylus markup's anchor, for resolving what it

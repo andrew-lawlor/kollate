@@ -4,6 +4,7 @@
 //! rest of Kollate.
 
 pub mod lua;
+pub mod pencil;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -25,7 +26,8 @@ pub fn koreader_dir(mount: &Path) -> Option<PathBuf> {
     dir.is_dir().then_some(dir)
 }
 
-/// Adds KOReader's books, annotations and words on `mount` to `snapshot`.
+/// Adds KOReader's books, annotations, Pencil markups and words on `mount`
+/// to `snapshot`.
 /// Only books with an annotation or a word are added, as with Nickel; one
 /// already in the snapshot (from Nickel) keeps Nickel's details. A sidecar that can't be read is
 /// noted in `koreader_unread`, so its annotations aren't taken as deleted.
@@ -46,6 +48,19 @@ pub fn add_koreader(mount: &Path, snapshot: &mut KoboSnapshot) {
                     (book.book.volume_id.clone(), book.book.language.clone()),
                 );
                 snapshot.bookmarks.extend(book.annotations);
+                match pencil::read_markups(&sdr, &book.book.volume_id) {
+                    Ok(markups) => {
+                        for (bookmark, ink) in markups {
+                            snapshot
+                                .koreader_ink
+                                .insert(bookmark.bookmark_id.clone(), ink);
+                            snapshot.bookmarks.push(bookmark);
+                        }
+                    }
+                    Err(why) => snapshot
+                        .koreader_unread
+                        .push((sdr.join("pencil").display().to_string(), why.to_string())),
+                }
                 opened.push(book.book);
             }
             Ok(None) => {}

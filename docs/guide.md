@@ -84,7 +84,7 @@ If KOReader is installed on your Kobo, Kollate imports from it in the same go, w
 | Vocabulary builder words | [Vocabulary](#7-vocabulary), with the sentence KOReader kept |
 | Books | The same book as in the Kobo's reader, if you read it in both; a book only KOReader has seen gets its cover from the book file |
 
-Once your library has anything from KOReader, every card says which reader it came from, **Kobo** or **KOReader**. Bookmarks aren't imported, and neither is handwriting from KOReader's third-party Pencil plugin, yet. A highlight deleted in KOReader is treated like one deleted on the Kobo (below).
+Once your library has anything from KOReader, every card says which reader it came from, **Kobo** or **KOReader**. Bookmarks aren't imported. Handwriting is, from [our fork of the Pencil plugin](https://github.com/andrew-lawlor/pencil.koplugin): each page you write on comes in as a markup, read like the Kobo's, except that what you underline or circle is taken from the words on the page, so it's always the book's exact text. Handwriting from the original Pencil plugin isn't read. A highlight deleted in KOReader is treated like one deleted on the Kobo (below).
 
 ### Importing again
 

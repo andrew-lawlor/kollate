@@ -7,7 +7,7 @@ mod query;
 mod schema;
 mod vocab;
 
-pub use markup::MarkupJob;
+pub use markup::{MarkupJob, page_words_path};
 pub use pen::GLOSSES_SETTING;
 pub(crate) use pen::apply_pen_marks;
 pub use query::{AnnotationFilter, DeviceDeletePolicy, SidebarCounts, Tag, View, VocabStatus};

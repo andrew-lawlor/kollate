@@ -896,6 +896,7 @@ dependencies = [
  "byteorder-lite",
  "moxcms",
  "num-traits",
+ "png",
  "zune-core",
  "zune-jpeg",
 ]

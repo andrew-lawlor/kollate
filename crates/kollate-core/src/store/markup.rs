@@ -10,7 +10,7 @@ use super::Library;
 use crate::Result;
 use crate::kobo::DeviceInfo;
 use crate::markup::marks::take_marks;
-use crate::markup::{Context, Reader, Transcription, read_page, transcribe};
+use crate::markup::{Context, PageWord, Reader, Transcription, read_page, transcribe};
 use crate::store::apply_pen_marks;
 
 /// A markup or notebook page to transcribe: its copied ink and page, and
@@ -23,6 +23,9 @@ pub struct MarkupJob {
     pub svg: PathBuf,
     pub jpg: Option<PathBuf>,
     pub words: Option<Vec<String>>,
+    /// The page's words with their boxes, from KOReader's Pencil export
+    /// (`<ink>.words.json` beside the ink): marks are resolved from them.
+    pub page_words: Option<PathBuf>,
     /// What the transcription was made from; see [`Library::pending_transcriptions`].
     pub hash: String,
 }
@@ -44,13 +47,24 @@ impl MarkupJob {
             });
         }
         let page = self.jpg.as_ref().and_then(|p| std::fs::read(p).ok());
+        let page_words: Option<Vec<PageWord>> = self
+            .page_words
+            .as_ref()
+            .and_then(|p| std::fs::read(p).ok())
+            .and_then(|b| serde_json::from_slice(&b).ok());
         let context = Context {
             page_jpeg: page.as_deref(),
+            page_words: page_words.as_deref(),
             book_words: self.words.as_deref(),
             known_word,
         };
         transcribe(&svg, context, reader)
     }
+}
+
+/// Where a markup's page words are kept: beside its ink, `<ink>.words.json`.
+pub fn page_words_path(svg: &std::path::Path) -> PathBuf {
+    svg.with_extension("words.json")
 }
 
 impl Library {
@@ -106,6 +120,7 @@ impl Library {
                 continue;
             };
             let jpg = jpg.map(PathBuf::from).filter(|p| p.is_file());
+            let page_words = Some(page_words_path(&svg)).filter(|p| p.is_file());
             let mut h = blake3::Hasher::new();
             // Bumped when reading changes in a way worth reading again for
             // (2: loops, stars and question marks known by shape, 0.4;
@@ -115,6 +130,10 @@ impl Library {
             h.update(&ink);
             h.update(&[u8::from(jpg.is_some()), u8::from(context.is_some())]);
             h.update(source.as_bytes());
+            // Only KOReader markups have page words, so Nickel's keep their hash.
+            if page_words.is_some() {
+                h.update(b"page words");
+            }
             let hash = h.finalize().to_hex()[..32].to_owned();
             if done.as_deref() != Some(hash.as_str()) {
                 jobs.push(MarkupJob {
@@ -123,6 +142,7 @@ impl Library {
                     svg,
                     jpg,
                     words: context.and_then(|c| serde_json::from_str(&c).ok()),
+                    page_words,
                     hash,
                 });
             }

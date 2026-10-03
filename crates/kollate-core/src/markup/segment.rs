@@ -84,11 +84,19 @@ pub fn strokes(svg: &str) -> Vec<Stroke> {
             .iter()
             .map(|&[x, y]| (x, y))
             .collect();
+        // A stroked path (KOReader's ink is pen centre lines) is as wide as
+        // its pen; Nickel's ink is filled outlines, which already are.
+        let half = xml
+            .split(" stroke-width=\"")
+            .nth(1)
+            .and_then(|w| w.split('"').next())
+            .and_then(|w| w.parse::<f32>().ok())
+            .map_or(0.0, |w| w / 2.0);
         let boxes = points.iter().map(|&(x, y)| Bounds {
-            left: x,
-            top: y,
-            right: x,
-            bottom: y,
+            left: x - half,
+            top: y - half,
+            right: x + half,
+            bottom: y + half,
         });
         if let Some(bounds) = Bounds::union(boxes) {
             out.push(Stroke {

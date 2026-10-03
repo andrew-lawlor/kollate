@@ -4,8 +4,10 @@
 use std::path::Path;
 
 use kollate_core::Library;
-use kollate_core::kobo::{DeviceInfo, KoboSnapshot};
+use kollate_core::kobo::assets::copy_assets;
+use kollate_core::kobo::{AnnotationKind, DeviceInfo, KoboSnapshot};
 use kollate_core::koreader::add_koreader;
+use kollate_core::markup::{Reader, RgbImage};
 
 const BOOK: &str = "Anderson, Poul/Broken Sword, The - Poul Anderson.kepub.epub";
 
@@ -271,4 +273,113 @@ fn a_book_only_opened_isnt_added() {
     drop(conn);
     let snap = read(m.path());
     assert!(snap.books.is_empty(), "{:?}", snap.books);
+}
+
+/// Stands in for the model: reads every note as `note`, and fails if asked
+/// to read print (a Pencil markup's marks come from its page's words).
+struct Notes(&'static str);
+
+impl Reader for Notes {
+    fn handwriting(&mut self, _: &RgbImage) -> kollate_core::Result<String> {
+        Ok(self.0.to_owned())
+    }
+    fn print(&mut self, _: &RgbImage) -> kollate_core::Result<String> {
+        unreachable!("marks are found from the page's words")
+    }
+}
+
+/// A Pencil (fork) markup on the book: a line underlined under "the
+/// glorious city" and a two-letter note in the margin, as the plugin writes
+/// it, plus a folder still being written.
+fn add_pencil_markup(mount: &Path) {
+    let dir = mount
+        .join(BOOK.replace(".epub", ".sdr"))
+        .join("pencil/markups");
+    let m = dir.join("m_20261003045726_288_351");
+    write(
+        &m.join("markup.json"),
+        r#"{"format": 1, "id": "m_20261003045726_288_351", "created": 1791003446,
+            "modified": 1791003500, "start": "/body/DocFragment[6]/body/div/p[1]/text().0",
+            "end": "/body/DocFragment[6]/body/div/p[3]/text().20", "chapter": "Preface",
+            "screen": {"width": 600, "height": 400, "rotation": 0}, "has_page_image": true,
+            "plugin_version": "0.6.3"}"#,
+    );
+    write(
+        &m.join("ink.json"),
+        r#"{"format": 1, "strokes": [
+            {"points": [[95, 146], [250, 147], [395, 146]], "width": 3, "color": "Black", "tool": "pen"},
+            {"points": [[480, 90], [490, 120], [500, 90]], "width": 3, "color": "Black", "tool": "pen"},
+            {"points": [[510, 90], [510, 120], [530, 120]], "width": 3, "color": "Black", "tool": "pen"}
+        ]}"#,
+    );
+    write(
+        &m.join("words.json"),
+        r#"{"format": 1, "words": [
+            {"text": "The", "boxes": [[100, 100, 150, 140]], "pos0": "a", "pos1": "b"},
+            {"text": "glorious", "boxes": [[160, 100, 290, 140]], "pos0": "c", "pos1": "d"},
+            {"text": "city", "boxes": [[300, 100, 380, 140]], "pos0": "e", "pos1": "f"},
+            {"text": "of", "boxes": [[100, 160, 130, 200]], "pos0": "g", "pos1": "h"}
+        ]}"#,
+    );
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::GrayImage::from_pixel(600, 400, image::Luma([255]))
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    write(&m.join("page.png"), png.into_inner());
+    // Being written: no markup.json yet.
+    write(&dir.join("m_20261003050000_1_1/ink.json"), "{");
+}
+
+#[test]
+fn imports_pencil_markups_and_reads_marks_from_the_page_words() {
+    let m = mount(BLUE);
+    add_pencil_markup(m.path());
+    let snap = read(m.path());
+    assert!(
+        snap.koreader_unread.is_empty(),
+        "{:?}",
+        snap.koreader_unread
+    );
+    let markup = snap
+        .bookmarks
+        .iter()
+        .find(|b| b.kind == AnnotationKind::Markup)
+        .expect("the markup");
+    assert_eq!(markup.bookmark_id, "koreader:ink:m_20261003045726_288_351");
+    assert_eq!(markup.chapter_title.as_deref(), Some("Preface"));
+    assert_eq!(markup.spine_index, Some(5));
+    assert_eq!(
+        snap.bookmarks
+            .iter()
+            .filter(|b| b.kind == AnnotationKind::Markup)
+            .count(),
+        1,
+        "the folder being written is skipped"
+    );
+
+    let device = device();
+    let mut lib = Library::open_in_memory().unwrap();
+    lib.import(&snap, &device, false).unwrap();
+    let assets = tempfile::tempdir().unwrap();
+    let copied = copy_assets(m.path(), &snap, assets.path()).unwrap();
+    let ink = copied
+        .markups
+        .iter()
+        .find(|c| c.bookmark_id == markup.bookmark_id)
+        .unwrap();
+    let jpg = std::fs::read(ink.jpg.as_ref().unwrap()).unwrap();
+    assert_eq!(&jpg[..2], [0xff, 0xd8], "the page, as a JPEG");
+    assert!(
+        std::fs::read_to_string(ink.svg.as_ref().unwrap())
+            .unwrap()
+            .contains("stroke-width=\"3\"")
+    );
+    lib.attach_assets(&device, &copied).unwrap();
+
+    let jobs = lib.pending_transcriptions("model").unwrap();
+    assert_eq!(jobs.len(), 1);
+    assert!(jobs[0].page_words.is_some());
+    let t = jobs[0].run(&mut Notes("ok"), None).unwrap();
+    assert_eq!(t.text.as_deref(), Some("The glorious city"));
+    assert_eq!(t.note.as_deref(), Some("ok"));
 }
