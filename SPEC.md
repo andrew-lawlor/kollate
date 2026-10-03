@@ -423,6 +423,12 @@ One **markup** is the ink of one page visit: everything drawn on a page between 
 - **Marked text by geometry:** an underline marks the words whose boxes sit just above it on the same line; a circle the words whose boxes it encloses (the same rules as on Nickel's page image, §8a, but on boxes). The text is the words' own, in order: no model reads print, nothing is snapped. Pages without words fall back to reading `page.jpg` and snapping (§8a).
 - Handwriting itself is read as on Nickel; circled single words go to Vocabulary (§8c) with the sentence from `words.json`.
 
+### Fork status (2026-10-02)
+github.com/andrew-lawlor/pencil.koplugin, fork 0.2.0, tried on the Libra Colour:
+- **Store version 5:** upstream PR #77's packed points (and its save-debounce fix, which had made the original rewrite its whole strokes file after nearly every stroke), plus anchors per stroke and stable group ids. A real 204-stroke file: 1.29 MB → 204 KB, every point identical.
+- **Markup export** as above, with nothing slow near the pen: pages captured on arrival, anchors from the captured words, encoding and writing at 8 s idle (one picture per pause), saves never mid-stroke.
+- **Pen latency:** on MediaTek Kobos, KOReader waits for the display controller to accept each partial UI-waveform update, and the controller holds one back while an overlapping update is still running (~250 ms). Black pen ink now uses the fast (DU) waveform while writing, then one UI refresh once writing stops. The slowest point per stroke went from a 263 ms median to 3 ms (the original plugin: 12 ms); measured with the fork's profiler (`lib/profile.lua`).
+
 ### Later (in the fork)
 **Ink after a font change:** strokes are drawn near their anchor words on the new layout (offsets in line heights), flagged in the plugin as "moved". Never exact for a margin note, but better than losing it; not promised for the first release.
 
