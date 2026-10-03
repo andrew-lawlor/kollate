@@ -251,7 +251,60 @@ pub fn segment(strokes: &[Stroke]) -> Segments {
         });
         groups[slot].extend(g);
     }
-    let groups: Vec<Vec<(usize, bool)>> = groups
+    // Pieces of one line of writing with a wider word gap than the first
+    // pass allows (a hand with room to spare, as on the Elipsa) join: each a
+    // line or less, mostly level with the other, and within three letters
+    // sideways. A lone word read on its own loses its context ("a" read as
+    // "1"). A piece about a letter wide joins only with writing on both
+    // sides: at the start or end of a line it's a mark (a star, a "?"), read
+    // better on its own.
+    let one_line = |b: &Bounds| b.height() < 4.0 * letter;
+    let bounds: Vec<Option<Bounds>> = groups.iter().map(|g| ink_bounds(g)).collect();
+    let beside = |a: usize, b: usize| {
+        let (Some(ba), Some(bb)) = (bounds[a], bounds[b]) else {
+            return false;
+        };
+        let (gx, gy) = ba.gap(&bb);
+        let overlap = ba.bottom.min(bb.bottom) - ba.top.max(bb.top);
+        one_line(&ba)
+            && one_line(&bb)
+            && gy == 0.0
+            && overlap >= 0.5 * ba.height().min(bb.height())
+            && gx < 3.0 * letter
+    };
+    let short = |a: usize| bounds[a].is_some_and(|b| b.width() <= 2.0 * letter);
+    let flanked = |a: usize| {
+        let Some(ba) = bounds[a] else { return false };
+        let side = |left: bool| {
+            (0..groups.len()).any(|b| {
+                b != a
+                    && !short(b)
+                    && beside(a, b)
+                    && bounds[b].is_some_and(|bb| (bb.centre().0 < ba.centre().0) == left)
+            })
+        };
+        side(true) && side(false)
+    };
+    let mut level: Vec<usize> = (0..groups.len()).collect();
+    for a in 0..groups.len() {
+        for b in a + 1..groups.len() {
+            if beside(a, b) && (!short(a) || flanked(a)) && (!short(b) || flanked(b)) {
+                let (ra, rb) = (root(&mut level, a), root(&mut level, b));
+                level[ra] = rb;
+            }
+        }
+    }
+    let mut lined: Vec<Vec<usize>> = Vec::new();
+    let mut slot_of = std::collections::HashMap::new();
+    for (a, g) in groups.into_iter().enumerate() {
+        let r = root(&mut level, a);
+        let slot = *slot_of.entry(r).or_insert_with(|| {
+            lined.push(Vec::new());
+            lined.len() - 1
+        });
+        lined[slot].extend(g);
+    }
+    let groups: Vec<Vec<(usize, bool)>> = lined
         .into_iter()
         .map(|g| {
             let mut g: Vec<(usize, bool)> = g.into_iter().map(|k| writing[k]).collect();
@@ -587,6 +640,21 @@ mod tests {
         assert_eq!(s.notes.len(), 2);
         assert_eq!(s.notes[0].strokes.len(), 12);
         assert_eq!(s.notes[1].strokes.len(), 3);
+    }
+
+    #[test]
+    fn keeps_a_line_with_very_wide_word_gaps_whole() {
+        // "This is a much longer note": gaps of two letters around a lone
+        // "a", as written on the Elipsa. A mark two letters before the line,
+        // like a star, and one six letters after it stay apart.
+        let mut paths = word(100.0, 100.0, 4);
+        paths.extend(word(100.0 + 4.0 * 34.0 + 80.0, 100.0, 1));
+        paths.extend(word(100.0 + 5.0 * 34.0 + 160.0, 100.0, 4));
+        paths.extend(word(100.0 + 9.0 * 34.0 + 160.0 + 240.0, 100.0, 1));
+        paths.extend(word(100.0 - 30.0 - 80.0, 100.0, 1));
+        let s = segment(&strokes(&svg(paths)));
+        let sizes: Vec<usize> = s.notes.iter().map(|n| n.strokes.len()).collect();
+        assert_eq!(sizes, [9, 1, 1]);
     }
 
     #[test]
