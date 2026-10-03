@@ -86,6 +86,7 @@ impl DeviceInfo {
             Some("000000000390") => "Kobo Libra Colour",
             Some("000000000386") => "Kobo Clara 2E",
             Some("000000000393") => "Kobo Clara Colour",
+            Some("000000000389") => "Kobo Elipsa 2E",
             _ => "Kobo",
         }
     }
@@ -191,5 +192,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(colour.model_name(), "Kobo Clara Colour");
+        let elipsa = DeviceInfo::parse(
+            "N000000000000,4.9.77,4.38.23828,4.9.77,4.9.77,00000000-0000-0000-0000-000000000389",
+        )
+        .unwrap();
+        assert_eq!(elipsa.model_name(), "Kobo Elipsa 2E");
     }
 }
