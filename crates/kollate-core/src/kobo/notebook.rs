@@ -31,8 +31,10 @@ use crate::{Error, Result};
 
 /// The notebook layout this reader understands.
 const FORMAT_VERSION: &str = "4.0";
-/// Notebook pages are drawn at 300 dpi, like the Kobo's screen.
-const PX_PER_MM: f32 = 300.0 / 25.4;
+/// Ink is stored in millimetres and drawn at the screen's resolution,
+/// which the notebook records (300 dpi on the Libra Colour, 228 on the
+/// Elipsa 2E); 300 when it doesn't.
+const DEFAULT_DPI: f32 = 300.0;
 
 /// One page with ink on it.
 #[derive(Debug, Clone, PartialEq)]
@@ -103,6 +105,13 @@ struct UserMeta {
 #[derive(Deserialize)]
 struct KoboMeta {
     geometry: Option<Geometry>,
+    dpi: Option<Dpi>,
+}
+
+#[derive(Deserialize)]
+struct Dpi {
+    x: f32,
+    y: f32,
 }
 
 #[derive(Deserialize)]
@@ -147,11 +156,17 @@ fn read_nebo(file: impl std::io::Read + std::io::Seek) -> Result<Vec<NotebookPag
             meta.format_version.as_deref().unwrap_or("(none)")
         )));
     }
-    let (width, height) = meta
-        .user
-        .and_then(|u| u.kobo)
-        .and_then(|k| k.geometry)
+    let kobo = meta.user.and_then(|u| u.kobo);
+    let (width, height) = kobo
+        .as_ref()
+        .and_then(|k| k.geometry.as_ref())
         .map_or((1264, 1680), |g| (g.width, g.height));
+    let (px_x, px_y) = kobo
+        .as_ref()
+        .and_then(|k| k.dpi.as_ref())
+        .filter(|d| d.x > 0.0 && d.y > 0.0)
+        .map_or((DEFAULT_DPI, DEFAULT_DPI), |d| (d.x, d.y));
+    let (px_x, px_y) = (px_x / 25.4, px_y / 25.4);
 
     let ids: Vec<String> = {
         let mut ids: Vec<String> = zip
@@ -170,11 +185,7 @@ fn read_nebo(file: impl std::io::Read + std::io::Seek) -> Result<Vec<NotebookPag
         let strokes: Vec<Vec<(f32, f32)>> =
             strokes(&read(&mut zip, &format!("pages/{id}/ink.bink"))?)
                 .into_iter()
-                .map(|s| {
-                    s.into_iter()
-                        .map(|(x, y)| (x * PX_PER_MM, y * PX_PER_MM))
-                        .collect()
-                })
+                .map(|s| s.into_iter().map(|(x, y)| (x * px_x, y * px_y)).collect())
                 .collect();
         if strokes.is_empty() {
             continue;
@@ -433,10 +444,15 @@ mod tests {
     }
 
     fn nebo(version: &str) -> Vec<u8> {
+        nebo_with(version, "")
+    }
+
+    /// A notebook whose Kobo metadata also has `extra` (e.g. a dpi field).
+    fn nebo_with(version: &str, extra: &str) -> Vec<u8> {
         let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
         let opts = zip::write::SimpleFileOptions::default();
         let meta = format!(
-            r#"{{"format-version": "{version}", "iink-user-metadata": {{"kobo": {{"geometry": {{"width": 1188, "height": 1485}}}}}}}}"#
+            r#"{{"format-version": "{version}", "iink-user-metadata": {{"kobo": {{{extra}"geometry": {{"width": 1188, "height": 1485}}}}}}}}"#
         );
         for (name, data) in [
             ("meta.json", meta.into_bytes()),
@@ -467,12 +483,23 @@ mod tests {
         let p = &pages[0];
         assert_eq!((p.width, p.height), (1188, 1485));
         let (x, y) = p.strokes[0][0];
-        assert!((x - 10.0 * PX_PER_MM).abs() < 0.01 && (y - 20.0 * PX_PER_MM).abs() < 0.01);
+        let px = 300.0 / 25.4;
+        assert!((x - 10.0 * px).abs() < 0.01 && (y - 20.0 * px).abs() < 0.01);
         let svg = p.svg();
         assert_eq!(svg.matches("<path").count(), 2);
         let [l, t, r, b] = p.ink_bounds(10.0).unwrap();
         assert!(l < 60 && t < 60 && r > 120 && b > 240);
         assert!(read_nebo(std::io::Cursor::new(nebo("5.0"))).is_err());
+    }
+
+    #[test]
+    fn draws_ink_at_the_notebooks_resolution() {
+        // The Elipsa 2E records 228 dpi; 10 mm is 89.8 pixels there.
+        let extra = r#""dpi": {"x": 228, "y": 228}, "#;
+        let pages = read_nebo(std::io::Cursor::new(nebo_with("4.0", extra))).unwrap();
+        let (x, y) = pages[0].strokes[0][0];
+        let px = 228.0 / 25.4;
+        assert!((x - 10.0 * px).abs() < 0.01 && (y - 20.0 * px).abs() < 0.01);
     }
 }
 
