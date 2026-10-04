@@ -17,7 +17,7 @@
 
 <p align="center"><i>"It is a comforting thing to have an archive: a place where the scattered leaves of memory are bound together."</i></p>
 
-E-readers hoard what you write in them. Kollate pulls it all onto your computer, into one library you can search, and sends none of it anywhere.
+E-readers hoard what you write in them. Kollate pulls it all onto your computer, into one searchable library. Your data never leaves your machine.
 
 What follows is an example week of reading with it in your workflow.
 
