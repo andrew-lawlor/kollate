@@ -4,7 +4,7 @@
 
 <p align="center">
   <b>Everything you mark on your e-reader, read, sorted and put to work.</b><br>
-  Highlights and notes from your Kobo, in its own reader or in KOReader. Kollate turns your margin notes<br>
+  Highlights and notes from your Kobo, in its own reader (Nickel) or in KOReader. Kollate turns your margin notes<br>
   and notebooks into text, files what you star and tag with the pen, and makes flashcards from the words you look up.<br>
   <sub>A native Linux app for GNOME and any desktop. Offline, private, and it never writes to your e-reader.</sub>
 </p>
@@ -17,9 +17,9 @@
 
 <p align="center"><i>"It is a comforting thing to have an archive: a place where the scattered leaves of memory are bound together."</i></p>
 
-E-readers hoard what you write in them. Highlights sit in a database you never see, handwriting stays ink, and KOReader keeps its notes in files of its own. Kollate pulls it all onto your computer, into one library you can search, and sends none of it anywhere.
+E-readers hoard what you write in them. Kollate pulls it all onto your computer, into one library you can search, and sends none of it anywhere.
 
-What follows is one week of reading with it.
+What follows is an example week of reading with it in your workflow.
 
 ## Your handwriting, read as text
 
