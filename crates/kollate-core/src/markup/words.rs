@@ -81,16 +81,27 @@ pub fn marked(mark: &Mark, strokes: &[Stroke], words: &[PageWord]) -> Vec<String
 }
 
 /// A passage's words as printed: each followed by what came after it, with
-/// any run of whitespace (a line break between lines of verse) as one space.
+/// any run of whitespace (a line break between lines of verse) as one space,
+/// and without invisible formatting characters (some books put a zero-width
+/// no-break space before every dash).
 fn join(words: &[&PageWord]) -> String {
+    let invisible = |c: char| {
+        matches!(
+            c,
+            '\u{feff}' | '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{2060}' | '\u{00ad}'
+        )
+    };
     let mut text = String::new();
     for (i, w) in words.iter().enumerate() {
-        text.push_str(&w.text);
+        text.extend(w.text.chars().filter(|&c| !invisible(c)));
         if i + 1 == words.len() {
             break;
         }
         let mut in_space = false;
         for c in w.after.as_deref().unwrap_or(" ").chars() {
+            if invisible(c) {
+                continue;
+            }
             if c.is_whitespace() {
                 if !in_space {
                     text.push(' ');
@@ -190,6 +201,10 @@ mod tests {
         ];
         let (m, s) = mark(MarkKind::Underline, "M15,146 L365,147");
         assert_eq!(marked(&m, &s, &words), ["Nestor’s son, ocean-side"]);
+        // A zero-width no-break space before a dash, as in some books.
+        let dash = vec![w("Pylos", "\u{feff}—", 20.0), w("Nestor", " ", 90.0)];
+        let (m, s) = mark(MarkKind::Underline, "M15,146 L155,147");
+        assert_eq!(marked(&m, &s, &dash), ["Pylos—Nestor"]);
     }
 
     #[test]
