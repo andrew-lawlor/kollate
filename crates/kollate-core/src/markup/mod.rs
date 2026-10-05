@@ -144,9 +144,12 @@ pub fn transcribe(
         // The book's own words, found by where they are: nothing to read.
         for mark in &segments.marks {
             let passages = words::marked(mark, &strokes, page_words);
-            for text in passages.iter().map(|p| trim_overshoot(p)) {
+            // No trimming for a pen that ran on, as there is when reading
+            // the picture: a word counts only when the mark covers most of it.
+            let one = passages.len() == 1;
+            for text in passages {
                 if mark.kind == segment::MarkKind::Circle
-                    && passages.len() == 1
+                    && one
                     && let Some(word) = single_word(&text)
                 {
                     circled.push(word.to_owned());

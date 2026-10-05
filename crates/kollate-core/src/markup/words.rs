@@ -13,6 +13,12 @@ use super::segment::{Mark, MarkKind, Stroke};
 pub struct PageWord {
     pub text: String,
     pub boxes: Vec<[f32; 4]>,
+    /// What's printed between this word and the next: a space, ", ", "-",
+    /// "’". The plugin splits words at hyphens and apostrophes ("Nestor",
+    /// "s"), so passages are joined with this. Exports before Pencil 0.6.6
+    /// have none: those are joined with spaces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after: Option<String>,
 }
 
 /// The passages a mark covers, in reading order: for each underline stroke,
@@ -62,16 +68,41 @@ pub fn marked(mark: &Mark, strokes: &[Stroke], words: &[PageWord]) -> Vec<String
             }
         }
     }
-    let mut passages: Vec<Vec<&str>> = Vec::new();
+    let mut passages: Vec<Vec<&PageWord>> = Vec::new();
     let mut last = None;
     for (k, w) in words.iter().enumerate().filter(|&(k, _)| chosen[k]) {
         match passages.last_mut() {
-            Some(p) if last == Some(k - 1) => p.push(&w.text),
-            _ => passages.push(vec![&w.text]),
+            Some(p) if last == Some(k - 1) => p.push(w),
+            _ => passages.push(vec![w]),
         }
         last = Some(k);
     }
-    passages.into_iter().map(|p| p.join(" ")).collect()
+    passages.into_iter().map(|p| join(&p)).collect()
+}
+
+/// A passage's words as printed: each followed by what came after it, with
+/// any run of whitespace (a line break between lines of verse) as one space.
+fn join(words: &[&PageWord]) -> String {
+    let mut text = String::new();
+    for (i, w) in words.iter().enumerate() {
+        text.push_str(&w.text);
+        if i + 1 == words.len() {
+            break;
+        }
+        let mut in_space = false;
+        for c in w.after.as_deref().unwrap_or(" ").chars() {
+            if c.is_whitespace() {
+                if !in_space {
+                    text.push(' ');
+                }
+                in_space = true;
+            } else {
+                text.push(c);
+                in_space = false;
+            }
+        }
+    }
+    text
 }
 
 #[cfg(test)]
@@ -83,6 +114,7 @@ mod tests {
         PageWord {
             text: text.into(),
             boxes: vec![[x0, y0, x1, y0 + 40.0]],
+            after: None,
         }
     }
 
@@ -134,9 +166,30 @@ mod tests {
         words.push(PageWord {
             text: "Achaian".into(),
             boxes: vec![[540.0, 100.0, 620.0, 140.0], [20.0, 220.0, 90.0, 260.0]],
+            after: None,
         });
         let (m, s) = mark(MarkKind::Underline, "M15,266 L95,267");
         assert_eq!(marked(&m, &s, &words), ["Achaian"]);
+    }
+
+    #[test]
+    fn a_passage_keeps_its_punctuation_and_split_words() {
+        let w = |text: &str, after: &str, x: f32| PageWord {
+            text: text.into(),
+            boxes: vec![[x, 100.0, x + 60.0, 140.0]],
+            after: Some(after.into()),
+        };
+        // "Nestor’s son, ocean-side" as the plugin's word walk splits it,
+        // with a line break before the last word.
+        let words = vec![
+            w("Nestor", "’", 20.0),
+            w("s", " ", 90.0),
+            w("son", ",\n", 160.0),
+            w("ocean", "-", 230.0),
+            w("side", ";", 300.0),
+        ];
+        let (m, s) = mark(MarkKind::Underline, "M15,146 L365,147");
+        assert_eq!(marked(&m, &s, &words), ["Nestor’s son, ocean-side"]);
     }
 
     #[test]
