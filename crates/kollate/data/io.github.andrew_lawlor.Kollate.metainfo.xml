@@ -70,6 +70,15 @@
     <control>pointing</control>
   </supports>
   <releases>
+    <release version="0.7.1" date="2026-10-05">
+      <description>
+        <p>What you underline or circle in KOReader keeps its punctuation.</p>
+        <ul>
+          <li>Passages marked in KOReader come in with their commas and full stops, and words with hyphens or apostrophes stay whole ("Nestor’s", "ocean-side"). Needs the Pencil plugin 0.6.6 or newer; markups written with older versions are joined with spaces as before</li>
+          <li>A KOReader passage is no longer cut short when it starts or ends next to a full stop</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.7.0" date="2026-10-03">
       <description>
         <p>Handwriting written in KOReader is read too, with the Pencil plugin's maintained fork.</p>

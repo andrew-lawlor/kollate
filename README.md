@@ -143,7 +143,7 @@ Flatpak fetches the GNOME 51 runtime itself. The sandbox can read the Kobo but n
 ### Debian / Ubuntu (.deb)
 
 ```sh
-sudo apt install ./kollate_0.7.0-1_amd64.deb
+sudo apt install ./kollate_0.7.1-1_amd64.deb
 ```
 
 Ships the app, `kollate-cli` and the English Wiktionary. Needs GTK 4.12 and libadwaita 1.5 or newer, as in Debian 13 and Ubuntu 24.04.
