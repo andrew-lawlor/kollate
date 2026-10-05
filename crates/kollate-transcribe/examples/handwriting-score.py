@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Scores handwriting-eval results against the writers' answers.
 
-    python3 handwriting-score.py <set dir> [--results <dir in it>] [--only <keys.json>] [--json]
+    python3 handwriting-score.py <set dir> [--results <dir in it>] [--only <keys.json>]
+        [--by-source] [--json]
 
 For each run in <set dir>/results:
 - Handwriting: character accuracy (1 - edit distance / answer length, over
@@ -74,11 +75,12 @@ def same_word(a, b):
     return a == b or SequenceMatcher(None, a, b).ratio() >= 0.8
 
 
-def score(run, answers, manifest, writer=None, only=None):
+def score(run, answers, manifest, writer=None, only=None, source=None):
     items = {i["key"]: i for i in manifest["items"]}
     s = dict(chars=0, errors=0, notes=0, exact=0, phantom=0, empty=0,
              star=[0, 0, 0], question=[0, 0, 0], tags=[0, 0, 0],
-             passages=[0, 0, 0], circled=[0, 0, 0], ms_item=[], ms_call=[], items=0)
+             passages=[0, 0, 0], circled=[0, 0, 0], ms_item=[], ms_call=[], items=0,
+             calls=0, print_calls=0)
     for key, result in run["items"].items():
         a = answers.get(key, {})
         if a.get("skip") or a.get("unreadable") or "error" in result:
@@ -87,7 +89,11 @@ def score(run, answers, manifest, writer=None, only=None):
             continue
         if writer and (a.get("writer") or "unassigned") != writer:
             continue
+        if source and items[key].get("source", "nickel") != source:
+            continue
         s["items"] += 1
+        s["calls"] += result.get("calls", 0)
+        s["print_calls"] += result.get("print_calls", 0)
         s["ms_item"].append(result["ms"])
         if result["calls"]:
             s["ms_call"].append(result["ms"] / result["calls"])
@@ -151,6 +157,8 @@ def summary(s):
         "tags": frac(s["tags"]),
         "passages": frac(s["passages"]),
         "circled words": frac(s["circled"]),
+        "model calls per page": f"{s['calls'] / s['items']:.1f}" if s["items"] else "–",
+        "of which reading print": f"{s['print_calls'] / s['items']:.1f}" if s["items"] else "–",
         "ms per call": med(s["ms_call"]),
         "ms per page": med(s["ms_item"]),
     }
@@ -167,12 +175,19 @@ def main():
     if "--only" in sys.argv:
         only = set(json.loads(Path(sys.argv[sys.argv.index("--only") + 1]).read_text()))
     results = sys.argv[sys.argv.index("--results") + 1] if "--results" in sys.argv else "results"
+    # With --by-source, columns are the reader each markup came from (the
+    # Kobo's own, or KOReader with the Pencil fork) instead of the writer.
+    sources = sorted({i.get("source", "nickel") for i in manifest["items"]})
     for path in sorted((set_dir / results).glob("*.json")):
         run = json.loads(path.read_text())
         name = f"{run['model']} · {run['setup']} · {run['device']}"
         out[name] = {"all": summary(score(run, answers, manifest, only=only))}
-        for w in writers:
-            out[name][w] = summary(score(run, answers, manifest, w, only))
+        if "--by-source" in sys.argv:
+            for src in sources:
+                out[name][src] = summary(score(run, answers, manifest, only=only, source=src))
+        else:
+            for w in writers:
+                out[name][w] = summary(score(run, answers, manifest, w, only))
     if "--json" in sys.argv:
         print(json.dumps(out, indent=2, ensure_ascii=False))
         return

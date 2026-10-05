@@ -32,6 +32,8 @@ struct Counted<'a> {
     model: &'a Transcriber,
     latin: bool,
     calls: usize,
+    /// Of those, reads of printed text (what an underline or circle marks).
+    print_calls: usize,
 }
 
 impl Reader for Counted<'_> {
@@ -41,6 +43,7 @@ impl Reader for Counted<'_> {
     }
     fn print(&mut self, image: &RgbImage) -> kollate_core::Result<String> {
         self.calls += 1;
+        self.print_calls += 1;
         self.model.ask(image, PRINT, self.latin, 160)
     }
 }
@@ -110,11 +113,17 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let words: Option<Vec<String>> = std::fs::read(items_dir.join(format!("{key}.words.json")))
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok());
+        // A KOReader markup's page words: marks are found from them.
+        let page_words: Option<Vec<kollate_core::markup::PageWord>> =
+            std::fs::read(items_dir.join(format!("{key}.page-words.json")))
+                .ok()
+                .and_then(|b| serde_json::from_slice(&b).ok());
 
         let mut reader = Counted {
             model: &transcriber,
             latin: setup != "no-grammar",
             calls: 0,
+            print_calls: 0,
         };
         let started = Instant::now();
         let read = match setup.as_str() {
@@ -140,7 +149,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     &svg,
                     Context {
                         page_jpeg: page.as_deref(),
-                        page_words: None,
+                        page_words: page_words.as_deref(),
                         book_words: words.as_deref(),
                         known_word: names,
                     },
@@ -153,6 +162,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut result = read.unwrap_or_else(|e| json!({ "error": e.to_string() }));
         result["ms"] = json!(ms);
         result["calls"] = json!(reader.calls);
+        result["print_calls"] = json!(reader.print_calls);
         eprintln!("[{}/{}] {key} {ms} ms", n + 1, items.len());
         results.insert(key.to_owned(), result);
     }

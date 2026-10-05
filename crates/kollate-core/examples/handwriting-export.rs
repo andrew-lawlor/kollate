@@ -27,15 +27,17 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut out = None;
     let mut library = None;
     let mut trashed = false;
+    let mut only_book: Option<String> = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--library" => library = args.next().map(PathBuf::from),
             "--trashed" => trashed = true,
+            "--book" => only_book = args.next().map(|b| b.to_lowercase()),
             _ => out = Some(PathBuf::from(arg)),
         }
     }
     let out =
-        out.ok_or("usage: handwriting-export <out dir> [--library <library.db>] [--trashed]")?;
+        out.ok_or("usage: handwriting-export <out dir> [--library <library.db>] [--trashed] [--book <title text>]")?;
     let library = library
         .or_else(default_library)
         .ok_or("no library found; pass --library")?;
@@ -45,7 +47,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&items_dir)?;
     let mut stmt = db.prepare(
         "SELECT a.kind, a.markup_svg_path, a.markup_jpg_path, a.markup_context, a.created_at,
-                a.chapter_title, a.status, COALESCE(b.user_title, b.title), b.language
+                a.chapter_title, a.status, COALESCE(b.user_title, b.title), b.language,
+                EXISTS (SELECT 1 FROM annotation_source x WHERE x.annotation_id = a.id
+                        AND x.bookmark_id LIKE 'koreader:%')
          FROM annotation a JOIN book b ON b.id = a.book_id
          WHERE a.kind IN ('markup', 'page') AND a.markup_svg_path IS NOT NULL
          ORDER BY COALESCE(b.user_title, b.title), a.created_at",
@@ -61,14 +65,22 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             r.get::<_, String>(6)?,
             r.get::<_, String>(7)?,
             r.get::<_, Option<String>>(8)?,
+            r.get::<_, bool>(9)?,
         ))
     })?;
 
     let mut items = Vec::new();
     let mut skipped = 0;
     for row in rows {
-        let (kind, svg_path, jpg_path, context, created, chapter, status, book, language) = row?;
+        let (kind, svg_path, jpg_path, context, created, chapter, status, book, language, koreader) =
+            row?;
         if status == "trashed" && !trashed {
+            continue;
+        }
+        if only_book
+            .as_ref()
+            .is_some_and(|b| !book.to_lowercase().contains(b.as_str()))
+        {
             continue;
         }
         let svg_path = PathBuf::from(svg_path);
@@ -95,6 +107,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(words) = &context {
             std::fs::write(items_dir.join(format!("{key}.words.json")), words)?;
         }
+        // A KOReader markup's page words, with their boxes (SPEC §8f).
+        let page_words = std::fs::read(kollate_core::store::page_words_path(&svg_path)).ok();
+        if let Some(words) = &page_words {
+            std::fs::write(items_dir.join(format!("{key}.page-words.json")), words)?;
+        }
         // What the writer looks at: the page with the ink on it, or a
         // notebook page's ink alone.
         let view = match (&jpg, page) {
@@ -113,6 +130,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             "trashed": status == "trashed",
             "has_page": jpg.is_some(),
             "has_words": context.is_some(),
+            "has_page_words": page_words.is_some(),
+            "source": if koreader { "koreader" } else { "nickel" },
         }));
     }
 
